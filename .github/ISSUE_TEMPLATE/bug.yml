@@ -1,100 +1,76 @@
-name: Bug Report Form
-description: Create a report to help us improve
+name: Bug Report
+description: Something broke or behaves unexpectedly.
 labels: [bug, needs:triage]
-assignees: []
 body:
-  - type: dropdown
-    id: os
+  - type: markdown
     attributes:
-      label: What Operating System(s) are you seeing this problem on?
-      multiple: true
+      value: |
+        Thanks for reporting a bug! Please include as much detail as possible so we can reproduce and fix it quickly.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      description: Confirm you have done the basics.
       options:
-        - Windows
-        - Linux X11
-        - Linux Wayland
-        - macOS
-        - FreeBSD X11
-        - FreeBSD Wayland
-    validations:
-      required: true
-  - type: textarea
-    id: window_manager
-    attributes:
-      label: Which Wayland compositor or X11 Window manager(s) are you using?
-      description: |
-        If running on a unix system, please include the name and version of the compositor/WM.
-        Windows and macOS typically can leave this blank, but if you are using additional window
-        management software on top of the standard for those systems, please indicate that here.
-      placeholder: "ex: Sway, Mutter, wayfire, i3."
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: I reproduced this on the latest nightly or main branch.
+          required: true
   - type: input
     id: version
     attributes:
       label: Shelldone version
-      description: |
-        Please run `shelldone -V` and include its output here.
-        If you installed the flatpak version of shelldone, please consider trying
-        the native package format for your system and comparing the behavior,
-        as flatpak runs in an isolated sandbox that can prevent some functionality
-        from working fully.
-      placeholder: "ex: 20210816-085256-935c1f48"
-    validations:
-      required: true
-  - type: dropdown
-    id: triednightly
-    attributes:
-      label: Did you try the latest nightly build to see if the issue is better (or worse!) than your current version?
-      options:
-        - Yes, and I updated the version box above to show the version of the nightly that I tried
-        - No, and I'll explain why below
+      description: Output of `shelldone -V` (or commit hash if building from source).
+      placeholder: 2025.09.26-main
     validations:
       required: true
   - type: textarea
-    id: description
+    id: environment
     attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is
-      placeholder: Tell us what happened
+      label: Environment
+      description: OS, window system/compositor, GPU/driver, shell, font if relevant.
+      placeholder: Linux 6.11, Wayland (Hyprland), AMD RX 6800 (Mesa 24.2), zsh 5.9
     validations:
       required: true
   - type: textarea
-    id: to_repro
+    id: repro
     attributes:
-      label: To Reproduce
-      description: Steps to reproduce the behavior
+      label: Steps to reproduce
+      description: Exact actions required (commands, config snippets, recordings) to trigger the bug.
       placeholder: |
-        Please include as much information as possible that can help to reproduce and
-        understand the issue.
-  - type: textarea
-    id: config
-    attributes:
-      label: Configuration
-      description: |
-        Please include the relevant section(s) of your `shelldone.lua` configuration file.
-        You can enter "no config" if the issue happens without you having made a config file.    
+        1. Start Shelldone with config below
+        2. Run command ...
+        3. Observe ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected Behavior
-      description: A clear and concise description of what you expected to happen
+      label: Expected behavior
+      description: What should have happened?
+      placeholder: The pane should resize without artifacts.
+    validations:
+      required: true
   - type: textarea
-    id: logs
+    id: actual
     attributes:
-      label: Logs
-      description: |
-        If possible, activate the Debug Overlay by pressing CTRL-SHIFT-L and then copy
-        and paste the log lines in here.  If you launched shelldone from
-        the command line, copy and paste that output here.
-        You can also find log files in `$XDG_RUNTIME_DIR/shelldone` on unix systems,
-        or `$HOME/.local/share/shelldone` on macOS and Windows systems.
-      placeholder: |
-        09:27:26.703 INFO shelldone_gui::termwindow > OpenGL initialized! NVIDIA GeForce GT 1030/PCIe/SSE2 4.6.0 NVIDIA 470.57.02 is_context_loss_possible=false shelldone version: 20210816-085256-935c1f48
+      label: Actual behavior / logs
+      description: Paste console output (`RUST_LOG=debug shelldone ...`), screenshots, etc. Drag & drop files as needed.
+      placeholder: Relevant logs, stack traces, screenshots
+    validations:
+      required: true
   - type: textarea
-    id: other
+    id: config
     attributes:
-      label: Anything else?
-      description: |
-        Add any other context about the problem here.  You can attach screenshots by clicking
-        this area to highlight it and then drag the files in, or just paste the image from
-        the clipboard to upload it.
+      label: Relevant configuration
+      description: Minimal `shelldone.lua` snippet or “no config”.
+      placeholder: ```lua
+return {
+  color_scheme = "Tokyo Night",
+}
+```
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Regression info, bisect results, related issues, or workarounds.

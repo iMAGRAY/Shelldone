@@ -789,7 +789,7 @@ mod tests {
         let mut cmd = CommandBuilder::new("dummy");
         let package_authors = cmd.get_env("CARGO_PKG_AUTHORS");
         println!("package_authors: {:?}", package_authors);
-        assert!(package_authors == Some(OsStr::new("Wez Furlong")));
+        assert!(package_authors == Some(OsStr::new("Shelldone Team")));
 
         cmd.env("foo key", "foo value");
         cmd.env("bar key", "bar value");

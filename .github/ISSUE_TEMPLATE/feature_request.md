@@ -1,20 +1,27 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
+name: Feature Proposal
+about: Suggest an improvement to Shelldone.
+title: ""
 labels: [enhancement, needs:triage]
-assignees: ''
-
+assignees: ""
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Summary
+Provide a short description of the problem and the outcome you expect.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+## Motivation / Use-case
+Why is this valuable? Include workflows, screenshots, or existing tools for comparison.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Requirements
+- [ ] UX considerations (mockups, accessibility, shortcuts)
+- [ ] Performance impact (expected input scale, latency budget)
+- [ ] Compatibility (config, scripting, plugins)
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+## Alternatives
+List alternative approaches you considered and why they fall short.
+
+## Rollout & Testing
+How should this be delivered (behind a flag, beta build, docs updates)? Which tests/configs are affected?
+
+## Additional context
+Links to discussions, prior art, or related issues.

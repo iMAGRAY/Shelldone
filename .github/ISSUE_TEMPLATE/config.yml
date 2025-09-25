@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: GitHub Discussions
-    url: https://github.com/shelldone/terminal/discussions
-    about: When you have questions that are not bug reports or feature requests
-  - name: Shelldone room on Matrix/Element
-    url: https://app.element.io/#/room/#shelldone:matrix.org
-    about: if you'd prefer more realtime conversation with the community
+    url: https://github.com/imagray/Shelldone/discussions
+    about: Questions, proposals, and community chat outside of issues.
+  - name: Matrix (#shelldone:matrix.org)
+    url: https://matrix.to/#/#shelldone:matrix.org
+    about: Low-latency chat with maintainers and other contributors.
+  - name: Security contact
+    url: mailto:team@shelldone.dev
+    about: Report vulnerabilities or sensitive issues privately.

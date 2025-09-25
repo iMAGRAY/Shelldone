@@ -1,16 +1,19 @@
 ---
-name: Documentation Problem
-about: Missing, incomplete or incorrect information in the documentation
-title: ''
+name: Documentation Update
+about: Report missing, incorrect, or confusing docs.
+title: ""
 labels: [docs, needs:triage]
-assignees: ''
-
+assignees: ""
 ---
 
-**What page or section of the docs have an issue?**
-Please include a link
+## Location
+Link to the page/section or file (e.g. `docs/config/appearance.md`).
 
-**Describe the issue**
-A clear and concise description of what you were looking for, couldn't find, or
-the where things were misleading etc.
+## Issue
+What is wrong or missing? Include copy/paste snippets as needed.
 
+## Proposal
+How should it be fixed? Suggest wording, screenshots, or structure.
+
+## Additional context
+Other resources that could help clarify the docs (blog posts, specs, discussions).

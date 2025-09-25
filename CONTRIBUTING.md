@@ -1,129 +1,71 @@
-# Contributing to shelldone
+# Contributing to Shelldone
 
-Thanks for considering donating your time and energy!  I value any contribution,
-even if it is just to highlight a typo.
+Welcome! Shelldone is a community-driven fork of WezTerm and we want
+new contributors to feel productive immediately. This guide explains the
+expectations, workflows, and tooling that keep the project fast and reliable.
 
-Included here are some guidelines that can help streamline taking in your contribution.
-They are just guidelines and not hard-and-fast rules. Things will probably go faster
-and smoother if you have the time and energy to read and follow these suggestions.
+## Code of Conduct
 
-## Contributing Documentation
+We follow the [Contributor Covenant](https://www.contributor-covenant.org/).
+Be respectful, assume good intent, and report issues privately to
+`team@shelldone.dev`.
 
-There's never enough!  Pretty much anything is fair game to improve here.
+## Quick Start Checklist
 
-### Running the doc build yourself
+| Step | Command | Purpose |
+| --- | --- | --- |
+| 1 | `git clone git@github.com:imagray/Shelldone.git` | local working copy |
+| 2 | `cd Shelldone && make dev` | compile + launch GUI for smoke testing |
+| 3 | `make verify` | fmt + clippy + tests + nextest |
+| 4 | `make servedocs` | preview docs changes |
 
-To check your documentation additions, you can optionally build the docs yourself and see how the changes will look on the webpage. 
+Additional scripts live in `ci/` and `get-deps/` for packaging flows.
 
-To serve them up, and then automatically rebuild and refresh the docs in your browser, run:
-```console
-$ ci/build-docs.sh serve
-```
-And then click on the URL that it prints out after it has performed the first build.
+## Workflow
 
-Any arguments passed to `build-docs.sh` are passed down to the underlying `mkdocs` utility.
+1. **Issue first.** Start from an existing issue or create one with the proper
+   template. Label it (`type/*`, `area/*`, `prio/*`).
+2. **Branch naming.** Use `feature/<topic>`, `fix/<bug-id>`, or `docs/<section>`.
+3. **Commits.** Keep commits scoped and message in imperative tone
+   (`Add GPU telemetry collector`). Include issue ID when applicable.
+4. **PR Checklist.**
+   - `make verify` passes locally.
+   - Docs updated when behavior changes.
+   - Screenshots/recordings for UX changes.
+   - Performance data when touching hot paths.
+   - Fill out the PR template (created automatically).
 
-Look at [mkdocs serve](https://www.mkdocs.org/user-guide/cli/#mkdocs-serve) for more information on additional parameters.
+We squash-merge by default; keep your branch linear (rebase vs merge).
 
-### Operating system specific installation instructions?
+## Code Style & Testing
 
-There are a lot of targets out there.  Today we have docs that are Ubuntu biased
-and I know that there are a lot of flavors of Linux. Rather than expand the README
-with instructions for those, please translate the instructions into steps that
-can be run in the [`get-deps`](https://github.com/shelldone/shelldone/blob/master/get-deps)
-script.
+- Rust edition 2021, `cargo fmt` (nightly) for formatting.
+- `cargo clippy --workspace --all-targets -- -D warnings` no warnings allowed.
+- `cargo nextest run` is our default test runner.
+- Add tests for bug fixes or new features; describe edge cases in comments.
+- Benchmarks belong under `tests/perf` and should guard against regressions.
 
-## Contributing code
+## Documentation
 
-Yes please!
+Updating behavior? Update docs:
+- User Guide (`docs/`)
+- API docs (`docs/config/...`)
+- Roadmap entries (`docs/ROADMAP/`)
 
-If you are new to the Rust language check out <https://doc.rust-lang.org/rust-by-example/>.
+The documentation site is powered by MkDocs: `make servedocs` reloads on save.
 
-### Where to find things?
+## Release & Distribution
 
-The `term` directory holds the core terminal model code. This is agnostic
-of any windowing system. If you want to add support for terminal escape
-sequences and that sort of thing, you probably want to be in the `term` directory.
-Keep in mind that for maximal compatibility and utility `shelldone` aims to
-be compatible with the `xterm` behavior.
-https://invisible-island.net/xterm/ctlseqs/ctlseqs.html is a useful resource!
+`make ship` currently proxies to `make verify`. Release automation lives in
+`ci/` and is run by maintainers. Contributors only need to ensure verify passes
+and changelog entries are accurate.
 
-The `src` directory holds the code for the `shelldone` program. This is
-the GUI renderer for the terminal model.  If you want to change something
-about the GUI you want to be in the `src` dir.
+## Communication
 
-### Iterating
+- GitHub Discussions (`Ideas`, `Help`, `Show & Tell`).
+- Matrix: `#shelldone:matrix.org` for live chat.
+- `team@shelldone.dev` for security or sensitive topics.
 
-I tend to iterate and sanity check as I develop using `cargo check`; it
-will type-check your code without generating code which is much faster
-than building everything in release mode:
+We run regular roadmap syncs documented in `docs/ROADMAP`. Feel free to join! :)
 
-```console
-$ cargo check
-```
-
-Likewise, if you want to quickly check that something works, you can run it
-in debug mode using:
-
-```console
-$ cargo run
-```
-
-This will produce a debug-instrumented binary with poor optimization. This will
-give you more detail in the backtrace produced if you run `RUST_BACKTRACE=1 cargo run`.
-
-If you get a panic and want to examine local variables, you'll need to use gdb:
-
-```console
-$ cargo build
-$ gdb ./target/debug/shelldone
-$ break rust_panic               # hit tab to complete the name of the panic symbol!
-$ run
-$ bt
-```
-
-### Please include tests to cover your changes!
-
-This will help ensure that your contributions keep working as things change.
-
-You can run the existing tests using:
-
-```console
-$ cargo test --all
-```
-
-There are some helper classes for writing tests for terminal behavior.
-Here's [an example of a test to verify that the terminal contents
-match expectations](https://github.com/shelldone/shelldone/blob/fd532a8c2fb3b56593597cf8be1775da1feda0a3/term/src/test/mod.rs#L314).
-
-Please also make a point of adding comments to your tests to help
-clarify the intent of the test!
-
-### Please also include documentation if you are adding or changing behavior
-
-This helps to keep things well-understood and working in the long term.
-Don't worry if you're not a wordsmith or English isn't your first language as
-I can help with that. It is more important to capture the intent of the
-feature and having this written out in English also helps when it comes
-to reviewing the code.
-
-## Submitting a Pull Request
-
-After considering all of the above, and once you've prepared your contribution
-and are ready to submit it, you'll need to create a pull request.
-
-If you're new to GitHub Pull Requests, read through
-https://help.github.com/articles/creating-a-pull-request/ to understand
-how the process works.
-
-### Before you submit your code
-
-Make sure that the tests are working and that the code is correctly
-formatted otherwise the continuous integration system will fail your build:
-
-```console
-$ rustup component add rustfmt-preview          # you only need to do this once
-$ cargo test --all
-$ cargo fmt --all
-```
-
+Happy hacking!

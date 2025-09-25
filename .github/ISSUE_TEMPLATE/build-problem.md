@@ -1,33 +1,27 @@
 ---
 name: Build Problem
-about: Having problems building from source?
-title: ''
-labels: [bug, needs:triage]
-assignees: ''
-
+about: Failing to build Shelldone from source.
+title: ""
+labels: [build, needs:triage]
+assignees: ""
 ---
 
-## Build Environment (please complete the following information):
+## Environment
+- OS / distribution (`lsb_release -a`, `uname -a`)
+- Compiler / toolchain (clang/gcc/MSVC + versions)
+- `rustup show`
+- How Shelldone was cloned (git commit/branch, shallow/full)
 
- - OS: [e.g. Linux X11, Linux Wayland, macOS, Windows].  If on Linux, Please include `lsb_release -a` in your report.
- - Linux: what distro, version and architecture?  Please include `uname -a` in your report.
- - Compiler: are you using `clang`, `gcc`, `Microsoft Visual Studio` or something else?  Which version?
- - Rust version: Please include the output from `rustup show`. Best results are
-   generally had with a recent stable version of the rust toolchain.
+## Steps
+Explain exactly what command you ran (e.g. `make verify`, `cargo build --release`).
 
-## Dependencies
+## Output
+Paste the full build log (or attach as a file) with `RUST_BACKTRACE=1` enabled if available.
 
-Did you run the `get-deps` script to install required system dependencies?
-Was it successful?
+## Dependency Check
+- Did you run `./get-deps`? Outcome?
+- Did you run `git submodule update --init --recursive`?
+- Have you tried cleaning with `cargo clean` or removing `target/`?
 
-If building from the git repo, did you update the submodules?  Not doing this
-is a common source of problems; see the information at
-<https://shelldone.dev/shelldone/install/source.html> for more information.
-
-## The build output
-
-Please include the output from running the build command:
-
-```
-cargo build --release
-```
+## Additional context
+Anything else that might help (custom env vars, container, CI provider).
