@@ -14,12 +14,12 @@ in more detail in the [Fonts](../../fonts.md) section.
 
 If not specified, the font is same as the font in `window_frame.font`
 
-You will typically use [wezterm.font](../wezterm/font.md) or
-[wezterm.font_with_fallback](../wezterm/font_with_fallback.md) to specify the
+You will typically use [shelldone.font](../shelldone/font.md) or
+[shelldone.font_with_fallback](../shelldone/font_with_fallback.md) to specify the
 font.
 
 To specify `char_select_font`:
 
 ```lua
-config.char_select_font = wezterm.font 'Roboto'
+config.char_select_font = shelldone.font 'Roboto'
 ```

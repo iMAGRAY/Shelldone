@@ -1,0 +1,9 @@
+Kill a pane
+
+Usage: shelldone cli kill-pane [OPTIONS]
+
+Options:
+      --pane-id <PANE_ID>  Specify the target pane. The default is to use the
+                           current pane based on the environment variable
+                           SHELLDONE_PANE
+  -h, --help               Print help

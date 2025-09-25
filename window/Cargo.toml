@@ -1,9 +1,9 @@
 [package]
 name = "window"
 version = "0.1.0"
-authors = ["Wez Furlong"]
+authors = ["Shelldone Team"]
 edition = "2018"
-repository = "https://github.com/wezterm/wezterm"
+repository = "https://github.com/shelldone/shelldone"
 description = "Cross platform window setup and render"
 license = "MIT"
 build = "build.rs"
@@ -42,10 +42,10 @@ serde = {workspace=true, features = ["rc", "derive"]}
 tiny-skia.workspace = true
 glium.workspace = true
 url.workspace = true
-wezterm-bidi.workspace = true
-wezterm-color-types.workspace = true
-wezterm-font.workspace = true
-wezterm-input-types.workspace = true
+shelldone-bidi.workspace = true
+shelldone-color-types.workspace = true
+shelldone-font.workspace = true
+shelldone-input-types.workspace = true
 
 [target."cfg(windows)".dependencies]
 clipboard-win.workspace = true

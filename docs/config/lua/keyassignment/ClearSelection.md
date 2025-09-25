@@ -9,14 +9,14 @@ when there is a selection present (clearing it afterwards) or sending
 CTRL-C to the terminal when there is no selection:
 
 ```lua
-local wezterm = require 'wezterm'
-local act = wezterm.action
+local shelldone = require 'shelldone'
+local act = shelldone.action
 
 config.keys = {
   {
     key = 'c',
     mods = 'CTRL',
-    action = wezterm.action_callback(function(window, pane)
+    action = shelldone.action_callback(function(window, pane)
       local has_selection = window:get_selection_text_for_pane(pane) ~= ''
       if has_selection then
         window:perform_action(act.CopyTo 'ClipboardAndPrimarySelection', pane)

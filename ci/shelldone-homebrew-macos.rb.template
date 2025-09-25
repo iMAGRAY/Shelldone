@@ -1,0 +1,52 @@
+# Note: if you are viewing this from the tap repo, this file is automatically
+# updated from:
+# https://github.com/shelldone/shelldone/blob/main/ci/shelldone-homebrew-macos.rb.template
+# by automation in the shelldone repo.
+# vim:ft=ruby:
+cask "shelldone" do
+  version "@TAG@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/shelldone/shelldone/releases/download/#{version}/Shelldone-macos-#{version}.zip"
+  name "Shelldone"
+  desc "A GPU-accelerated cross-platform terminal emulator and multiplexer written by @shelldone and implemented in Rust"
+  homepage "https://shelldone.org/"
+
+  conflicts_with cask: "shelldone/shelldone/shelldone-nightly"
+
+  # Unclear what the minimal OS version is
+  # depends_on macos: ">= :sierra"
+
+  app "Shelldone.app"
+  [
+    "shelldone",
+    "shelldone-gui",
+    "shelldone-mux-server",
+    "strip-ansi-escapes"
+  ].each do |tool|
+    binary "#{appdir}/Shelldone.app/Contents/MacOS/#{tool}"
+  end
+
+  preflight do
+    # Move "Shelldone-macos-#{version}/Shelldone.app" out of the subfolder
+    staged_subfolder = staged_path.glob(["Shelldone-*", "shelldone-*"]).first
+    if staged_subfolder
+      FileUtils.mv(staged_subfolder/"Shelldone.app", staged_path)
+      FileUtils.rm_rf(staged_subfolder)
+    end
+  end
+
+  zap trash: [
+    "~/Library/Saved Application State/com.github.shelldone.terminal.savedState",
+  ]
+
+  def caveats; <<~EOS
+    Cask #{token} related executables like 'shelldone', 'shelldone-gui',
+    'shelldone-mux-server', are linked into
+      /usr/local/bin/    for x86 Mac,
+      /opt/homebrew/bin/ for M1 Mac.
+
+    Removal of them is ensured by 'brew uninstall --cask #{token}'.
+  EOS
+  end
+end

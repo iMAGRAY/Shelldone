@@ -1,7 +1,7 @@
 [package]
 name = "mux"
 version = "0.1.0"
-authors = ["Wez Furlong <wez@wezfurlong.org>"]
+authors = ["Shelldone Team <team@shelldone.dev>"]
 edition = "2018"
 publish = false
 
@@ -45,9 +45,9 @@ termwiz.workspace = true
 textwrap.workspace = true
 thiserror.workspace = true
 url.workspace = true
-wezterm-dynamic.workspace = true
-wezterm-ssh.workspace = true
-wezterm-term = { workspace=true, features=["use_serde"] }
+shelldone-dynamic.workspace = true
+shelldone-ssh.workspace = true
+shelldone-term = { workspace=true, features=["use_serde"] }
 
 [target."cfg(windows)".dependencies]
 ntapi.workspace = true

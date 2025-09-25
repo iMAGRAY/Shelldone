@@ -1,0 +1,70 @@
+name: shelldone-ssh
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "shelldone-ssh/**"
+      - "filedescriptor/**"
+      - "pty/**"
+      - "async_ossl/**"
+      - "termwiz/**"
+      - ".github/workflows/shelldone_ssh.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "shelldone-ssh/**"
+      - "filedescriptor/**"
+      - "pty/**"
+      - "async_ossl/**"
+      - "termwiz/**"
+      - ".github/workflows/shelldone_ssh.yml"
+
+jobs:
+  build-shelldone-ssh-feature-libssh-rs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: "Install Rust"
+        uses: dtolnay/rust-toolchain@stable
+      - name: "Cache cargo"
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            shelldone-ssh
+          key: "shelldone-ssh-libssh-rs-${{ runner.os }}"
+      - name: "Install cargo-nextest from Cargo"
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: "cargo-nextest"
+      - name: Build
+        run: |
+          source $HOME/.cargo/env
+          cargo build -p shelldone-ssh --no-default-features --features "libssh-rs vendored-openssl-libssh-rs"
+          cargo nextest run --no-fail-fast -p shelldone-ssh --no-default-features --features "libssh-rs vendored-openssl-libssh-rs"
+  build-shelldone-ssh-feature-ssh2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: "Install Rust"
+        uses: dtolnay/rust-toolchain@stable
+      - name: "Cache cargo"
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            shelldone-ssh
+          key: "shelldone-ssh-ssh2-${{ runner.os }}"
+      - name: "Install cargo-nextest from Cargo"
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: "cargo-nextest"
+      - name: Build
+        run: |
+          source $HOME/.cargo/env
+          cargo build -p shelldone-ssh --no-default-features --features "ssh2 vendored-openssl-ssh2"
+          cargo nextest run --no-fail-fast -p shelldone-ssh --no-default-features --features "ssh2 vendored-openssl-ssh2"
+

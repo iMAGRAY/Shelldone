@@ -5,22 +5,22 @@ members = [
   "strip-ansi-escapes",
   "sync-color-schemes",
   "deps/cairo",
-  "wezterm",
-  "wezterm-blob-leases",
-  "wezterm-cell",
-  "wezterm-escape-parser",
-  "wezterm-dynamic",
-  "wezterm-gui",
-  "wezterm-mux-server",
-  "wezterm-open-url",
-  "wezterm-ssh",
-  "wezterm-surface",
-  "wezterm-uds",
+  "shelldone",
+  "shelldone-blob-leases",
+  "shelldone-cell",
+  "shelldone-escape-parser",
+  "shelldone-dynamic",
+  "shelldone-gui",
+  "shelldone-mux-server",
+  "shelldone-open-url",
+  "shelldone-ssh",
+  "shelldone-surface",
+  "shelldone-uds",
 ]
 resolver = "2"
 exclude = [
   "termwiz/codegen",
-  "wezterm-char-props/codegen",
+  "shelldone-char-props/codegen",
 ]
 
 [profile.release]
@@ -240,27 +240,27 @@ wayland-client = "0.31"
 wayland-egl = "0.32"
 wayland-protocols = "0.32"
 wayland-protocols-plasma = { version="0.3.6", features=["client"] }
-wezterm-bidi = { version="0.2.3", path = "bidi", default-features=false}
-wezterm-blob-leases = { version="0.1.1", path = "wezterm-blob-leases"}
-wezterm-cell = { path = "wezterm-cell"}
-wezterm-char-props = { path = "wezterm-char-props", default-features=false }
-wezterm-client = { path = "wezterm-client" }
-wezterm-color-types = { version="0.3", path = "color-types", default-features=false }
-wezterm-config-derive = { version="0.1", path="config/derive" }
-wezterm-dynamic = { version = "0.2.1", path = "wezterm-dynamic", default-features=false }
-wezterm-dynamic-derive = { version="0.1.1", path="wezterm-dynamic/derive" }
-wezterm-escape-parser = { version="0.1.0", path="wezterm-escape-parser" }
-wezterm-font = { path = "wezterm-font" }
-wezterm-gui-subcommands = { path = "wezterm-gui-subcommands" }
-wezterm-input-types = { version="0.1", path = "wezterm-input-types", default-features=false }
-wezterm-mux-server-impl = { path = "wezterm-mux-server-impl" }
-wezterm-open-url = { path = "wezterm-open-url" }
-wezterm-ssh = { path = "wezterm-ssh" }
-wezterm-surface = { path = "wezterm-surface" }
-wezterm-term = { path = "term" }
-wezterm-toast-notification = { path = "wezterm-toast-notification" }
-wezterm-uds = { path = "wezterm-uds" }
-wezterm-version = { path = "wezterm-version" }
+shelldone-bidi = { version="0.2.3", path = "bidi", default-features=false}
+shelldone-blob-leases = { version="0.1.1", path = "shelldone-blob-leases"}
+shelldone-cell = { path = "shelldone-cell"}
+shelldone-char-props = { path = "shelldone-char-props", default-features=false }
+shelldone-client = { path = "shelldone-client" }
+shelldone-color-types = { version="0.3", path = "color-types", default-features=false }
+shelldone-config-derive = { version="0.1", path="config/derive" }
+shelldone-dynamic = { version = "0.2.1", path = "shelldone-dynamic", default-features=false }
+shelldone-dynamic-derive = { version="0.1.1", path="shelldone-dynamic/derive" }
+shelldone-escape-parser = { version="0.1.0", path="shelldone-escape-parser" }
+shelldone-font = { path = "shelldone-font" }
+shelldone-gui-subcommands = { path = "shelldone-gui-subcommands" }
+shelldone-input-types = { version="0.1", path = "shelldone-input-types", default-features=false }
+shelldone-mux-server-impl = { path = "shelldone-mux-server-impl" }
+shelldone-open-url = { path = "shelldone-open-url" }
+shelldone-ssh = { path = "shelldone-ssh" }
+shelldone-surface = { path = "shelldone-surface" }
+shelldone-term = { path = "term" }
+shelldone-toast-notification = { path = "shelldone-toast-notification" }
+shelldone-uds = { path = "shelldone-uds" }
+shelldone-version = { path = "shelldone-version" }
 wgpu = "25.0.2"
 whoami = "1.5"
 winapi = "0.3.9"
@@ -270,7 +270,7 @@ windows = "0.33.0"
 winreg = "0.10"
 x11 = "2.21"
 xcb = "1.3"
-xcb-imdkit = { version="0.3", git="https://github.com/wezterm/xcb-imdkit-rs.git", rev="212330f7c6c37794d78061a773e8f4f9e4785bbb"}
+xcb-imdkit = { version="0.3", git="https://github.com/wez/xcb-imdkit-rs.git", rev="212330f7c6c37794d78061a773e8f4f9e4785bbb"}
 xkbcommon = "0.7.0"
 xml-rs = "0.8"
 zbus = "4.2"

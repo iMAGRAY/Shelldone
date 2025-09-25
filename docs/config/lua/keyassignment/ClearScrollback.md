@@ -8,8 +8,8 @@ the scrollbar thumb to the full height of the window.
 Added a parameter that allows additionally clear the viewport:
 
 ```lua
-local wezterm = require 'wezterm'
-local act = wezterm.action
+local shelldone = require 'shelldone'
+local act = shelldone.action
 
 config.keys = {
   -- Clears only the scrollback and leaves the viewport intact.

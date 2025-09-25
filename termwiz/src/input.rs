@@ -10,9 +10,9 @@ use crate::readbuf::ReadBuffer;
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
-use wezterm_input_types::ctrl_mapping;
+use shelldone_input_types::ctrl_mapping;
 
-pub use wezterm_input_types::Modifiers;
+pub use shelldone_input_types::Modifiers;
 
 pub const CSI: &str = "\x1b[";
 pub const SS3: &str = "\x1bO";
@@ -44,7 +44,7 @@ use winapi::um::wincon::{
     WINDOW_BUFFER_SIZE_EVENT, WINDOW_BUFFER_SIZE_RECORD,
 };
 
-pub use wezterm_escape_parser::csi::MouseButtons;
+pub use shelldone_escape_parser::csi::MouseButtons;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputEvent {
@@ -92,7 +92,7 @@ pub struct KeyEvent {
 }
 
 /// Which key is pressed.  Not all of these are probable to appear
-/// on most systems.  A lot of this list is @wez trawling docs and
+/// on most systems.  A lot of this list is @shelldone trawling docs and
 /// making an entry for things that might be possible in this first pass.
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -1327,7 +1327,7 @@ impl InputParser {
                         // end marker in 8K, 16K, 24K etc. of text until the final buffer is received.
                         // Ensure that we use saturating math here for the case where the amount
                         // of buffered data after the begin paste is smaller than the end paste marker
-                        // <https://github.com/wezterm/wezterm/pull/1832>
+                        // <https://github.com/shelldone/shelldone/pull/1832>
                         self.state =
                             InputState::Pasting(self.buf.len().saturating_sub(end_paste.len()));
                         return;

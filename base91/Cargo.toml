@@ -1,5 +1,5 @@
 [package]
-authors = ["Wez Furlong <wez@wezfurlong.org>"]
+authors = ["Shelldone Team <team@shelldone.dev>"]
 name = "base91"
 version = "0.1.0"
 edition = "2018"

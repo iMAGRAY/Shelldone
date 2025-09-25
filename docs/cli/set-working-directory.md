@@ -1,6 +1,6 @@
-# `wezterm set-working-directory`
+# `shelldone set-working-directory`
 
 ```console
-{% include "../examples/cmd-synopsis-wezterm-set-working-directory--help.txt" %}
+{% include "../examples/cmd-synopsis-shelldone-set-working-directory--help.txt" %}
 ```
 

@@ -1,10 +1,10 @@
-copyright: Copyright &copy; 2018-Present Wez Furlong
+copyright: Copyright © 2025 Shelldone Labs
 use_directory_urls: false
-site_name: Wez's Terminal Emulator
-site_url: https://wezterm.org/
-site_description: Wez's Terminal Emulator
-repo_url: https://github.com/wezterm/wezterm
-repo_name: wezterm/wezterm
+site_name: Shelldone Terminal Emulator
+site_url: https://shelldone.org/
+site_description: Shelldone Terminal Emulator
+repo_url: https://github.com/shelldone/shelldone
+repo_name: shelldone/shelldone
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: gh_pages
@@ -97,8 +97,8 @@ markdown_extensions:
   - pymdownx.saneheaders
   - pymdownx.magiclink:
       repo_url_shorthand: true
-      user: wezterm
-      repo: wezterm
+      user: shelldone
+      repo: shelldone
   - pymdownx.details
   - attr_list
   - md_in_html
@@ -128,8 +128,8 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/wezterm/wezterm
+      link: https://github.com/shelldone/shelldone
     - icon: fontawesome/brands/mastodon
-      link: https://fosstodon.org/@wez
+      link: https://fosstodon.org/@shelldone
     - icon: fontawesome/brands/twitter
-      link: https://twitter.com/wezfurlong
+      link: https://twitter.com/shelldone

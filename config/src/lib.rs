@@ -17,8 +17,8 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use wezterm_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, UnknownFieldAction, Value};
-use wezterm_term::UnicodeVersion;
+use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, UnknownFieldAction, Value};
+use shelldone_term::UnicodeVersion;
 
 mod background;
 mod bell;
@@ -383,9 +383,9 @@ pub fn create_user_owned_dirs(p: &Path) -> anyhow::Result<()> {
 }
 
 fn xdg_config_home() -> PathBuf {
-    match std::env::var_os("XDG_CONFIG_HOME").map(|s| PathBuf::from(s).join("wezterm")) {
+    match std::env::var_os("XDG_CONFIG_HOME").map(|s| PathBuf::from(s).join("shelldone")) {
         Some(p) => p,
-        None => HOME_DIR.join(".config").join("wezterm"),
+        None => HOME_DIR.join(".config").join("shelldone"),
     }
 }
 
@@ -395,7 +395,7 @@ fn config_dirs() -> Vec<PathBuf> {
 
     #[cfg(unix)]
     if let Some(d) = std::env::var_os("XDG_CONFIG_DIRS") {
-        dirs.extend(std::env::split_paths(&d).map(|s| PathBuf::from(s).join("wezterm")));
+        dirs.extend(std::env::split_paths(&d).map(|s| PathBuf::from(s).join("shelldone")));
     }
 
     dirs
@@ -444,7 +444,7 @@ pub fn configuration() -> ConfigHandle {
 
 /// Returns a version of the config (loaded from the config file)
 /// with some field overridden based on the supplied overrides object.
-pub fn overridden_config(overrides: &wezterm_dynamic::Value) -> Result<ConfigHandle, Error> {
+pub fn overridden_config(overrides: &shelldone_dynamic::Value) -> Result<ConfigHandle, Error> {
     CONFIG.overridden(overrides)
 }
 
@@ -561,7 +561,7 @@ impl ConfigInner {
     }
 
     fn accumulate_watch_paths(lua: &Lua, watch_paths: &mut Vec<PathBuf>) {
-        if let Ok(mlua::Value::Table(tbl)) = lua.named_registry_value("wezterm-watch-paths") {
+        if let Ok(mlua::Value::Table(tbl)) = lua.named_registry_value("shelldone-watch-paths") {
             for path in tbl.sequence_values::<String>() {
                 if let Ok(path) = path {
                     watch_paths.push(PathBuf::from(path));
@@ -595,7 +595,7 @@ impl ConfigInner {
                 // But avoid watching the home dir itself, so that we
                 // don't keep reloading every time something in the
                 // home dir changes!
-                // <https://github.com/wezterm/wezterm/issues/1895>
+                // <https://github.com/shelldone/shelldone/issues/1895>
                 if parent != &*HOME_DIR {
                     watch_paths.push(parent.to_path_buf());
                 }
@@ -655,7 +655,7 @@ impl ConfigInner {
         self.generation += 1;
     }
 
-    fn overridden(&mut self, overrides: &wezterm_dynamic::Value) -> Result<ConfigHandle, Error> {
+    fn overridden(&mut self, overrides: &shelldone_dynamic::Value) -> Result<ConfigHandle, Error> {
         let config = Config::load_with_overrides(overrides);
         Ok(ConfigHandle {
             config: Arc::new(config.config?),
@@ -730,7 +730,7 @@ impl Configuration {
         inner.use_this_config(cfg);
     }
 
-    fn overridden(&self, overrides: &wezterm_dynamic::Value) -> Result<ConfigHandle, Error> {
+    fn overridden(&self, overrides: &shelldone_dynamic::Value) -> Result<ConfigHandle, Error> {
         let mut inner = self.inner.lock().unwrap();
         inner.overridden(overrides)
     }

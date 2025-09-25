@@ -1,6 +1,6 @@
-# `wezterm ls-fonts`
+# `shelldone ls-fonts`
 
 ```console
-{% include "../examples/cmd-synopsis-wezterm-ls-fonts--help.txt" %}
+{% include "../examples/cmd-synopsis-shelldone-ls-fonts--help.txt" %}
 ```
 

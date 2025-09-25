@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Use eg: `xwininfo -int` to get the id of a wezterm
+# Use eg: `xwininfo -int` to get the id of a shelldone
 # and pass it to this script
 WINID=$1
 
 changed=$(git status --porcelain assets/colors | cut -c4-)
-WEZTERM_DIR=$PWD
+SHELLDONE_DIR=$PWD
 
 cd ../github/iTerm2-Color-Schemes/dynamic-colors
-shots=$WEZTERM_DIR/docs/colorschemes
+shots=$SHELLDONE_DIR/docs/colorschemes
 
-printf "\e]0;wezterm\e\\"
+printf "\e]0;shelldone\e\\"
 
 for toml in $changed ; do
   name=$(basename $toml)

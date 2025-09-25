@@ -1,0 +1,39 @@
+[package]
+authors = ["Shelldone Team"]
+name = "shelldone-surface"
+version = "0.1.0"
+edition = "2018"
+repository = "https://github.com/shelldone/shelldone"
+description = "Surface and Line types for terminals"
+license = "MIT"
+documentation = "https://docs.rs/shelldone-surface"
+keywords = ["terminal", "surface", "line"]
+
+[dependencies]
+bitflags = "2.0"
+fancy-regex.workspace = true
+finl_unicode.workspace = true
+fixedbitset.workspace = true
+ordered-float.workspace = true
+serde = {workspace=true, optional=true}
+siphasher.workspace = true
+unicode-segmentation.workspace = true
+shelldone-bidi.workspace = true
+shelldone-blob-leases = {workspace=true, optional=true}
+shelldone-cell = {workspace = true}
+shelldone-char-props.workspace = true
+shelldone-color-types = {workspace = true}
+shelldone-dynamic = {workspace = true}
+shelldone-escape-parser = {workspace = true}
+shelldone-input-types.workspace = true
+
+[features]
+default = []
+std = ["fancy-regex/std", "shelldone-cell/std", "shelldone-dynamic/std", "shelldone-escape-parser/std", "fixedbitset/std", "fancy-regex/perf", "fancy-regex/unicode"]
+appdata = ["std"]
+use_serde = ["serde"] #, "shelldone-color-types/use_serde", "shelldone-blob-leases/serde", "bitflags/serde", "shelldone-input-types/serde", "shelldone-escape-parser/use_serde", "shelldone-cell/use_serde"]
+use_image = ["shelldone-cell/use_image"] # "image", "dep:image", "shelldone-escape-parser/use_image", "shelldone-escape-parser/kitty-shm", "shelldone-cell/use_image"]
+
+[dev-dependencies]
+k9.workspace = true
+

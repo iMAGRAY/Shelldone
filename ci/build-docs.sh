@@ -33,8 +33,8 @@ function ghapi() {
   fi
 }
 
-[[ -f /tmp/wezterm.releases.json ]] || ghapi /repos/wezterm/wezterm/releases > /tmp/wezterm.releases.json
-[[ -f /tmp/wezterm.nightly.json ]] || ghapi /repos/wezterm/wezterm/releases/tags/nightly > /tmp/wezterm.nightly.json
+[[ -f /tmp/shelldone.releases.json ]] || ghapi /repos/shelldone/shelldone/releases > /tmp/shelldone.releases.json
+[[ -f /tmp/shelldone.nightly.json ]] || ghapi /repos/shelldone/shelldone/releases/tags/nightly > /tmp/shelldone.nightly.json
 python3 ci/subst-release-info.py || exit 1
 python3 ci/generate-docs.py || exit 1
 
@@ -46,7 +46,7 @@ if hash black 2>/dev/null ; then
 fi
 
 cp "assets/icon/terminal.png" docs/favicon.png
-cp "assets/icon/wezterm-icon.svg" docs/favicon.svg
+cp "assets/icon/shelldone-icon.svg" docs/favicon.svg
 mkdir -p docs/fonts
 cp assets/fonts/SymbolsNerdFontMono-Regular.ttf docs/fonts/
 
@@ -61,11 +61,11 @@ docker_or_podman() {
   fi
 }
 
-docker_or_podman build -t wezterm/mkdocs-material -f ci/Dockerfile.docs .
+docker_or_podman build -t shelldone/mkdocs-material -f ci/Dockerfile.docs .
 
 if [ "$SERVE" == "yes" ] ; then
-  docker_or_podman run --rm -it -p8000:8000 -v ${PWD}:/docs wezterm/mkdocs-material serve -a 0.0.0.0:8000
-  #docker_or_podman run --rm -it --network=host -v ${PWD}:/docs wezterm/mkdocs-material $@
+  docker_or_podman run --rm -it -p8000:8000 -v ${PWD}:/docs shelldone/mkdocs-material serve -a 0.0.0.0:8000
+  #docker_or_podman run --rm -it --network=host -v ${PWD}:/docs shelldone/mkdocs-material $@
 else
-  docker_or_podman run --rm -e CARDS=true -v ${PWD}:/docs wezterm/mkdocs-material build
+  docker_or_podman run --rm -e CARDS=true -v ${PWD}:/docs shelldone/mkdocs-material build
 fi

@@ -1,7 +1,7 @@
-# `wezterm serial`
+# `shelldone serial`
 
 ```console
-{% include "../examples/cmd-synopsis-wezterm-serial--help.txt" %}
+{% include "../examples/cmd-synopsis-shelldone-serial--help.txt" %}
 ```
 
 

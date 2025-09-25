@@ -1,7 +1,7 @@
-# `wezterm record`
+# `shelldone record`
 
 ```console
-{% include "../examples/cmd-synopsis-wezterm-record--help.txt" %}
+{% include "../examples/cmd-synopsis-shelldone-record--help.txt" %}
 ```
 
 

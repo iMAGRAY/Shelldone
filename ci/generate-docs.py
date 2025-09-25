@@ -278,7 +278,7 @@ title: Color Schemes with first letter "{scheme_prefix}"
                     origin_url = scheme["metadata"].get("origin_url", None)
                     if origin_url:
                         idx.write(f"Source: <{origin_url}><br/>\n")
-                    version = scheme["metadata"].get("wezterm_version", None)
+                    version = scheme["metadata"].get("shelldone_version", None)
                     if version and version != "Always":
                         idx.write(f"{{{{since('{version}')}}}}<br/>\n")
 
@@ -324,7 +324,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
 TOC = [
     Page(
-        "WezTerm",
+        "Shelldone",
         "index.md",
         children=[
             Page("Features", "features.md"),
@@ -379,40 +379,40 @@ TOC = [
                 "config/lua/config",
             ),
             Gen(
-                "module: wezterm",
-                "config/lua/wezterm",
+                "module: shelldone",
+                "config/lua/shelldone",
             ),
             Gen(
-                "module: wezterm.color",
-                "config/lua/wezterm.color",
+                "module: shelldone.color",
+                "config/lua/shelldone.color",
             ),
             Gen(
-                "module: wezterm.gui",
-                "config/lua/wezterm.gui",
+                "module: shelldone.gui",
+                "config/lua/shelldone.gui",
             ),
             Gen(
-                "module: wezterm.mux",
-                "config/lua/wezterm.mux",
+                "module: shelldone.mux",
+                "config/lua/shelldone.mux",
             ),
             Gen(
-                "module: wezterm.plugin",
-                "config/lua/wezterm.plugin",
+                "module: shelldone.plugin",
+                "config/lua/shelldone.plugin",
             ),
             Gen(
-                "module: wezterm.procinfo",
-                "config/lua/wezterm.procinfo",
+                "module: shelldone.procinfo",
+                "config/lua/shelldone.procinfo",
             ),
             Gen(
-                "module: wezterm.serde",
-                "config/lua/wezterm.serde",
+                "module: shelldone.serde",
+                "config/lua/shelldone.serde",
             ),
             Gen(
-                "module: wezterm.time",
-                "config/lua/wezterm.time",
+                "module: shelldone.time",
+                "config/lua/shelldone.time",
             ),
             Gen(
-                "module: wezterm.url",
-                "config/lua/wezterm.url",
+                "module: shelldone.url",
+                "config/lua/shelldone.url",
             ),
             Gen(
                 "enum: KeyAssignment",
@@ -432,7 +432,7 @@ TOC = [
             Page("object: TabInformation", "config/lua/TabInformation.md"),
             Page("object: SshDomain", "config/lua/SshDomain.md"),
             Page("object: SpawnCommand", "config/lua/SpawnCommand.md"),
-            Gen("object: Time", "config/lua/wezterm.time/Time"),
+            Gen("object: Time", "config/lua/shelldone.time/Time"),
             Page("object: TlsDomainClient", "config/lua/TlsDomainClient.md"),
             Page("object: TlsDomainServer", "config/lua/TlsDomainServer.md"),
             Gen(
@@ -462,17 +462,17 @@ TOC = [
         "CLI Reference",
         "cli/general.md",
         children=[
-            Gen("wezterm cli", "cli/cli"),
-            Page("wezterm connect", "cli/connect.md"),
-            Page("wezterm imgcat", "cli/imgcat.md"),
-            Page("wezterm ls-fonts", "cli/ls-fonts.md"),
-            Page("wezterm record", "cli/record.md"),
-            Page("wezterm replay", "cli/replay.md"),
-            Page("wezterm serial", "cli/serial.md"),
-            Page("wezterm set-working-directory", "cli/set-working-directory.md"),
-            Page("wezterm show-keys", "cli/show-keys.md"),
-            Page("wezterm ssh", "cli/ssh.md"),
-            Page("wezterm start", "cli/start.md"),
+            Gen("shelldone cli", "cli/cli"),
+            Page("shelldone connect", "cli/connect.md"),
+            Page("shelldone imgcat", "cli/imgcat.md"),
+            Page("shelldone ls-fonts", "cli/ls-fonts.md"),
+            Page("shelldone record", "cli/record.md"),
+            Page("shelldone replay", "cli/replay.md"),
+            Page("shelldone serial", "cli/serial.md"),
+            Page("shelldone set-working-directory", "cli/set-working-directory.md"),
+            Page("shelldone show-keys", "cli/show-keys.md"),
+            Page("shelldone ssh", "cli/ssh.md"),
+            Page("shelldone start", "cli/start.md"),
         ],
     ),
     Page(

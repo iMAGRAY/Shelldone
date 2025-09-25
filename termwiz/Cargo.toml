@@ -1,9 +1,9 @@
 [package]
-authors = ["Wez Furlong"]
+authors = ["Shelldone Team"]
 name = "termwiz"
 version = "0.24.0"
 edition = "2018"
-repository = "https://github.com/wezterm/wezterm"
+repository = "https://github.com/shelldone/shelldone"
 description = "Terminal Wizardry for Unix and Windows"
 license = "MIT"
 documentation = "https://docs.rs/termwiz"
@@ -37,23 +37,23 @@ thiserror.workspace = true
 ucd-trie.workspace = true
 unicode-segmentation.workspace = true
 vtparse.workspace = true
-wezterm-bidi.workspace = true
-wezterm-blob-leases = {workspace=true, optional=true}
-wezterm-cell = {workspace = true, features=["std"]}
-wezterm-char-props.workspace = true
-wezterm-color-types = {workspace = true, features=["std"]}
-wezterm-dynamic = {workspace = true, features=["std"]}
-wezterm-escape-parser = {workspace = true, features=["std"]}
-wezterm-input-types.workspace = true
-wezterm-surface = {workspace = true, features=["std", "appdata"]}
+shelldone-bidi.workspace = true
+shelldone-blob-leases = {workspace=true, optional=true}
+shelldone-cell = {workspace = true, features=["std"]}
+shelldone-char-props.workspace = true
+shelldone-color-types = {workspace = true, features=["std"]}
+shelldone-dynamic = {workspace = true, features=["std"]}
+shelldone-escape-parser = {workspace = true, features=["std"]}
+shelldone-input-types.workspace = true
+shelldone-surface = {workspace = true, features=["std", "appdata"]}
 
 [features]
 default = ["image", "tmux_cc"]
 widgets = ["cassowary", "fnv"]
-use_serde = ["serde", "wezterm-color-types/use_serde", "wezterm-blob-leases/serde", "bitflags/serde", "wezterm-input-types/serde", "wezterm-escape-parser/use_serde", "wezterm-cell/use_serde", "wezterm-surface/use_serde"]
-use_image = ["image", "dep:image", "wezterm-escape-parser/use_image", "wezterm-escape-parser/kitty-shm", "wezterm-cell/use_image", "wezterm-surface/use_image"]
-image = ["sha2", "wezterm-blob-leases", "wezterm-escape-parser/image"]
-tmux_cc = ["pest", "pest_derive", "wezterm-escape-parser/tmux_cc"]
+use_serde = ["serde", "shelldone-color-types/use_serde", "shelldone-blob-leases/serde", "bitflags/serde", "shelldone-input-types/serde", "shelldone-escape-parser/use_serde", "shelldone-cell/use_serde", "shelldone-surface/use_serde"]
+use_image = ["image", "dep:image", "shelldone-escape-parser/use_image", "shelldone-escape-parser/kitty-shm", "shelldone-cell/use_image", "shelldone-surface/use_image"]
+image = ["sha2", "shelldone-blob-leases", "shelldone-escape-parser/image"]
+tmux_cc = ["pest", "pest_derive", "shelldone-escape-parser/tmux_cc"]
 docs = ["widgets", "use_serde", "image", "tmux_cc"]
 
 [dev-dependencies]

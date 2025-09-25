@@ -14,24 +14,24 @@ returned table may have the following fields:
 
 * `brief` - required: the brief description for the entry
 * `doc` - optional: a long description that may be shown after the entry, or that
-  may be used in future versions of wezterm to provide more information about the
+  may be used in future versions of shelldone to provide more information about the
   command.
 * `action` - the action to take when the item is activated. Can be any key assignment
   action.
 * `icon` - optional Nerd Fonts glyph name to use for the icon for the entry. See
-  [wezterm.nerdfonts](../wezterm/nerdfonts.md) for a list of icon names.
+  [shelldone.nerdfonts](../shelldone/nerdfonts.md) for a list of icon names.
 
 ## Adding a Rename Tab entry to the palette
 
 In this example, an entry is added for renaming tabs:
 
 ```lua
-local wezterm = require 'wezterm'
-local act = wezterm.action
+local shelldone = require 'shelldone'
+local act = shelldone.action
 
-local config = wezterm.config_builder()
+local config = shelldone.config_builder()
 
-wezterm.on('augment-command-palette', function(window, pane)
+shelldone.on('augment-command-palette', function(window, pane)
   return {
     {
       brief = 'Rename tab',
@@ -40,7 +40,7 @@ wezterm.on('augment-command-palette', function(window, pane)
       action = act.PromptInputLine {
         description = 'Enter new name for tab',
         initial_value = 'My Tab Name',
-        action = wezterm.action_callback(function(window, pane, line)
+        action = shelldone.action_callback(function(window, pane, line)
           if line then
             window:active_tab():set_title(line)
           end

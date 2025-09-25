@@ -1,9 +1,9 @@
 [package]
 name = "tabout"
 version = "0.3.0"
-authors = ["Wez Furlong <wez@wezfurlong.org>"]
+authors = ["Shelldone Team <team@shelldone.dev>"]
 edition = "2018"
-repository = "https://github.com/wezterm/wezterm"
+repository = "https://github.com/shelldone/shelldone"
 description = "Tabulate output for CLI programs"
 license = "MIT"
 documentation = "https://docs.rs/tabout"

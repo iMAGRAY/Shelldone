@@ -21,15 +21,15 @@ TRIGGER_PATHS_APPIMAGE = [
 ]
 
 TRIGGER_PATHS_UNIX = [
-    "assets/open-wezterm-here",
+    "assets/open-shelldone-here",
     "assets/shell-completion/**/*",
     "assets/shell-integration/**/*",
-    "assets/wezterm-nautilus.py",
-    "assets/wezterm.appdata.xml",
-    "assets/wezterm.desktop",
+    "assets/shelldone-nautilus.py",
+    "assets/shelldone.appdata.xml",
+    "assets/shelldone.desktop",
     "get-deps",
     "ci/tag-name.sh",
-    "termwiz/data/wezterm.terminfo",
+    "termwiz/data/shelldone.terminfo",
 ]
 
 TRIGGER_PATHS_MAC = [
@@ -436,9 +436,9 @@ rustup default {toolchain}
 
     def build_all_release(self):
         bin_crates = [
-            "wezterm",
-            "wezterm-gui",
-            "wezterm-mux-server",
+            "shelldone",
+            "shelldone-gui",
+            "shelldone-mux-server",
             "strip-ansi-escapes",
         ]
         steps = []
@@ -524,17 +524,17 @@ rustup default {toolchain}
                 # Add the distro name/version into the filename
                 RunStep(
                     "Rename APKs",
-                    f"mv ~/packages/wezterm/x86_64/*.apk $(echo ~/packages/wezterm/x86_64/*.apk | sed -e 's/wezterm-/wezterm-{self.name}-/')",
+                    f"mv ~/packages/shelldone/x86_64/*.apk $(echo ~/packages/shelldone/x86_64/*.apk | sed -e 's/shelldone-/shelldone-{self.name}-/')",
                 ),
                 # Move it to the repo dir
                 RunStep(
                     "Move APKs",
-                    f"mv ~/packages/wezterm/x86_64/*.apk .",
+                    f"mv ~/packages/shelldone/x86_64/*.apk .",
                 ),
                 # Move and rename the keys
                 RunStep(
                     "Move APK keys",
-                    f"mv ~/.abuild/*.pub wezterm-{self.name}.pub",
+                    f"mv ~/.abuild/*.pub shelldone-{self.name}.pub",
                 ),
             ]
         elif self.uses_zypper():
@@ -560,15 +560,15 @@ rustup default {toolchain}
     def asset_patterns(self):
         patterns = []
         if self.uses_yum() or self.uses_zypper():
-            patterns += ["wezterm-*.rpm"]
+            patterns += ["shelldone-*.rpm"]
         elif "win" in self.name:
-            patterns += ["WezTerm-*.zip", "WezTerm-*.exe"]
+            patterns += ["Shelldone-*.zip", "Shelldone-*.exe"]
         elif "mac" in self.name:
-            patterns += ["WezTerm-*.zip"]
+            patterns += ["Shelldone-*.zip"]
         elif ("ubuntu" in self.name) or ("debian" in self.name):
-            patterns += ["wezterm-*.deb", "wezterm-*.xz"]
+            patterns += ["shelldone-*.deb", "shelldone-*.xz"]
         elif "alpine" in self.name:
-            patterns += ["wezterm-*.apk"]
+            patterns += ["shelldone-*.apk"]
             if self.is_tag:
                 patterns.append("*.pub")
 
@@ -585,21 +585,21 @@ rustup default {toolchain}
             steps.append(
                 RunStep(
                     "Move RPM",
-                    f"mv ~/rpmbuild/RPMS/*/*.rpm wezterm-nightly-{self.name}.rpm",
+                    f"mv ~/rpmbuild/RPMS/*/*.rpm shelldone-nightly-{self.name}.rpm",
                 )
             )
         elif self.uses_apk():
             steps.append(
                 RunStep(
                     "Move APKs",
-                    f"mv ~/packages/wezterm/x86_64/*.apk wezterm-nightly-{self.name}.apk",
+                    f"mv ~/packages/shelldone/x86_64/*.apk shelldone-nightly-{self.name}.apk",
                 )
             )
         elif self.uses_zypper():
             steps.append(
                 RunStep(
                     "Move RPM",
-                    f"mv /usr/src/packages/RPMS/*/*.rpm wezterm-nightly-{self.name}.rpm",
+                    f"mv /usr/src/packages/RPMS/*/*.rpm shelldone-nightly-{self.name}.rpm",
                 )
             )
 
@@ -631,7 +631,7 @@ rustup default {toolchain}
             steps += [
                 RunStep(
                     "Upload to gemfury",
-                    f"for f in wezterm*.deb ; do curl -i -F package=@$f https://$FURY_TOKEN@push.fury.io/wez/ ; done",
+                    f"for f in shelldone*.deb ; do curl -i -F package=@$f https://$FURY_TOKEN@push.fury.io/shelldone/ ; done",
                     env={"FURY_TOKEN": "${{ secrets.FURY_TOKEN }}"},
                 ),
             ]
@@ -666,7 +666,7 @@ rustup default {toolchain}
             steps += [
                 RunStep(
                     "Upload to gemfury",
-                    f"for f in wezterm*.deb ; do curl -i -F package=@$f https://$FURY_TOKEN@push.fury.io/wez/ ; done",
+                    f"for f in shelldone*.deb ; do curl -i -F package=@$f https://$FURY_TOKEN@push.fury.io/shelldone/ ; done",
                     env={"FURY_TOKEN": "${{ secrets.FURY_TOKEN }}"},
                 ),
             ]
@@ -699,10 +699,10 @@ rustup default {toolchain}
             return []
         return [
             ActionStep(
-                "Checkout flathub/org.wezfurlong.wezterm",
+                "Checkout flathub/net.shelldone.terminal",
                 action="actions/checkout@v4",
                 params={
-                    "repository": "flathub/org.wezfurlong.wezterm",
+                    "repository": "flathub/net.shelldone.terminal",
                     "path": "flathub",
                     "token": "${{ secrets.GH_PAT }}",
                 },
@@ -713,7 +713,7 @@ rustup default {toolchain}
             ),
             RunStep(
                 "Submit PR",
-                'cd flathub && gh pr create --fill --body "PR automatically created by release automation in the wezterm repo"',
+                'cd flathub && gh pr create --fill --body "PR automatically created by release automation in the shelldone repo"',
                 env={
                     "GITHUB_TOKEN": "${{ secrets.GH_PAT }}",
                 },
@@ -728,26 +728,26 @@ rustup default {toolchain}
                     "Checkout winget-pkgs",
                     action="actions/checkout@v4",
                     params={
-                        "repository": "wez/winget-pkgs",
+                        "repository": "shelldone/winget-pkgs",
                         "path": "winget-pkgs",
                         "token": "${{ secrets.GH_PAT }}",
                     },
                 ),
                 RunStep(
                     "Setup email for winget repo",
-                    "cd winget-pkgs && git config user.email wez@wezfurlong.org",
+                    "cd winget-pkgs && git config user.email team@shelldone.dev",
                 ),
                 RunStep(
                     "Setup name for winget repo",
-                    "cd winget-pkgs && git config user.name 'Wez Furlong'",
+                    "cd winget-pkgs && git config user.name 'Shelldone Labs'",
                 ),
                 RunStep(
                     "Create winget manifest and push to fork",
-                    "bash ci/make-winget-pr.sh winget-pkgs WezTerm-*.exe",
+                    "bash ci/make-winget-pr.sh winget-pkgs Shelldone-*.exe",
                 ),
                 RunStep(
                     "Submit PR",
-                    'cd winget-pkgs && gh pr create --fill --body "PR automatically created by release automation in the wezterm repo"',
+                    'cd winget-pkgs && gh pr create --fill --body "PR automatically created by release automation in the shelldone repo"',
                     env={
                         "GITHUB_TOKEN": "${{ secrets.GH_PAT }}",
                     },
@@ -764,21 +764,21 @@ rustup default {toolchain}
                     "Checkout homebrew tap",
                     action="actions/checkout@v4",
                     params={
-                        "repository": "wez/homebrew-wezterm",
-                        "path": "homebrew-wezterm",
+                        "repository": "shelldone/homebrew-shelldone",
+                        "path": "homebrew-shelldone",
                         "token": "${{ secrets.GH_PAT }}",
                     },
                 ),
                 RunStep(
                     "Update homebrew tap formula",
-                    "cp wezterm.rb homebrew-wezterm/Casks/wezterm.rb",
+                    "cp shelldone.rb homebrew-shelldone/Casks/shelldone.rb",
                 ),
                 ActionStep(
                     "Commit homebrew tap changes",
                     action="stefanzweifel/git-auto-commit-action@v5",
                     params={
                         "commit_message": "Automated update to match latest tag",
-                        "repository": "homebrew-wezterm",
+                        "repository": "homebrew-shelldone",
                     },
                 ),
             ]
@@ -788,21 +788,21 @@ rustup default {toolchain}
                     "Checkout linuxbrew tap",
                     action="actions/checkout@v4",
                     params={
-                        "repository": "wez/homebrew-wezterm-linuxbrew",
-                        "path": "linuxbrew-wezterm",
+                        "repository": "shelldone/homebrew-shelldone-linuxbrew",
+                        "path": "linuxbrew-shelldone",
                         "token": "${{ secrets.GH_PAT }}",
                     },
                 ),
                 RunStep(
                     "Update linuxbrew tap formula",
-                    "cp wezterm-linuxbrew.rb linuxbrew-wezterm/Formula/wezterm.rb",
+                    "cp shelldone-linuxbrew.rb linuxbrew-shelldone/Formula/shelldone.rb",
                 ),
                 ActionStep(
                     "Commit linuxbrew tap changes",
                     action="stefanzweifel/git-auto-commit-action@v5",
                     params={
                         "commit_message": "Automated update to match latest tag",
-                        "repository": "linuxbrew-wezterm",
+                        "repository": "linuxbrew-shelldone",
                     },
                 ),
             ]
@@ -939,7 +939,7 @@ rustup default {toolchain}
             steps += [
                 RunStep(
                     "Workaround git permissions issue",
-                    "git config --global --add safe.directory /__w/wezterm/wezterm",
+                    "git config --global --add safe.directory /__w/shelldone/shelldone",
                 )
             ]
         steps += [CheckoutStep(submodules=submodules, container=self.container)]
@@ -1080,7 +1080,7 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     needs: build
-    if: github.repository == 'wezterm/wezterm'
+    if: github.repository == 'shelldone/shelldone'
     permissions:
       contents: write
       pages: write

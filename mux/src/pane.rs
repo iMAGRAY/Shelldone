@@ -14,9 +14,9 @@ use termwiz::hyperlink::Rule;
 use termwiz::input::KeyboardEncoding;
 use termwiz::surface::{Line, SequenceNo};
 use url::Url;
-use wezterm_dynamic::Value;
-use wezterm_term::color::ColorPalette;
-use wezterm_term::{
+use shelldone_dynamic::Value;
+use shelldone_term::color::ColorPalette;
+use shelldone_term::{
     Clipboard, DownloadHandler, KeyCode, KeyModifiers, MouseEvent, Progress, SemanticZone,
     StableRowIndex, TerminalConfiguration, TerminalSize,
 };

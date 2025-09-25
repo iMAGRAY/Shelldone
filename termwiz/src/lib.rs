@@ -41,28 +41,28 @@
 //! * `use_serde` - makes a number of structs serde serializable
 
 pub mod caps;
-pub use wezterm_cell as cell;
-pub use wezterm_cell::color;
-pub use wezterm_surface::cellcluster;
+pub use shelldone_cell as cell;
+pub use shelldone_cell::color;
+pub use shelldone_surface::cellcluster;
 pub mod error;
 #[cfg(feature = "use_image")]
-pub use wezterm_cell::image;
-pub use wezterm_surface::hyperlink;
+pub use shelldone_cell::image;
+pub use shelldone_surface::hyperlink;
 pub mod input;
 pub mod istty;
 pub mod keymap;
 pub mod lineedit;
 mod macros;
-pub use wezterm_char_props::nerdfonts;
+pub use shelldone_char_props::nerdfonts;
 mod readbuf;
 pub mod render;
-pub use wezterm_surface as surface;
+pub use shelldone_surface as surface;
 pub mod terminal;
 #[cfg(feature = "tmux_cc")]
-pub use wezterm_escape_parser::tmux_cc;
+pub use shelldone_escape_parser::tmux_cc;
 #[cfg(feature = "widgets")]
 pub mod widgets;
 
 pub use error::{Context, Error, Result};
 
-pub use wezterm_escape_parser as escape;
+pub use shelldone_escape_parser as escape;

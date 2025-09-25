@@ -69,7 +69,7 @@ All notable changes to this project will be documented in this file.
 - Update sha2
 - Plumb more modifier+state information through
 - Improve support for numpad buttons
-- :Modifiers is now wezterm_input_types::Modifiers
+- :Modifiers is now shelldone_input_types::Modifiers
 - Ignore caps/num lock when encoding keys in xterm encoding
 - Move led status to separate enum
 - Input: avoid panic for certain numpad keys
@@ -258,7 +258,7 @@ All notable changes to this project will be documented in this file.
 - Replace pretty_assertions dep with k9
 - Nix -> 0.24
 - Avoid panic with a malformed escape
-- Cut over to wezterm-dynamic
+- Cut over to shelldone-dynamic
 - Allow specifying the animation speed for images
 - Implement OSC 1337 ReportCellSize
 - Add kitty keyboard CSI control escapes
@@ -294,7 +294,7 @@ All notable changes to this project will be documented in this file.
 ### 🚜 Refactor
 
 - Move cursor sprite generation to be dynamic
-- Move color parsing into wezerm-color-types crate
+- Move color parsing into shelldone-color-types crate
 - Move sixel parser/builder to own file
 
 ### 📚 Documentation
@@ -310,7 +310,7 @@ All notable changes to this project will be documented in this file.
 - Fix panic in RgbColor::from_rgb_str w/ empty string
 - Fixup DECKPAM/DECANM/DECCKM interaction
 - Enable scrollback in the error window
-- Recognize wezterm as supporting iterm2 images
+- Recognize shelldone as supporting iterm2 images
 - Implement window/pixel size responses
 - Fix DCS parsing
 - Fix dec private mode parsing
@@ -363,7 +363,7 @@ All notable changes to this project will be documented in this file.
 - Really fixup windows build
 - Update to ordered-float 2.1
 - Add window::effective_config() method
-- Add wezterm.format function
+- Add shelldone.format function
 - Improve restoring cursor visibility under tmux
 - Alternate plan for restoring cursor visibility in tmux
 - Revert tmux workarounds

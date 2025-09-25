@@ -15,8 +15,8 @@ This action has been removed. Please use [PasteFrom](PasteFrom.md) instead.
 ## Example
 
 ```lua
-local wezterm = require 'wezterm'
-local act = wezterm.action
+local shelldone = require 'shelldone'
+local act = shelldone.action
 
 config.keys = {
   { key = 'v', mods = 'SHIFT|CTRL', action = act.PastePrimarySelection },

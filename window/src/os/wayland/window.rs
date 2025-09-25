@@ -44,8 +44,8 @@ use wayland_client::{Connection as WConnection, Dispatch, Proxy, QueueHandle};
 use wayland_egl::{is_available as egl_is_available, WlEglSurface};
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur_manager::OrgKdeKwinBlurManager;
-use wezterm_font::FontConfiguration;
-use wezterm_input_types::{
+use shelldone_font::FontConfiguration;
+use shelldone_input_types::{
     KeyboardLedStatus, Modifiers, MouseButtons, MouseEvent, MouseEventKind, MousePress,
     ScreenPoint, WindowDecorations,
 };
@@ -593,7 +593,7 @@ impl WaylandWindowInner {
         // correctly.
         // Therefore, when frame_callback is set to some, we need to send the NeedRepaint
         // event again to ensure the window is displayed.
-        // Fix: https://github.com/wezterm/wezterm/issues/5103
+        // Fix: https://github.com/shelldone/shelldone/issues/5103
         if self.frame_callback.is_some() {
             self.events.dispatch(WindowEvent::NeedRepaint);
         }
@@ -1085,8 +1085,8 @@ impl WaylandWindowInner {
         // which is necessary for the frame callback to get triggered.
         // Ordering the repaint after requesting the callback ensures that
         // we will get woken at the appropriate time.
-        // <https://github.com/wezterm/wezterm/issues/3468>
-        // <https://github.com/wezterm/wezterm/issues/3126>
+        // <https://github.com/shelldone/shelldone/issues/3468>
+        // <https://github.com/shelldone/shelldone/issues/3126>
         self.events.dispatch(WindowEvent::NeedRepaint);
 
         Ok(())

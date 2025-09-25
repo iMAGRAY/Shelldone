@@ -17,8 +17,8 @@ motion keys are used to adjust the size in their conventional directions,
 respectively.
 
 ```lua
-local wezterm = require 'wezterm'
-local act = wezterm.action
+local shelldone = require 'shelldone'
+local act = shelldone.action
 local config = {}
 
 config.leader = { key = 'a', mods = 'CTRL' }

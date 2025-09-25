@@ -11,7 +11,7 @@ config.keys = {
   {
     key = 'o',
     mods = 'LEADER|CTRL',
-    action = wezterm.action.ActivateLastTab,
+    action = shelldone.action.ActivateLastTab,
   },
 }
 ```

@@ -1,12 +1,12 @@
 # `QuitApplication`
 
-Terminate the WezTerm application, killing all tabs.
+Terminate the Shelldone application, killing all tabs.
 
 ```lua
-local wezterm = require 'wezterm'
+local shelldone = require 'shelldone'
 
 config.keys = {
-  { key = 'q', mods = 'CMD', action = wezterm.action.QuitApplication },
+  { key = 'q', mods = 'CMD', action = shelldone.action.QuitApplication },
 }
 ```
 

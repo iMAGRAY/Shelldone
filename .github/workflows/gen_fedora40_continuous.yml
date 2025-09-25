@@ -14,16 +14,16 @@ on:
       - ".github/workflows/gen_fedora40_continuous.yml"
       - "assets/fonts/**/*"
       - "assets/icon/*"
-      - "assets/open-wezterm-here"
+      - "assets/open-shelldone-here"
       - "assets/shell-completion/**/*"
       - "assets/shell-integration/**/*"
-      - "assets/wezterm-nautilus.py"
-      - "assets/wezterm.appdata.xml"
-      - "assets/wezterm.desktop"
+      - "assets/shelldone-nautilus.py"
+      - "assets/shelldone.appdata.xml"
+      - "assets/shelldone.desktop"
       - "ci/deploy.sh"
       - "ci/tag-name.sh"
       - "get-deps"
-      - "termwiz/data/wezterm.terminfo"
+      - "termwiz/data/shelldone.terminfo"
 
 jobs:
   build:
@@ -53,7 +53,7 @@ jobs:
         run: "yum install -y openssh-server"
       - name: "Workaround git permissions issue"
         shell: bash
-        run: "git config --global --add safe.directory /__w/wezterm/wezterm"
+        run: "git config --global --add safe.directory /__w/shelldone/shelldone"
       - name: "checkout repo"
         uses: actions/checkout@v4
         with:
@@ -77,15 +77,15 @@ jobs:
       - name: "Install System Deps"
         shell: bash
         run: "env CI=yes PATH=$PATH ./get-deps"
-      - name: "Build wezterm (Release mode)"
+      - name: "Build shelldone (Release mode)"
         shell: bash
-        run: "cargo build -p wezterm --release"
-      - name: "Build wezterm-gui (Release mode)"
+        run: "cargo build -p shelldone --release"
+      - name: "Build shelldone-gui (Release mode)"
         shell: bash
-        run: "cargo build -p wezterm-gui --release"
-      - name: "Build wezterm-mux-server (Release mode)"
+        run: "cargo build -p shelldone-gui --release"
+      - name: "Build shelldone-mux-server (Release mode)"
         shell: bash
-        run: "cargo build -p wezterm-mux-server --release"
+        run: "cargo build -p shelldone-mux-server --release"
       - name: "Build strip-ansi-escapes (Release mode)"
         shell: bash
         run: "cargo build -p strip-ansi-escapes --release"
@@ -102,18 +102,18 @@ jobs:
         run: "bash ci/deploy.sh"
       - name: "Move RPM"
         shell: bash
-        run: "mv ~/rpmbuild/RPMS/*/*.rpm wezterm-nightly-fedora40.rpm"
+        run: "mv ~/rpmbuild/RPMS/*/*.rpm shelldone-nightly-fedora40.rpm"
       - name: "Upload artifact"
         uses: actions/upload-artifact@v4
         with:
           name: "fedora40"
-          path: "wezterm-*.rpm"
+          path: "shelldone-*.rpm"
           retention-days: 5
 
   upload:
     runs-on: ubuntu-latest
     needs: build
-    if: github.repository == 'wezterm/wezterm'
+    if: github.repository == 'shelldone/shelldone'
     permissions:
       contents: write
       pages: write
@@ -122,7 +122,7 @@ jobs:
     steps:
       - name: "Workaround git permissions issue"
         shell: bash
-        run: "git config --global --add safe.directory /__w/wezterm/wezterm"
+        run: "git config --global --add safe.directory /__w/shelldone/shelldone"
       - name: "checkout repo"
         uses: actions/checkout@v4
       - name: "Download artifact"
@@ -131,9 +131,9 @@ jobs:
           name: "fedora40"
       - name: "Checksum"
         shell: bash
-        run: "for f in wezterm-*.rpm ; do sha256sum $f > $f.sha256 ; done"
+        run: "for f in shelldone-*.rpm ; do sha256sum $f > $f.sha256 ; done"
       - name: "Upload to Nightly Release"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: "bash ci/retry.sh gh release upload --clobber nightly wezterm-*.rpm *.sha256"
+        run: "bash ci/retry.sh gh release upload --clobber nightly shelldone-*.rpm *.sha256"

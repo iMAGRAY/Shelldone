@@ -1,4 +1,4 @@
-use wezterm_bidi::*;
+use shelldone_bidi::*;
 
 fn class_by_name(s: &str) -> BidiClass {
     match s {

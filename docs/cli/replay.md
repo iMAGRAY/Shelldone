@@ -1,7 +1,7 @@
-# `wezterm replay`
+# `shelldone replay`
 
 ```console
-{% include "../examples/cmd-synopsis-wezterm-replay--help.txt" %}
+{% include "../examples/cmd-synopsis-shelldone-replay--help.txt" %}
 ```
 
 

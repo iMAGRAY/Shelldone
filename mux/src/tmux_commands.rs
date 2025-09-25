@@ -15,7 +15,7 @@ use std::sync::Arc;
 use termwiz::escape::csi::{Cursor, CSI};
 use termwiz::escape::{Action, OneBased};
 use termwiz::tmux_cc::*;
-use wezterm_term::TerminalSize;
+use shelldone_term::TerminalSize;
 
 pub(crate) trait TmuxCommand: Send + Debug {
     fn get_command(&self, domain_id: DomainId) -> String;
@@ -211,11 +211,11 @@ impl TmuxDomainState {
             active_lock: active_lock.clone(),
         };
 
-        let terminal = wezterm_term::Terminal::new(
+        let terminal = shelldone_term::Terminal::new(
             size,
             std::sync::Arc::new(config::TermConfig::new()),
-            "WezTerm",
-            config::wezterm_version(),
+            "Shelldone",
+            config::shelldone_version(),
             Box::new(writer.clone()),
         );
 

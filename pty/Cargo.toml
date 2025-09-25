@@ -1,9 +1,9 @@
 [package]
 name = "portable-pty"
 version = "0.9.0"
-authors = ["Wez Furlong"]
+authors = ["Shelldone Team"]
 edition = "2018"
-repository = "https://github.com/wezterm/wezterm"
+repository = "https://github.com/shelldone/shelldone"
 description = "Cross platform pty interface"
 license = "MIT"
 documentation = "https://docs.rs/portable-pty"

@@ -1,5 +1,5 @@
 {
-  description = "A GPU-accelerated cross-platform terminal emulator and multiplexer written by @wez and implemented in Rust";
+  description = "A GPU-accelerated cross-platform terminal emulator and multiplexer written by @shelldone and implemented in Rust";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -18,7 +18,7 @@
     # links to each repo in package sources.
     #
     # Try to use tags when possible to increase readability
-    # (note: `git submodule status` in wezterm repo will show the `git describe` result for each
+    # (note: `git submodule status` in shelldone repo will show the `git describe` result for each
     # submodule, can help finding a tag if any)
     freetype2 = {
       url = "github:freetype/freetype/VER-2-13-3";
@@ -99,7 +99,7 @@
         packages.default = rustPlatform.buildRustPackage rec {
           inherit buildInputs nativeBuildInputs;
 
-          name = "wezterm";
+          name = "shelldone";
           src = ./..;
           version = self.shortRev or "dev";
 
@@ -121,11 +121,11 @@
             echo ${version} > .tag
 
             # tests are failing with: Unable to exchange encryption keys
-            rm -r wezterm-ssh/tests
+            rm -r shelldone-ssh/tests
 
             # hash does not work well with NixOS
-            substituteInPlace assets/shell-integration/wezterm.sh \
-              --replace-fail 'hash wezterm 2>/dev/null' 'command type -P wezterm &>/dev/null' \
+            substituteInPlace assets/shell-integration/shelldone.sh \
+              --replace-fail 'hash shelldone 2>/dev/null' 'command type -P shelldone &>/dev/null' \
               --replace-fail 'hash base64 2>/dev/null' 'command type -P base64 &>/dev/null' \
               --replace-fail 'hash hostname 2>/dev/null' 'command type -P hostname &>/dev/null' \
               --replace-fail 'hash hostnamectl 2>/dev/null' 'command type -P hostnamectl &>/dev/null'
@@ -139,42 +139,42 @@
               patchelf \
                 --add-needed "${pkgs.libGL}/lib/libEGL.so.1" \
                 --add-needed "${pkgs.vulkan-loader}/lib/libvulkan.so.1" \
-                $out/bin/wezterm-gui
+                $out/bin/shelldone-gui
             ''
             + lib.optionalString stdenv.isDarwin /* bash */ ''
               mkdir -p "$out/Applications"
-              OUT_APP="$out/Applications/WezTerm.app"
-              cp -r assets/macos/WezTerm.app "$OUT_APP"
+              OUT_APP="$out/Applications/Shelldone.app"
+              cp -r assets/macos/Shelldone.app "$OUT_APP"
               rm $OUT_APP/*.dylib
               cp -r assets/shell-integration/* "$OUT_APP"
               # macOS will only recognize our application bundle
               # if the binaries are inside of it. Move them there
               # and create symbolic links for them in bin/.
-              mv $out/bin/{wezterm,wezterm-mux-server,wezterm-gui,strip-ansi-escapes} "$OUT_APP"
-              ln -s "$OUT_APP"/{wezterm,wezterm-mux-server,wezterm-gui,strip-ansi-escapes} "$out/bin"
+              mv $out/bin/{shelldone,shelldone-mux-server,shelldone-gui,strip-ansi-escapes} "$OUT_APP"
+              ln -s "$OUT_APP"/{shelldone,shelldone-mux-server,shelldone-gui,strip-ansi-escapes} "$out/bin"
             '';
 
           postInstall = ''
             mkdir -p $out/nix-support
             echo "${passthru.terminfo}" >> $out/nix-support/propagated-user-env-packages
 
-            install -Dm644 assets/icon/terminal.png $out/share/icons/hicolor/128x128/apps/org.wezfurlong.wezterm.png
-            install -Dm644 assets/wezterm.desktop $out/share/applications/org.wezfurlong.wezterm.desktop
-            install -Dm644 assets/wezterm.appdata.xml $out/share/metainfo/org.wezfurlong.wezterm.appdata.xml
+            install -Dm644 assets/icon/terminal.png $out/share/icons/hicolor/128x128/apps/net.shelldone.terminal.png
+            install -Dm644 assets/shelldone.desktop $out/share/applications/net.shelldone.terminal.desktop
+            install -Dm644 assets/shelldone.appdata.xml $out/share/metainfo/net.shelldone.terminal.appdata.xml
 
-            install -Dm644 assets/shell-integration/wezterm.sh -t $out/etc/profile.d
-            installShellCompletion --cmd wezterm \
+            install -Dm644 assets/shell-integration/shelldone.sh -t $out/etc/profile.d
+            installShellCompletion --cmd shelldone \
               --bash assets/shell-completion/bash \
               --fish assets/shell-completion/fish \
               --zsh assets/shell-completion/zsh
 
-            install -Dm644 assets/wezterm-nautilus.py -t $out/share/nautilus-python/extensions
+            install -Dm644 assets/shelldone-nautilus.py -t $out/share/nautilus-python/extensions
           '';
 
           passthru = {
-            # the headless variant is useful when deploying wezterm's mux server on remote severs
+            # the headless variant is useful when deploying shelldone's mux server on remote severs
             headless = rustPlatform.buildRustPackage {
-              pname = "wezterm-headless";
+              pname = "shelldone-headless";
               inherit
                 version
                 src
@@ -189,35 +189,35 @@
 
               cargoBuildFlags = [
                 "--package"
-                "wezterm"
+                "shelldone"
                 "--package"
-                "wezterm-mux-server"
+                "shelldone-mux-server"
               ];
 
               doCheck = false;
 
               postInstall = ''
-                install -Dm644 assets/shell-integration/wezterm.sh -t $out/etc/profile.d
-                install -Dm644 ${passthru.terminfo}/share/terminfo/w/wezterm -t $out/share/terminfo/w
+                install -Dm644 assets/shell-integration/shelldone.sh -t $out/etc/profile.d
+                install -Dm644 ${passthru.terminfo}/share/terminfo/w/shelldone -t $out/share/terminfo/w
               '';
             };
 
             terminfo =
-              pkgs.runCommand "wezterm-terminfo"
+              pkgs.runCommand "shelldone-terminfo"
                 {
                   nativeBuildInputs = [ pkgs.ncurses ];
                 }
                 ''
                   mkdir -p $out/share/terminfo $out/nix-support
-                  tic -x -o $out/share/terminfo ${src}/termwiz/data/wezterm.terminfo
+                  tic -x -o $out/share/terminfo ${src}/termwiz/data/shelldone.terminfo
                 '';
           };
 
-          meta.mainProgram = "wezterm";
+          meta.mainProgram = "shelldone";
         };
 
         devShell = pkgs.mkShell {
-          name = "wezterm-shell";
+          name = "shelldone-shell";
           inherit nativeBuildInputs;
 
           buildInputs =

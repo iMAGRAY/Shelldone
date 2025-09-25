@@ -1,9 +1,9 @@
 [package]
 name = "filedescriptor"
 version = "0.8.3"
-authors = ["Wez Furlong"]
+authors = ["Shelldone Team"]
 edition = "2018"
-repository = "https://github.com/wezterm/wezterm"
+repository = "https://github.com/shelldone/shelldone"
 description = "More ergonomic wrappers around RawFd and RawHandle"
 license = "MIT"
 documentation = "https://docs.rs/filedescriptor"

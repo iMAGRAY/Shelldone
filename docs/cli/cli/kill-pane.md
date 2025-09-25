@@ -1,4 +1,4 @@
-# `wezterm cli kill-pane`
+# `shelldone cli kill-pane`
 
 {{since('20230326-111934-3666303c')}}
 
@@ -8,5 +8,5 @@ specify via the `--pane-id` parameter.
 ## Synopsis
 
 ```console
-{% include "../../examples/cmd-synopsis-wezterm-cli-kill-pane--help.txt" %}
+{% include "../../examples/cmd-synopsis-shelldone-cli-kill-pane--help.txt" %}
 ```

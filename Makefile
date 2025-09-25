@@ -4,19 +4,19 @@ all: build
 
 test:
 	cargo nextest run
-	cargo nextest run -p wezterm-escape-parser # no_std by default
+	cargo nextest run -p shelldone-escape-parser # no_std by default
 
 check:
 	cargo check
-	cargo check -p wezterm-escape-parser
-	cargo check -p wezterm-cell
-	cargo check -p wezterm-surface
-	cargo check -p wezterm-ssh
+	cargo check -p shelldone-escape-parser
+	cargo check -p shelldone-cell
+	cargo check -p shelldone-surface
+	cargo check -p shelldone-ssh
 
 build:
-	cargo build $(BUILD_OPTS) -p wezterm
-	cargo build $(BUILD_OPTS) -p wezterm-gui
-	cargo build $(BUILD_OPTS) -p wezterm-mux-server
+	cargo build $(BUILD_OPTS) -p shelldone
+	cargo build $(BUILD_OPTS) -p shelldone-gui
+	cargo build $(BUILD_OPTS) -p shelldone-mux-server
 	cargo build $(BUILD_OPTS) -p strip-ansi-escapes
 
 fmt:

@@ -7,36 +7,36 @@ hide:
 
     ## Installing on Linux via Flathub
 
-    WezTerm is available in flatpak format and published on
-    [Flathub](https://flathub.org/apps/details/org.wezfurlong.wezterm), which is
+    Shelldone is available in flatpak format and published on
+    [Flathub](https://flathub.org/apps/details/net.shelldone.terminal), which is
     aggregated into the GNOME Software application and other similar
     storefront/software catalog applications.
 
     !!! warning
         flatpaks run in an isolated sandbox which can cause some issues
         especially for power users. It is recommended that you graduate
-        to a native package if/when you decide to fully embrace wezterm.
+        to a native package if/when you decide to fully embrace shelldone.
 
-    <a href='https://flathub.org/apps/details/org.wezfurlong.wezterm'><img width='240' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+    <a href='https://flathub.org/apps/details/net.shelldone.terminal'><img width='240' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
 
     To install using the command line:
 
     First, [setup flatpak on your system](https://flatpak.org/setup/), then:
 
     ```console
-    $ flatpak install flathub org.wezfurlong.wezterm
+    $ flatpak install flathub net.shelldone.terminal
     ```
 
     and then run:
 
     ```console
-    $ flatpak run org.wezfurlong.wezterm
+    $ flatpak run net.shelldone.terminal
     ```
 
     You may wish to define an alias for convenience:
 
     ```console
-    $ alias wezterm='flatpak run org.wezfurlong.wezterm'
+    $ alias shelldone='flatpak run net.shelldone.terminal'
     ```
 
     !!! note
@@ -44,14 +44,14 @@ hide:
         differently when compared to installing the native package format for your
         system.
 
-        * starting wezterm using `wezterm cli` subcommands will block on the first
+        * starting shelldone using `shelldone cli` subcommands will block on the first
         run since you logged in if you haven't already launched the gui.
         * Process inspection functions such as determining the current directory
         for a pane will not work
 
-        The flatpak is provided primarily for ease of trying out wezterm with
+        The flatpak is provided primarily for ease of trying out shelldone with
         low commitment, and you are encouraged to use native packages for your
-        system once you're ready to get the most out of wezterm.
+        system once you're ready to get the most out of shelldone.
 
     Only stable releases are allowed to be published to Flathub, so if
     you want/need to try a nightly download you will need to use one of
@@ -61,7 +61,7 @@ hide:
 
     ## Installing on Linux using AppImage
 
-    WezTerm is available in [AppImage](https://appimage.org/) format; a
+    Shelldone is available in [AppImage](https://appimage.org/) format; a
     self-contained single file that doesn't require installation or
     any special privileges to run, and that is compatible with a wide
     range of Linux distributions.
@@ -76,7 +76,7 @@ hide:
     $ chmod +x {{ ubuntu20_AppImage_stable_asset }}
     ```
 
-    You may then execute the appimage directly to launch wezterm, with no
+    You may then execute the appimage directly to launch shelldone, with no
     specific installation steps required:
 
     ```console
@@ -87,8 +87,8 @@ hide:
 
     ```console
     $ mkdir ~/bin
-    $ mv ./{{ ubuntu20_AppImage_stable_asset }} ~/bin/wezterm
-    $ ~/bin/wezterm
+    $ mv ./{{ ubuntu20_AppImage_stable_asset }} ~/bin/shelldone
+    $ ~/bin/shelldone
     ```
 
     * Configuration instructions can be [found here](../config/files.md)
@@ -100,9 +100,9 @@ hide:
     steps:
 
     ```console
-    $ curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
-    $ echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
-    $ sudo chmod 644 /usr/share/keyrings/wezterm-fury.gpg
+    $ curl -fsSL https://apt.fury.io/shelldone/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/shelldone-fury.gpg
+    $ echo 'deb [signed-by=/usr/share/keyrings/shelldone-fury.gpg] https://apt.fury.io/shelldone/ * *' | sudo tee /etc/apt/sources.list.d/shelldone.list
+    $ sudo chmod 644 /usr/share/keyrings/shelldone-fury.gpg
     ```
 
     Update your dependencies:
@@ -111,16 +111,16 @@ hide:
     $ sudo apt update
     ```
 
-    Now you can install wezterm:
+    Now you can install shelldone:
 
     ```console
-    $ sudo apt install wezterm
+    $ sudo apt install shelldone
     ```
 
     or to install a nightly build:
 
     ```console
-    $ sudo apt install wezterm-nightly
+    $ sudo apt install shelldone-nightly
     ```
 
     !!! note
@@ -152,18 +152,18 @@ hide:
     $ sudo apt install -y ./{{ ubuntu22_deb_stable_asset }}
     ```
 
-    * The package installs `/usr/bin/wezterm` and `/usr/share/applications/org.wezfurlong.wezterm.desktop`
+    * The package installs `/usr/bin/shelldone` and `/usr/share/applications/net.shelldone.terminal.desktop`
     * Configuration instructions can be [found here](../config/files.md)
 
 === "Copr"
     ## Installing on Fedora and rpm-based Systems via Copr
 
-    Nightly builds of wezterm are now available via the
+    Nightly builds of shelldone are now available via the
     [Copr](https://copr.fedorainfracloud.org/) build service.
 
     You can see the current list of available distributions and architectures
-    [on the wezterm-nightly project
-    page](https://copr.fedorainfracloud.org/coprs/wezfurlong/wezterm-nightly/).
+    [on the shelldone-nightly project
+    page](https://copr.fedorainfracloud.org/coprs/shelldone/shelldone-nightly/).
     At the time that this page was written, the following distributions are
     available in Copr for `x86_64` and `aarch64`:
 
@@ -177,8 +177,8 @@ hide:
     To perform initial installation:
 
     ```console
-    $ sudo dnf copr enable wezfurlong/wezterm-nightly
-    $ sudo dnf install wezterm
+    $ sudo dnf copr enable shelldone/shelldone-nightly
+    $ sudo dnf install shelldone
     ```
     ## openSUSE specific
 
@@ -186,19 +186,19 @@ hide:
 
     ```console
     $ sudo zypper in dnf
-    $ sudo dnf copr enable wezfurlong/wezterm-nightly <repository>
+    $ sudo dnf copr enable shelldone/shelldone-nightly <repository>
     ```
     where `<repository>` is one of the following, depending on the flavor and architecture:
     `opensuse-tumbleweed-x86_64`, `opensuse-tumbleweed-aarch64`, `opensuse-leap-15.5-x86_64`, `opensuse-leap-15.5-aarch64`.
 
     ```console
-    $ sudo dnf install wezterm
+    $ sudo dnf install shelldone
     ```
 
     ## Update
 
     ```console
-    $ sudo dnf update wezterm
+    $ sudo dnf update shelldone
     ```
 
 === "Fedora/RPM"
@@ -206,7 +206,7 @@ hide:
 
     !!! note
         It is recommended that you install via Copr so that it is easiest
-        to stay up to date as future versions of wezterm are released.
+        to stay up to date as future versions of shelldone are released.
 
     The CI system builds `.rpm` files on CentOS and Fedora systems.
     These are likely compatible with other rpm-based distributions.
@@ -234,14 +234,14 @@ hide:
 
     !!! note
         It is recommended that you install via Copr so that it is easiest
-        to stay up to date as future versions of wezterm are released.
+        to stay up to date as future versions of shelldone are released.
 
     ## openSUSE Tumbleweed/Slowroll
 
-    The stable version of WezTerm is available in the official repositories.
+    The stable version of Shelldone is available in the official repositories.
 
     ```console
-    $ zypper install wezterm
+    $ zypper install shelldone
     ```
 
     ## openSUSE Leap
@@ -251,64 +251,64 @@ hide:
 === "Arch"
     ## Arch Linux
 
-    WezTerm is available in the [Extra
-    repository](https://archlinux.org/packages/extra/x86_64/wezterm/).
+    Shelldone is available in the [Extra
+    repository](https://archlinux.org/packages/extra/x86_64/shelldone/).
 
     Be sure to also install the `ttf-nerd-fonts-symbols-mono` package!
 
     The version available in the extra repository may lag behind the latest
-    wezterm release, so you may wish to use one of these AUR options:
+    shelldone release, so you may wish to use one of these AUR options:
 
     |What                 |Where|
     |---------------------|-|
-    |Build from source    |<https://aur.archlinux.org/packages/wezterm-git/>|
+    |Build from source    |<https://aur.archlinux.org/packages/shelldone-git/>|
 
 === "Linuxbrew"
     ## Linuxbrew Tap
 
     If you are a [Linuxbrew](https://docs.brew.sh/Homebrew-on-Linux) user, you
-    can install wezterm from our tap:
+    can install shelldone from our tap:
 
     ```console
-    $ brew tap wezterm/wezterm-linuxbrew
-    $ brew install wezterm
+    $ brew tap shelldone/shelldone-linuxbrew
+    $ brew install shelldone
     ```
 
     If you'd like to use a nightly build you can perform a head install:
 
     ```console
-    $ brew install --HEAD wezterm
+    $ brew install --HEAD shelldone
     ```
 
     to upgrade to a newer nightly, it is simplest to remove then
     install:
 
     ```console
-    $ brew rm wezterm
-    $ brew install --HEAD wezterm
+    $ brew rm shelldone
+    $ brew install --HEAD shelldone
     ```
 === "Nix/NixOS"
 
     ## Nix
     
-    WezTerm is available in nixpkgs as `wezterm`.
+    Shelldone is available in nixpkgs as `shelldone`.
 
     ```nix
     {
         # configuration.nix
 
         environment.systemPackages = [
-            pkgs.wezterm
+            pkgs.shelldone
         ]
     }
     ```
 
     !!! note "Git must be available in $PATH before attempting install"
 
-        The Wezterm package uses Nix's `builtins.fetchGit` which depends on the `git`
+        The Shelldone package uses Nix's `builtins.fetchGit` which depends on the `git`
         binary being available in `$PATH` during the _evaluation_ phase (before building packages).
 
-        Git must be installed before attempting to install wezterm.
+        Git must be installed before attempting to install shelldone.
 
         Note: `builtins.fetchGit` is used because of `cargoLock.allowBuiltinFetchGit` in `buildRustPackage` call.
 
@@ -318,15 +318,15 @@ hide:
 
     ### Flake
     
-    If you need a newer version use the flake. Use the cachix if you want to avoid building WezTerm from source.
+    If you need a newer version use the flake. Use the cachix if you want to avoid building Shelldone from source.
 
-    The flake is in the `nix` directory, so the url will be something like `github:wezterm/wezterm?dir=nix`
+    The flake is in the `nix` directory, so the url will be something like `github:shelldone/shelldone?dir=nix`
 
     Here's an example for NixOS configurations:
     
     ```nix
     {
-        inputs.wezterm.url = "github:wezterm/wezterm?dir=nix";
+        inputs.shelldone.url = "github:shelldone/shelldone?dir=nix";
         # ...
 
         outputs = inputs @ {nixpkgs, ...}:{
@@ -345,7 +345,7 @@ hide:
     # flake.nix
     
     {
-        inputs.wezterm.url = "github:wezterm/wezterm?dir=nix";
+        inputs.shelldone.url = "github:shelldone/shelldone?dir=nix";
         # ...
 
         outputs = inputs @ {nixpkgs, home-manager, ...}:{
@@ -363,9 +363,9 @@ hide:
     # home.nix
     
     {inputs, pkgs, ...}:{
-        programs.wezterm = {
+        programs.shelldone = {
             enable = true;
-            package = inputs.wezterm.packages.${pkgs.system}.default;
+            package = inputs.shelldone.packages.${pkgs.system}.default;
         };
     }
     ```
@@ -379,8 +379,8 @@ hide:
     # nixosConfiguration module
     {
         nix.settings = {
-            substituters = ["https://wezterm.cachix.org"];
-            trusted-public-keys = ["wezterm.cachix.org-1:kAbhjYUC9qvblTE+s7S+kl5XM1zVa4skO+E/1IDWdH0="];
+            substituters = ["https://shelldone.cachix.org"];
+            trusted-public-keys = ["shelldone.cachix.org-1:kAbhjYUC9qvblTE+s7S+kl5XM1zVa4skO+E/1IDWdH0="];
         };
     }
     ```

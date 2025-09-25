@@ -21,10 +21,10 @@ to set the user var named `foo` to the value `bar`.
 Then, if you have this in your config:
 
 ```lua
-local wezterm = require 'wezterm'
+local shelldone = require 'shelldone'
 
-wezterm.on('user-var-changed', function(window, pane, name, value)
-  wezterm.log_info('var', name, value)
+shelldone.on('user-var-changed', function(window, pane, name, value)
+  shelldone.log_info('var', name, value)
 end)
 
 return {}
