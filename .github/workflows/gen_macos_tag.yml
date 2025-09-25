@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: "cp shelldone.rb homebrew-shelldone/Casks/shelldone.rb"
       - name: "Commit homebrew tap changes"
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: "Automated update to match latest tag"
           repository: "homebrew-shelldone"
