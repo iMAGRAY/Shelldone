@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use codec::SetPaneZoomed;
 use mux::pane::PaneId;
-use std::collections::HashMap;
 use shelldone_client::client::Client;
+use std::collections::HashMap;
 
 #[derive(Debug, Parser, Clone)]
 pub struct ZoomPane {

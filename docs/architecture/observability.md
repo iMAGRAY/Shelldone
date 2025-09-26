@@ -1,0 +1,41 @@
+# Shelldone Observability and Operations
+
+## Goals
+- Provide full transparency into performance, errors, and agent behaviour.
+- Detect regressions and degradations as early as possible.
+- Enable post-incident investigations and reproducibility.
+
+## Metrics
+- **Core:** latency (input-to-render, tab switch), frame time, memory, CPU, GPU consumption.
+- **Mux:** domain/pane counts, queue depths, RTT to remote hosts.
+- **Agents:** action volume, rejected-step ratio, average negotiation time.
+- **Perf budgets:** benchmarked against `docs/architecture/perf-budget.md` and published via Prometheus.
+
+Metrics are exported through OpenTelemetry (OTLP/HTTP). `shelldone` exposes a configurable local endpoint and can push to an external collector.
+
+## Logs
+- Structured JSON with standard levels (`trace`, `debug`, `info`, `warn`, `error`).
+- Stored under `$XDG_STATE_HOME/shelldone/logs/`.
+- Split into `core.log`, `agents.log`, `plugins.log`, and `security.log`.
+- Size/time-based rotation with compression; optionally mirrored to journald.
+
+## Tracing
+- Wrap critical operations (render, exec, SSH, agent actions) in spans.
+- Persist span context in state snapshots to reconstruct chains after failures.
+- Provide `shelldone trace show` / `shelldone trace export` for offline analysis.
+
+## Alerts and SLOs
+- SLOs: input-to-render ≤ 20 ms at P99, crash-free sessions ≥ 99%, agent errors < 1%.
+- Alert rules (Prometheus) route to Slack and Matrix.
+- `make verify-ci` validates that the SLO configuration is in sync (lint step).
+
+## Pipeline Integration
+- `make verify-full` runs smoke tests with tracing enabled and checks JSON baselines.
+- Performance artefacts (charts, JSON) live in `artifacts/perf/`.
+
+## Plan
+1. Publish an ADR covering collector choice, log format, and metrics storage.
+2. Implement the `observability` crate and integrate it across the subsystems.
+3. Ship a `shelldone obs view|export` CLI.
+4. Wire observability checks into CI/CD (`make verify`, future GitHub Actions).
+5. Document user workflows in `docs/recipes/observability.md`.

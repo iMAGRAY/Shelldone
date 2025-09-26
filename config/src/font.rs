@@ -3,33 +3,32 @@ use crate::*;
 use bitflags::*;
 use enum_display_derive::Display;
 use luahelper::impl_lua_conversion_dynamic;
+use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, Value};
 use std::convert::TryFrom;
 use std::fmt::Display;
-use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, Value};
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Display, PartialOrd, Ord, FromDynamic, ToDynamic,
 )]
+#[derive(Default)]
 pub enum FontStyle {
+    #[default]
     Normal,
     Italic,
     Oblique,
 }
 
-impl Default for FontStyle {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Display, PartialOrd, Ord, FromDynamic, ToDynamic,
 )]
+#[derive(Default)]
 pub enum FontStretch {
     UltraCondensed,
     ExtraCondensed,
     Condensed,
     SemiCondensed,
+    #[default]
     Normal,
     SemiExpanded,
     Expanded,
@@ -69,11 +68,6 @@ impl FontStretch {
     }
 }
 
-impl Default for FontStretch {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FontWeight(u16);
@@ -590,7 +584,7 @@ impl TextStyle {
         // Insert our bundled default JetBrainsMono as a fallback
         // in case their preference doesn't match anything.
         // But don't add it if it is already their preference.
-        if !font.iter().any(|f| *f == default_font) {
+        if !font.contains(&default_font) {
             default_font.is_fallback = true;
             font.push(default_font);
         }
@@ -650,17 +644,14 @@ pub struct StyleRule {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum AllowSquareGlyphOverflow {
     Never,
     Always,
+    #[default]
     WhenFollowedBySpace,
 }
 
-impl Default for AllowSquareGlyphOverflow {
-    fn default() -> Self {
-        Self::WhenFollowedBySpace
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
 pub enum FontLocatorSelection {

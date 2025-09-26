@@ -7,9 +7,9 @@ use crate::termwindow::render::window_buttons::window_button_element;
 use crate::termwindow::{UIItem, UIItemType};
 use crate::utilsprites::RenderMetrics;
 use config::{Dimension, DimensionContext, TabBarColors};
-use std::rc::Rc;
 use shelldone_font::LoadedFont;
 use shelldone_term::color::{ColorAttribute, ColorPalette};
+use std::rc::Rc;
 use window::{IntegratedTitleButtonAlignment, IntegratedTitleButtonStyle};
 
 const X_BUTTON: &[Poly] = &[
@@ -141,7 +141,7 @@ impl crate::TermWindow {
                     },
                 )
                 .vertical_align(VerticalAlign::Middle)
-                .item_type(UIItemType::TabBar(item.item.clone()))
+                .item_type(UIItemType::TabBar(item.item))
                 .margin(BoxDimension {
                     left: Dimension::Cells(0.5),
                     right: Dimension::Cells(0.),
@@ -167,7 +167,7 @@ impl crate::TermWindow {
                 })),
                 TabBarItem::Tab { active, .. } if active => element
                     .vertical_align(VerticalAlign::Bottom)
-                    .item_type(UIItemType::TabBar(item.item.clone()))
+                    .item_type(UIItemType::TabBar(item.item))
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.),
                         right: Dimension::Cells(0.),
@@ -212,7 +212,7 @@ impl crate::TermWindow {
                     }),
                 TabBarItem::Tab { .. } => element
                     .vertical_align(VerticalAlign::Bottom)
-                    .item_type(UIItemType::TabBar(item.item.clone()))
+                    .item_type(UIItemType::TabBar(item.item))
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.),
                         right: Dimension::Cells(0.),
@@ -465,7 +465,7 @@ impl crate::TermWindow {
         let ui_items = computed.ui_items();
 
         let gl_state = self.render_state.as_ref().unwrap();
-        self.render_element(&computed, gl_state, None)?;
+        self.render_element(computed, gl_state, None)?;
 
         Ok(ui_items)
     }
@@ -479,7 +479,7 @@ fn make_x_button(
     active: bool,
 ) -> Element {
     Element::new(
-        &font,
+        font,
         ElementContent::Poly {
             line_width: metrics.underline_height.max(2),
             poly: SizedPoly {

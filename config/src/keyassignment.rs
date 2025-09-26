@@ -5,13 +5,13 @@ use luahelper::impl_lua_conversion_dynamic;
 use ordered_float::NotNan;
 use portable_pty::CommandBuilder;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::path::PathBuf;
 use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, Value};
 use shelldone_input_types::{KeyCode, Modifiers};
 use shelldone_term::input::MouseButton;
 use shelldone_term::SemanticType;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic, PartialEq, Eq)]
 pub struct LauncherActionArgs {
@@ -112,10 +112,12 @@ pub enum SelectionMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum Pattern {
     CaseSensitiveString(String),
     CaseInSensitiveString(String),
     Regex(String),
+    #[default]
     CurrentSelectionOrEmptyString,
 }
 
@@ -130,11 +132,6 @@ impl Pattern {
     }
 }
 
-impl Default for Pattern {
-    fn default() -> Self {
-        Self::CurrentSelectionOrEmptyString
-    }
-}
 
 /// A mouse event that can trigger an action
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, FromDynamic, ToDynamic)]
@@ -153,10 +150,12 @@ pub enum MouseEventTrigger {
 /// When spawning a tab, specify which domain should be used to
 /// host/spawn that tab.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum SpawnTabDomain {
     /// Use the default domain
     DefaultDomain,
     /// Use the domain from the current tab in the associated window
+    #[default]
     CurrentPaneDomain,
     /// Use a specific domain by name
     DomainName(String),
@@ -164,11 +163,6 @@ pub enum SpawnTabDomain {
     DomainId(usize),
 }
 
-impl Default for SpawnTabDomain {
-    fn default() -> Self {
-        Self::CurrentPaneDomain
-    }
-}
 
 #[derive(Default, Clone, PartialEq, FromDynamic, ToDynamic)]
 pub struct SpawnCommand {
@@ -251,10 +245,7 @@ impl SpawnCommand {
         for (k, v) in cmd.iter_full_env_as_str() {
             set_environment_variables.insert(k.to_string(), v.to_string());
         }
-        let cwd = match cmd.get_cwd() {
-            Some(cwd) => Some(PathBuf::from(cwd)),
-            None => None,
-        };
+        let cwd = cmd.get_cwd().map(PathBuf::from);
         Ok(Self {
             label: None,
             domain: SpawnTabDomain::DefaultDomain,
@@ -296,45 +287,38 @@ impl PaneDirection {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, FromDynamic, ToDynamic, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ScrollbackEraseMode {
+    #[default]
     ScrollbackOnly,
     ScrollbackAndViewport,
 }
 
-impl Default for ScrollbackEraseMode {
-    fn default() -> Self {
-        Self::ScrollbackOnly
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum ClipboardCopyDestination {
     Clipboard,
     PrimarySelection,
+    #[default]
     ClipboardAndPrimarySelection,
 }
 impl_lua_conversion_dynamic!(ClipboardCopyDestination);
 
-impl Default for ClipboardCopyDestination {
-    fn default() -> Self {
-        Self::ClipboardAndPrimarySelection
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum ClipboardPasteSource {
+    #[default]
     Clipboard,
     PrimarySelection,
 }
 
-impl Default for ClipboardPasteSource {
-    fn default() -> Self {
-        Self::Clipboard
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum PaneSelectMode {
+    #[default]
     Activate,
     SwapWithActive,
     SwapWithActiveKeepFocus,
@@ -342,11 +326,6 @@ pub enum PaneSelectMode {
     MoveToNewWindow,
 }
 
-impl Default for PaneSelectMode {
-    fn default() -> Self {
-        Self::Activate
-    }
-}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
 pub struct PaneSelectArguments {
@@ -362,8 +341,10 @@ pub struct PaneSelectArguments {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum CharSelectGroup {
     RecentlyUsed,
+    #[default]
     SmileysAndEmotion,
     PeopleAndBody,
     AnimalsAndNature,
@@ -413,11 +394,6 @@ char_select_group_impl_next_prev! (
     ShortCodes => RecentlyUsed,
 );
 
-impl Default for CharSelectGroup {
-    fn default() -> Self {
-        Self::SmileysAndEmotion
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
 pub struct CharSelectArguments {

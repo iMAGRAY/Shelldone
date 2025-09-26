@@ -2,10 +2,10 @@ use crate::pane::{ForEachPaneLogicalLine, WithPaneLines};
 use luahelper::impl_lua_conversion_dynamic;
 use rangeset::RangeSet;
 use serde::{Deserialize, Serialize};
-use std::ops::Range;
-use termwiz::surface::SequenceNo;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 use shelldone_term::{Line, StableRowIndex, Terminal};
+use std::ops::Range;
+use termwiz::surface::SequenceNo;
 
 /// Describes the location of the cursor
 #[derive(

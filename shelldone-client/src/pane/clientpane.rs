@@ -17,6 +17,12 @@ use mux::{Mux, MuxNotification};
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use rangeset::RangeSet;
 use ratelim::RateLimiter;
+use shelldone_dynamic::Value;
+use shelldone_term::color::ColorPalette;
+use shelldone_term::{
+    Alert, Clipboard, KeyCode, KeyModifiers, Line, MouseEvent, Progress, StableRowIndex,
+    TerminalConfiguration, TerminalSize,
+};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
@@ -24,12 +30,6 @@ use std::sync::Arc;
 use termwiz::input::KeyEvent;
 use termwiz::surface::SequenceNo;
 use url::Url;
-use shelldone_dynamic::Value;
-use shelldone_term::color::ColorPalette;
-use shelldone_term::{
-    Alert, Clipboard, KeyCode, KeyModifiers, Line, MouseEvent, Progress, StableRowIndex,
-    TerminalConfiguration, TerminalSize,
-};
 
 pub struct ClientPane {
     client: Arc<ClientInner>,
@@ -390,8 +390,8 @@ impl Pane for ClientPane {
         let render = self.renderable.lock();
         let mut inner = render.inner.borrow_mut();
 
-        let cols = size.cols as usize;
-        let rows = size.rows as usize;
+        let cols = size.cols;
+        let rows = size.rows;
 
         if inner.dimensions.cols != cols
             || inner.dimensions.viewport_rows != rows
@@ -652,7 +652,7 @@ impl std::io::Write for PaneWriter {
             pane_id: self.remote_pane_id,
             data: data.to_vec(),
         }))
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
+        .map_err(|e| std::io::Error::other(format!("{}", e)))?;
         Ok(data.len())
     }
 

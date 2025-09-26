@@ -36,14 +36,12 @@ impl LocalProcessInfo {
         fn all_pids() -> Vec<pid_t> {
             let mut pids = vec![];
             if let Ok(dir) = std::fs::read_dir("/proc") {
-                for entry in dir {
-                    if let Ok(entry) = entry {
-                        if let Ok(file_type) = entry.file_type() {
-                            if file_type.is_dir() {
-                                if let Some(name) = entry.file_name().to_str() {
-                                    if let Ok(pid) = name.parse::<pid_t>() {
-                                        pids.push(pid);
-                                    }
+                for entry in dir.flatten() {
+                    if let Ok(file_type) = entry.file_type() {
+                        if file_type.is_dir() {
+                            if let Some(name) = entry.file_name().to_str() {
+                                if let Ok(pid) = name.parse::<pid_t>() {
+                                    pids.push(pid);
                                 }
                             }
                         }
@@ -82,7 +80,7 @@ impl LocalProcessInfo {
         }
 
         fn cwd_for_pid(pid: pid_t) -> PathBuf {
-            LocalProcessInfo::current_working_dir(pid as u32).unwrap_or_else(PathBuf::new)
+            LocalProcessInfo::current_working_dir(pid as u32).unwrap_or_default()
         }
 
         fn parse_cmdline(pid: pid_t) -> Vec<String> {
@@ -130,10 +128,6 @@ impl LocalProcessInfo {
             }
         }
 
-        if let Some(info) = procs.iter().find(|info| info.pid == pid) {
-            Some(build_proc(info, &procs))
-        } else {
-            None
-        }
+        procs.iter().find(|info| info.pid == pid).map(|info| build_proc(info, &procs))
     }
 }

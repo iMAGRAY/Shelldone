@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use filedescriptor::FileDescriptor;
 use parking_lot::{Condvar, Mutex};
 use portable_pty::CommandBuilder;
+use shelldone_term::TerminalSize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::Write;
 use std::sync::Arc;
 use termwiz::tmux_cc::*;
-use shelldone_term::TerminalSize;
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum AttachState {
@@ -213,10 +213,10 @@ impl TmuxDomainState {
                 }
                 Event::WindowRenamed { window, name } => {
                     let gui_tabs = self.gui_tabs.lock();
-                    if let Some(x) = gui_tabs.get(&window) {
+                    if let Some(x) = gui_tabs.get(window) {
                         let mux = Mux::get();
                         if let Some(tab) = mux.get_tab(x.tab_id) {
-                            tab.set_title(&format!("{}", name));
+                            tab.set_title(&name.to_string());
                         }
                     }
                 }
@@ -325,7 +325,7 @@ impl TmuxDomainState {
                 direction: split_request.direction,
             }));
             TmuxDomainState::schedule_send_next_command(self.domain_id);
-            return Ok(());
+            Ok(())
         } else {
             anyhow::bail!("Could not find the tmux pane peer for local pane: {pane_id}");
         }

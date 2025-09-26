@@ -31,14 +31,6 @@ use anyhow::Context;
 use luahelper::impl_lua_conversion_dynamic;
 use mlua::FromLua;
 use portable_pty::CommandBuilder;
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use termwiz::hyperlink;
-use termwiz::surface::CursorShape;
 use shelldone_bidi::ParagraphDirectionHint;
 use shelldone_config_derive::ConfigMeta;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
@@ -47,6 +39,14 @@ use shelldone_input_types::{
     UIKeyCapRendering, WindowDecorations,
 };
 use shelldone_term::TerminalSize;
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use termwiz::hyperlink;
+use termwiz::surface::CursorShape;
 
 #[derive(Debug, Clone, FromDynamic, ToDynamic, ConfigMeta)]
 pub struct Config {
@@ -2176,7 +2176,7 @@ pub(crate) fn validate_domain_name(name: &str) -> Result<(), String> {
         Err(format!(
             "\"{name}\" is a built-in domain and cannot be redefined"
         ))
-    } else if name == "" {
+    } else if name.is_empty() {
         Err("the empty string is an invalid domain name".to_string())
     } else {
         Ok(())

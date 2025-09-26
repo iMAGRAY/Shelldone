@@ -2,8 +2,8 @@ use config::lua::mlua::{self, IntoLua, Lua, Value as LuaValue};
 use config::lua::{get_or_create_module, get_or_create_sub_module};
 use luahelper::lua_value_to_dynamic;
 use serde_json::{Map, Value as JValue};
-use std::collections::HashSet;
 use shelldone_dynamic::{FromDynamic, Value as DynValue};
+use std::collections::HashSet;
 
 pub fn register(lua: &Lua) -> anyhow::Result<()> {
     let serde_mod = get_or_create_sub_module(lua, "serde")?;
@@ -97,14 +97,14 @@ fn json_value_to_lua_value<'lua>(lua: &'lua Lua, value: JValue) -> mlua::Result<
         },
         JValue::String(s) => s.into_lua(lua)?,
         JValue::Array(arr) => {
-            let tbl = lua.create_table_with_capacity(arr.len() as usize, 0)?;
+            let tbl = lua.create_table_with_capacity(arr.len(), 0)?;
             for (idx, value) in arr.into_iter().enumerate() {
                 tbl.set(idx + 1, json_value_to_lua_value(lua, value)?)?;
             }
             LuaValue::Table(tbl)
         }
         JValue::Object(map) => {
-            let tbl = lua.create_table_with_capacity(0, map.len() as usize)?;
+            let tbl = lua.create_table_with_capacity(0, map.len())?;
             for (key, value) in map.into_iter() {
                 let key = key.into_lua(lua)?;
                 let value = json_value_to_lua_value(lua, value)?;
@@ -193,7 +193,7 @@ fn lua_value_to_json_value(value: LuaValue, visited: &mut HashSet<usize>) -> mlu
                     return Err(mlua::Error::FromLuaConversionError {
                         from: "userdata",
                         to: "shelldone_dynamic::Value",
-                        message: Some(format!("no __shelldone_to_dynamic metadata")),
+                        message: Some("no __shelldone_to_dynamic metadata".to_string()),
                     });
                 }
             }
@@ -257,7 +257,7 @@ fn lua_value_to_json_value(value: LuaValue, visited: &mut HashSet<usize>) -> mlu
                     }
                 }
 
-                JValue::Array(array.into())
+                JValue::Array(array)
             } else {
                 let mut obj = Map::default();
                 for pair in table.pairs::<LuaValue, LuaValue>() {
@@ -283,7 +283,7 @@ fn lua_value_to_json_value(value: LuaValue, visited: &mut HashSet<usize>) -> mlu
                     })?;
                     obj.insert(key, value);
                 }
-                JValue::Object(obj.into())
+                JValue::Object(obj)
             }
         }
     })

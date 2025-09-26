@@ -10,6 +10,7 @@ use mux::Mux;
 use promise::BrokenPromise;
 use rangeset::*;
 use ratelim::RateLimiter;
+use shelldone_term::{KeyCode, KeyModifiers, Line, StableRowIndex};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -22,7 +23,6 @@ use termwiz::color::AnsiColor;
 use termwiz::image::{ImageCell, ImageData};
 use termwiz::surface::{SequenceNo, SEQ_ZERO};
 use url::Url;
-use shelldone_term::{KeyCode, KeyModifiers, Line, StableRowIndex};
 
 const MAX_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const BASE_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -761,8 +761,8 @@ impl RenderableState {
                 }
             };
 
-            if inner.client.overlay_lag_indicator && idx == inner.dimensions.physical_top {
-                if inner.is_tardy() {
+            if inner.client.overlay_lag_indicator && idx == inner.dimensions.physical_top
+                && inner.is_tardy() {
                     let status = format!(
                         "shelldone: {:.0?}⏳since last response",
                         inner.last_recv_time.elapsed()
@@ -782,7 +782,6 @@ impl RenderableState {
                         .unwrap()
                         .overlay_text_with_attribute(col, &status, attr, SEQ_ZERO);
                 }
-            }
 
             inner.lines.put(idx, entry);
         }

@@ -4,8 +4,8 @@
 use super::VisibleRowIndex;
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
 use shelldone_dynamic::{FromDynamic, ToDynamic};
+use std::time::{Duration, Instant};
 
 pub use termwiz::input::{KeyCode, Modifiers as KeyModifiers};
 

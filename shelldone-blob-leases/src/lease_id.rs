@@ -25,10 +25,16 @@ fn get_mac_address() -> [u8; 6] {
     }
 }
 
+impl Default for LeaseId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LeaseId {
     pub fn new() -> Self {
         static MAC: LazyLock<[u8; 6]> = LazyLock::new(get_mac_address);
-        let uuid = Uuid::now_v1(&*MAC);
+        let uuid = Uuid::now_v1(&MAC);
         let pid = std::process::id();
         Self { uuid, pid }
     }

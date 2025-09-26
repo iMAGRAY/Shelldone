@@ -2,10 +2,10 @@
 
 pub use mlua;
 use mlua::{IntoLua, Value as LuaValue};
+use shelldone_dynamic::{FromDynamic, ToDynamic, Value as DynValue};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::rc::Rc;
-use shelldone_dynamic::{FromDynamic, ToDynamic, Value as DynValue};
 
 pub mod enumctor;
 
@@ -343,7 +343,7 @@ impl<'lua> std::fmt::Debug for ValuePrinterHelper<'lua> {
                 self.visited
                     .borrow_mut()
                     .insert(self.value.to_pointer() as usize);
-                if is_array_style_table(&t) {
+                if is_array_style_table(t) {
                     // Treat as list
                     let mut list = fmt.debug_list();
                     for value in t.clone().sequence_values() {

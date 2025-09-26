@@ -1,38 +1,34 @@
 use crate::config::validate_domain_name;
 use crate::*;
 use luahelper::impl_lua_conversion_dynamic;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::fmt::Display;
 use std::str::FromStr;
-use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 #[derive(Debug, Clone, Copy, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum SshBackend {
     Ssh2,
+    #[default]
     LibSsh,
 }
 
-impl Default for SshBackend {
-    fn default() -> Self {
-        Self::LibSsh
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum SshMultiplexing {
+    #[default]
     Shelldone,
     None,
     // TODO: Tmux-cc in the future?
 }
 
-impl Default for SshMultiplexing {
-    fn default() -> Self {
-        Self::Shelldone
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum Shell {
     /// Unknown command shell: no assumptions can be made
+    #[default]
     Unknown,
 
     /// Posix shell compliant, such that `cd DIR ; exec CMD` behaves
@@ -41,11 +37,6 @@ pub enum Shell {
     // TODO: Cmd, PowerShell in the future?
 }
 
-impl Default for Shell {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic)]
 pub struct SshDomain {

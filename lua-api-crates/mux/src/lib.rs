@@ -9,10 +9,10 @@ use mux::tab::{SplitDirection, SplitRequest, SplitSize, Tab, TabId};
 use mux::window::{Window, WindowId};
 use mux::Mux;
 use portable_pty::CommandBuilder;
-use std::collections::HashMap;
-use std::sync::Arc;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 use shelldone_term::TerminalSize;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 mod domain;
 mod pane;
@@ -53,7 +53,8 @@ pub fn register(lua: &Lua) -> anyhow::Result<()> {
             let mux = get_mux()?;
             let workspaces = mux.iter_workspaces();
             if workspaces.contains(&workspace) {
-                Ok(mux.set_active_workspace(&workspace))
+                let _: () = mux.set_active_workspace(&workspace);
+                Ok(())
             } else {
                 Err(mlua::Error::external(format!(
                     "{:?} is not an existing workspace",
@@ -197,19 +198,16 @@ impl CommandBuilderFrag {
 }
 
 #[derive(Debug, FromDynamic, ToDynamic)]
+#[derive(Default)]
 enum HandySplitDirection {
     Left,
+    #[default]
     Right,
     Top,
     Bottom,
 }
 impl_lua_conversion_dynamic!(HandySplitDirection);
 
-impl Default for HandySplitDirection {
-    fn default() -> Self {
-        Self::Right
-    }
-}
 
 #[derive(Debug, FromDynamic, ToDynamic)]
 struct SpawnWindow {

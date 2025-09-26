@@ -7,11 +7,11 @@ use config::ConfigHandle;
 use finl_unicode::grapheme_clusters::Graphemes;
 use log::error;
 use ordered_float::NotNan;
+use shelldone_bidi::Direction;
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::ops::Range;
 use termwiz::cell::{unicode_column_width, Presentation};
-use shelldone_bidi::Direction;
 
 // Changing these will switch to using harfbuzz's opentype functions.
 // There's something awry with our integration in that mode: the advances
@@ -815,7 +815,7 @@ impl<'a> ClusterResolver<'a> {
             Some(pw) => {
                 let cell_idx = pw.byte_to_cell_idx(start);
                 let actual_start = self.start_by_cell_idx.get(&cell_idx)?;
-                self.map.get_mut(&actual_start)
+                self.map.get_mut(actual_start)
             }
             None => self.map.get_mut(&start),
         }
@@ -826,7 +826,7 @@ impl<'a> ClusterResolver<'a> {
             Some(pw) => {
                 let cell_idx = pw.byte_to_cell_idx(start);
                 let actual_start = self.start_by_cell_idx.get(&cell_idx)?;
-                self.map.get(&actual_start)
+                self.map.get(actual_start)
             }
             None => self.map.get(&start),
         }

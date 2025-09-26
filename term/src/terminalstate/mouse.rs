@@ -31,7 +31,7 @@ impl TerminalState {
     }
 
     fn encode_x10_or_utf8(&mut self, event: MouseEvent, button: i8) -> anyhow::Result<()> {
-        let mut buf = vec![b'\x1b', b'[', b'M', (32 + button) as u8];
+        let mut buf = vec![0x1b, b'[', b'M', (32 + button) as u8];
         self.encode_coord(event.x as i64, &mut buf);
         self.encode_coord(event.y, &mut buf);
         log::trace!("{event:?} {buf:?}");
@@ -96,8 +96,8 @@ impl TerminalState {
         } else if self.mouse_encoding == MouseEncoding::SgrPixels
             && (self.mouse_tracking || self.button_event_mouse || self.any_event_mouse)
         {
-            let height = self.screen.physical_rows as usize;
-            let width = self.screen.physical_cols as usize;
+            let height = self.screen.physical_rows;
+            let width = self.screen.physical_cols;
             log::trace!(
                 "wheel {event:?} ESC [<{};{};{}M",
                 button,
@@ -161,8 +161,8 @@ impl TerminalState {
             )?;
             self.writer.flush()?;
         } else if self.mouse_encoding == MouseEncoding::SgrPixels {
-            let height = self.screen.physical_rows as usize;
-            let width = self.screen.physical_cols as usize;
+            let height = self.screen.physical_rows;
+            let width = self.screen.physical_cols;
             log::trace!(
                 "press {event:?} ESC [<{};{};{}M",
                 button,
@@ -209,8 +209,8 @@ impl TerminalState {
                     )?;
                     self.writer.flush()?;
                 } else if self.mouse_encoding == MouseEncoding::SgrPixels {
-                    let height = self.screen.physical_rows as usize;
-                    let width = self.screen.physical_cols as usize;
+                    let height = self.screen.physical_rows;
+                    let width = self.screen.physical_cols;
                     log::trace!(
                         "release {event:?} ESC [<{};{};{}m",
                         release_button,
@@ -285,8 +285,8 @@ impl TerminalState {
                 )?;
                 self.writer.flush()?;
             } else if self.mouse_encoding == MouseEncoding::SgrPixels {
-                let height = self.screen.physical_rows as usize;
-                let width = self.screen.physical_cols as usize;
+                let height = self.screen.physical_rows;
+                let width = self.screen.physical_cols;
                 log::trace!(
                     "move {event:?} ESC [<{};{};{}M",
                     button,

@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
-use std::collections::HashMap;
 use shelldone_input_types::PhysKeyCode;
+use std::collections::HashMap;
 
 fn build_map() -> HashMap<u16, PhysKeyCode> {
     [

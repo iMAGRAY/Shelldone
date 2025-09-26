@@ -2,6 +2,7 @@ use config::lua::get_or_create_module;
 use config::lua::mlua::{self, IntoLua, Lua};
 use finl_unicode::grapheme_clusters::Graphemes;
 use luahelper::impl_lua_conversion_dynamic;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::str::FromStr;
 use termwiz::caps::{Capabilities, ColorLevel, ProbeHints};
 use termwiz::cell::{grapheme_column_width, unicode_column_width, AttributeChange, CellAttributes};
@@ -9,7 +10,6 @@ use termwiz::color::{AnsiColor, ColorAttribute, ColorSpec, SrgbaTuple};
 use termwiz::render::terminfo::TerminfoRenderer;
 use termwiz::surface::change::Change;
 use termwiz::surface::Line;
-use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 pub fn register(lua: &Lua) -> anyhow::Result<()> {
     let shelldone_mod = get_or_create_module(lua, "shelldone")?;
@@ -136,14 +136,14 @@ impl termwiz::render::RenderTty for FormatTarget {
 
 pub fn format_as_escapes(items: Vec<FormatItem>) -> anyhow::Result<String> {
     let mut changes: Vec<Change> = items.into_iter().map(Into::into).collect();
-    changes.push(Change::AllAttributes(CellAttributes::default()).into());
+    changes.push(Change::AllAttributes(CellAttributes::default()));
     let mut renderer = new_shelldone_terminfo_renderer();
     let mut target = FormatTarget { target: vec![] };
     renderer.render_to(&changes, &mut target)?;
     Ok(String::from_utf8(target.target)?)
 }
 
-fn format<'lua>(_: &'lua Lua, items: Vec<FormatItem>) -> mlua::Result<String> {
+fn format(_: &Lua, items: Vec<FormatItem>) -> mlua::Result<String> {
     format_as_escapes(items).map_err(mlua::Error::external)
 }
 

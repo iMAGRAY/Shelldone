@@ -1,7 +1,7 @@
 use super::*;
 use crate::terminalstate::performer::Performer;
-use std::sync::Arc;
 use shelldone_escape_parser::parser::Parser;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]

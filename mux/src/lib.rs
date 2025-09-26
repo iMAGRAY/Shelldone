@@ -17,6 +17,7 @@ use parking_lot::{
 };
 use percent_encoding::percent_decode_str;
 use portable_pty::{CommandBuilder, ExitStatus, PtySize};
+use shelldone_term::{Clipboard, ClipboardSelection, DownloadHandler, TerminalSize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::io::{Read, Write};
@@ -29,7 +30,6 @@ use std::time::{Duration, Instant};
 use termwiz::escape::csi::{DecPrivateMode, DecPrivateModeCode, Device, Mode};
 use termwiz::escape::{Action, CSI};
 use thiserror::*;
-use shelldone_term::{Clipboard, ClipboardSelection, DownloadHandler, TerminalSize};
 #[cfg(windows)]
 use winapi::um::winsock2::{SOL_SOCKET, SO_RCVBUF, SO_SNDBUF};
 
@@ -167,7 +167,7 @@ fn parse_buffered_data(pane: Weak<dyn Pane>, dead: &Arc<AtomicBool>, mut rx: Fil
 
                             // Flush prior actions
                             if !actions.is_empty() {
-                                send_actions_to_mux(&pane, &dead, std::mem::take(&mut actions));
+                                send_actions_to_mux(&pane, dead, std::mem::take(&mut actions));
                                 action_size = 0;
                             }
                         }
@@ -186,7 +186,7 @@ fn parse_buffered_data(pane: Weak<dyn Pane>, dead: &Arc<AtomicBool>, mut rx: Fil
                     action.append_to(&mut actions);
 
                     if flush && !actions.is_empty() {
-                        send_actions_to_mux(&pane, &dead, std::mem::take(&mut actions));
+                        send_actions_to_mux(&pane, dead, std::mem::take(&mut actions));
                         action_size = 0;
                     }
                 });
@@ -221,7 +221,7 @@ fn parse_buffered_data(pane: Weak<dyn Pane>, dead: &Arc<AtomicBool>, mut rx: Fil
                         }
                     }
 
-                    send_actions_to_mux(&pane, &dead, std::mem::take(&mut actions));
+                    send_actions_to_mux(&pane, dead, std::mem::take(&mut actions));
                     deadline = None;
                     action_size = 0;
                 }
@@ -238,7 +238,7 @@ fn parse_buffered_data(pane: Weak<dyn Pane>, dead: &Arc<AtomicBool>, mut rx: Fil
     // for very short lived commands so that we don't forget to
     // display what they displayed.
     if !actions.is_empty() {
-        send_actions_to_mux(&pane, &dead, std::mem::take(&mut actions));
+        send_actions_to_mux(&pane, dead, std::mem::take(&mut actions));
     }
 }
 
@@ -573,8 +573,7 @@ impl Mux {
     pub fn iter_clients(&self) -> Vec<ClientInfo> {
         self.clients
             .read()
-            .values()
-            .map(|info| info.clone())
+            .values().cloned()
             .collect()
     }
 
@@ -611,7 +610,7 @@ impl Mux {
             .and_then(|ident| {
                 self.clients
                     .read()
-                    .get(&ident)
+                    .get(ident)
                     .and_then(|info| info.active_workspace.clone())
             })
             .unwrap_or_else(|| self.get_default_workspace())
@@ -621,14 +620,14 @@ impl Mux {
     pub fn active_workspace_for_client(&self, ident: &Arc<ClientId>) -> String {
         self.clients
             .read()
-            .get(&ident)
+            .get(ident)
             .and_then(|info| info.active_workspace.clone())
             .unwrap_or_else(|| self.get_default_workspace())
     }
 
     pub fn set_active_workspace_for_client(&self, ident: &Arc<ClientId>, workspace: &str) {
         let mut clients = self.clients.write();
-        if let Some(info) = clients.get_mut(&ident) {
+        if let Some(info) = clients.get_mut(ident) {
             info.active_workspace.replace(workspace.to_string());
             self.notify(MuxNotification::ActiveWorkspaceChanged(ident.clone()));
         }
@@ -1036,9 +1035,7 @@ impl Mux {
 
     pub fn iter_panes(&self) -> Vec<Arc<dyn Pane>> {
         self.panes
-            .read()
-            .iter()
-            .map(|(_, v)| Arc::clone(v))
+            .read().values().map(|v| Arc::clone(v))
             .collect()
     }
 
@@ -1134,7 +1131,7 @@ impl Mux {
                 .get_domain(*domain_id)
                 .ok_or_else(|| anyhow!("domain id {} is invalid", domain_id))?,
             SpawnTabDomain::DomainName(name) => {
-                self.get_domain_by_name(&name).ok_or_else(|| {
+                self.get_domain_by_name(name).ok_or_else(|| {
                     let names: Vec<String> = self
                         .domains_by_name
                         .read()

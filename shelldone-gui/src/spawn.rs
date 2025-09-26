@@ -7,8 +7,8 @@ use mux::tab::SplitRequest;
 use mux::window::WindowId as MuxWindowId;
 use mux::Mux;
 use portable_pty::CommandBuilder;
-use std::sync::Arc;
 use shelldone_term::TerminalSize;
+use std::sync::Arc;
 
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum SpawnWhere {

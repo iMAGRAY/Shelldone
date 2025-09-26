@@ -2,6 +2,7 @@ use crate::termwindow::{PaneInformation, TabInformation, UIItem, UIItemType};
 use config::{ConfigHandle, TabBarColors};
 use finl_unicode::grapheme_clusters::Graphemes;
 use mlua::FromLua;
+use shelldone_term::{Line, Progress};
 use termwiz::cell::{unicode_column_width, Cell, CellAttributes};
 use termwiz::color::{AnsiColor, ColorSpec};
 use termwiz::escape::csi::Sgr;
@@ -9,7 +10,6 @@ use termwiz::escape::parser::Parser;
 use termwiz::escape::{Action, ControlCode, CSI};
 use termwiz::surface::SEQ_ZERO;
 use termwiz_funcs::{format_as_escapes, FormatColor, FormatItem};
-use shelldone_term::{Line, Progress};
 use window::{IntegratedTitleButton, IntegratedTitleButtonAlignment, IntegratedTitleButtonStyle};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -56,7 +56,7 @@ fn call_format_tab_title(
             let panes = lua.create_sequence_from(pane_info.iter().cloned())?;
 
             let v = config::lua::emit_sync_callback(
-                &*lua,
+                &lua,
                 (
                     "format-tab-title".to_string(),
                     (
@@ -72,7 +72,7 @@ fn call_format_tab_title(
             match &v {
                 mlua::Value::Nil => Ok(None),
                 mlua::Value::Table(_) => {
-                    let items = <Vec<FormatItem>>::from_lua(v, &*lua)?;
+                    let items = <Vec<FormatItem>>::from_lua(v, &lua)?;
 
                     let esc = format_as_escapes(items.clone())?;
                     let line = parse_status_text(&esc, CellAttributes::default());
@@ -83,7 +83,7 @@ fn call_format_tab_title(
                     }))
                 }
                 _ => {
-                    let s = String::from_lua(v, &*lua)?;
+                    let s = String::from_lua(v, &lua)?;
                     let line = parse_status_text(&s, CellAttributes::default());
                     Ok(Some(TitleText {
                         len: line.len(),
@@ -213,9 +213,9 @@ fn compute_tab_title(
 }
 
 fn is_tab_hover(mouse_x: Option<usize>, x: usize, tab_title_len: usize) -> bool {
-    return mouse_x
+    mouse_x
         .map(|mouse_x| mouse_x >= x && mouse_x < x + tab_title_len)
-        .unwrap_or(false);
+        .unwrap_or(false)
 }
 
 impl TabBarState {
@@ -424,10 +424,10 @@ impl TabBarState {
 
         if use_integrated_title_buttons
             && config.integrated_title_button_style == IntegratedTitleButtonStyle::MacOsNative
-            && config.use_fancy_tab_bar == false
-            && config.tab_bar_at_bottom == false
+            && !config.use_fancy_tab_bar
+            && !config.tab_bar_at_bottom
         {
-            for _ in 0..10 as usize {
+            for _ in 0..10_usize {
                 line.insert_cell(0, black_cell.clone(), title_width, SEQ_ZERO);
                 x += 1;
             }
@@ -662,57 +662,54 @@ pub fn parse_status_text(text: &str, default_cell: CellAttributes) -> Line {
             }
             Action::CSI(csi) => {
                 flush_print(&mut print_buffer, &mut cells, &pen);
-                match csi {
-                    CSI::Sgr(sgr) => match sgr {
-                        Sgr::Reset => pen = default_cell.clone(),
-                        Sgr::Intensity(i) => {
-                            pen.set_intensity(i);
+                if let CSI::Sgr(sgr) = csi { match sgr {
+                    Sgr::Reset => pen = default_cell.clone(),
+                    Sgr::Intensity(i) => {
+                        pen.set_intensity(i);
+                    }
+                    Sgr::Underline(u) => {
+                        pen.set_underline(u);
+                    }
+                    Sgr::Overline(o) => {
+                        pen.set_overline(o);
+                    }
+                    Sgr::VerticalAlign(o) => {
+                        pen.set_vertical_align(o);
+                    }
+                    Sgr::Blink(b) => {
+                        pen.set_blink(b);
+                    }
+                    Sgr::Italic(i) => {
+                        pen.set_italic(i);
+                    }
+                    Sgr::Inverse(inverse) => {
+                        pen.set_reverse(inverse);
+                    }
+                    Sgr::Invisible(invis) => {
+                        pen.set_invisible(invis);
+                    }
+                    Sgr::StrikeThrough(strike) => {
+                        pen.set_strikethrough(strike);
+                    }
+                    Sgr::Foreground(col) => {
+                        if let ColorSpec::Default = col {
+                            pen.set_foreground(default_cell.foreground());
+                        } else {
+                            pen.set_foreground(col);
                         }
-                        Sgr::Underline(u) => {
-                            pen.set_underline(u);
+                    }
+                    Sgr::Background(col) => {
+                        if let ColorSpec::Default = col {
+                            pen.set_background(default_cell.background());
+                        } else {
+                            pen.set_background(col);
                         }
-                        Sgr::Overline(o) => {
-                            pen.set_overline(o);
-                        }
-                        Sgr::VerticalAlign(o) => {
-                            pen.set_vertical_align(o);
-                        }
-                        Sgr::Blink(b) => {
-                            pen.set_blink(b);
-                        }
-                        Sgr::Italic(i) => {
-                            pen.set_italic(i);
-                        }
-                        Sgr::Inverse(inverse) => {
-                            pen.set_reverse(inverse);
-                        }
-                        Sgr::Invisible(invis) => {
-                            pen.set_invisible(invis);
-                        }
-                        Sgr::StrikeThrough(strike) => {
-                            pen.set_strikethrough(strike);
-                        }
-                        Sgr::Foreground(col) => {
-                            if let ColorSpec::Default = col {
-                                pen.set_foreground(default_cell.foreground());
-                            } else {
-                                pen.set_foreground(col);
-                            }
-                        }
-                        Sgr::Background(col) => {
-                            if let ColorSpec::Default = col {
-                                pen.set_background(default_cell.background());
-                            } else {
-                                pen.set_background(col);
-                            }
-                        }
-                        Sgr::UnderlineColor(col) => {
-                            pen.set_underline_color(col);
-                        }
-                        Sgr::Font(_) => {}
-                    },
-                    _ => {}
-                }
+                    }
+                    Sgr::UnderlineColor(col) => {
+                        pen.set_underline_color(col);
+                    }
+                    Sgr::Font(_) => {}
+                } }
             }
             Action::OperatingSystemCommand(_)
             | Action::DeviceControl(_)

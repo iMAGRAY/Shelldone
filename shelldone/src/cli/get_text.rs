@@ -1,8 +1,8 @@
 use clap::Parser;
 use mux::pane::PaneId;
-use termwiz_funcs::lines_to_escapes;
 use shelldone_client::client::Client;
 use shelldone_term::{ScrollbackOrVisibleRowIndex, StableRowIndex};
+use termwiz_funcs::lines_to_escapes;
 
 #[derive(Debug, Parser, Clone)]
 pub struct GetText {
@@ -46,8 +46,8 @@ impl GetText {
             None => info.dimensions.physical_top,
             Some(n) if n >= 0 => info.dimensions.physical_top + n as StableRowIndex,
             Some(n) => {
-                let line = info.dimensions.physical_top as isize + n as isize;
-                if line < info.dimensions.scrollback_top as isize {
+                let line = info.dimensions.physical_top + n as isize;
+                if line < info.dimensions.scrollback_top {
                     info.dimensions.scrollback_top
                 } else {
                     line as StableRowIndex
@@ -59,8 +59,8 @@ impl GetText {
             None => info.dimensions.physical_top + info.dimensions.viewport_rows as StableRowIndex,
             Some(n) if n >= 0 => info.dimensions.physical_top + n as StableRowIndex,
             Some(n) => {
-                let line = info.dimensions.physical_top as isize + n as isize;
-                if line < info.dimensions.scrollback_top as isize {
+                let line = info.dimensions.physical_top + n as isize;
+                if line < info.dimensions.scrollback_top {
                     info.dimensions.scrollback_top
                 } else {
                     line as StableRowIndex
@@ -70,7 +70,7 @@ impl GetText {
 
         let lines = client
             .get_lines(codec::GetLines {
-                pane_id: pane_id.into(),
+                pane_id: pane_id,
                 lines: vec![start_line..end_line + 1],
             })
             .await?;

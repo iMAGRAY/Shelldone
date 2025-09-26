@@ -2,8 +2,8 @@ use crate::cli::CliOutputFormatKind;
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use serde::Serializer as _;
-use tabout::{tabulate_output, Alignment, Column};
 use shelldone_client::client::Client;
+use tabout::{tabulate_output, Alignment, Column};
 
 #[derive(Debug, Parser, Clone, Copy)]
 pub struct ListClientsCommand {

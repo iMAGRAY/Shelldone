@@ -11,10 +11,10 @@ use ::window::glium::{
 };
 use ::window::*;
 use anyhow::Context;
+use shelldone_font::FontConfiguration;
 use std::cell::{Ref, RefCell, RefMut};
 use std::convert::TryInto;
 use std::rc::Rc;
-use shelldone_font::FontConfiguration;
 use wgpu::util::DeviceExt;
 
 const INDICES_PER_CELL: usize = 6;
@@ -585,12 +585,12 @@ impl RenderState {
     ) -> anyhow::Result<Self> {
         loop {
             let glyph_cache = RefCell::new(GlyphCache::new_gl(&context, fonts, atlas_size)?);
-            let result = UtilSprites::new(&mut *glyph_cache.borrow_mut(), metrics);
+            let result = UtilSprites::new(&mut glyph_cache.borrow_mut(), metrics);
             match result {
                 Ok(util_sprites) => {
                     let glyph_prog = match &context {
                         RenderContext::Glium(context) => {
-                            Some(Self::compile_prog(&context, Self::glyph_shader)?)
+                            Some(Self::compile_prog(context, Self::glyph_shader)?)
                         }
                         RenderContext::WebGpu(_) => None,
                     };

@@ -3,8 +3,8 @@ use assert_fs::prelude::*;
 use assert_fs::TempDir;
 use predicates::prelude::*;
 use rstest::*;
-use std::convert::TryInto;
 use shelldone_ssh::{FileType, SftpChannelError, SftpError, Utf8PathBuf};
+use std::convert::TryInto;
 
 // Sftp file tests
 mod file;

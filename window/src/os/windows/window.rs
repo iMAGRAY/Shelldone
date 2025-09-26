@@ -17,6 +17,9 @@ use raw_window_handle::{
     RawWindowHandle, Win32WindowHandle, WindowHandle, WindowsDisplayHandle,
 };
 use shared_library::shared_library;
+use shelldone_color_types::LinearRgba;
+use shelldone_font::FontConfiguration;
+use shelldone_input_types::KeyboardLedStatus;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -29,9 +32,6 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::sync::Mutex;
-use shelldone_color_types::LinearRgba;
-use shelldone_font::FontConfiguration;
-use shelldone_input_types::KeyboardLedStatus;
 use winapi::shared::minwindef::*;
 use winapi::shared::ntdef::*;
 use winapi::shared::windef::*;

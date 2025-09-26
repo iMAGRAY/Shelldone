@@ -3,8 +3,8 @@ use clap::{Parser, ValueHint};
 use mux::pane::PaneId;
 use mux::tab::{SplitDirection, SplitRequest, SplitSize};
 use portable_pty::cmdbuilder::CommandBuilder;
-use std::ffi::OsString;
 use shelldone_client::client::Client;
+use std::ffi::OsString;
 
 #[derive(Debug, Parser, Clone)]
 pub struct SplitPane {

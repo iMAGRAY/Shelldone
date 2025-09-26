@@ -21,6 +21,8 @@ use mux::window::WindowId;
 use portable_pty::CommandBuilder;
 use rangeset::*;
 use serde::{Deserialize, Serialize};
+use shelldone_term::color::ColorPalette;
+use shelldone_term::{Alert, ClipboardSelection, StableRowIndex, TerminalSize};
 use smol::io::AsyncWriteExt;
 use smol::prelude::*;
 use std::collections::HashMap;
@@ -33,8 +35,6 @@ use termwiz::hyperlink::Hyperlink;
 use termwiz::image::{ImageData, TextureCoordinate};
 use termwiz::surface::{Line, SequenceNo};
 use thiserror::Error;
-use shelldone_term::color::ColorPalette;
-use shelldone_term::{Alert, ClipboardSelection, StableRowIndex, TerminalSize};
 
 #[derive(Error, Debug)]
 #[error("Corrupt Response: {0}")]
@@ -1027,7 +1027,7 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
                 if let Some(link) = cell.attrs_mut().hyperlink().map(Arc::clone) {
                     cell.attrs_mut().set_hyperlink(None);
                     match current_link.as_ref() {
-                        Some(current) if Arc::ptr_eq(&current, &link) => {
+                        Some(current) if Arc::ptr_eq(current, &link) => {
                             // Continue the current streak
                             current_range = range_union(current_range, x..x + 1);
                         }

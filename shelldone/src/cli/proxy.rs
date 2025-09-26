@@ -4,10 +4,10 @@ use config::ConfigHandle;
 use mux::activity::Activity;
 use mux::client::ClientId;
 use mux::Mux;
-use std::io::{Read, Write};
-use std::sync::Arc;
 use shelldone_client::client::{unix_connect_with_retry, Client};
 use shelldone_client::domain::ClientDomainConfig;
+use std::io::{Read, Write};
+use std::sync::Arc;
 
 #[derive(Debug, Parser, Clone)]
 pub struct ProxyCommand {}

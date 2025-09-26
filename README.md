@@ -46,8 +46,45 @@ workflow and review expectations. TL;DR:
 
 ```bash
 make dev      # launch a dev shell
-make verify   # fmt + clippy + tests + nextest
+make verify   # orchestrated QA (fmt + clippy baseline + tests + nextest)
 ```
 
 - Contributor resources: [`docs/community/contributor-handbook.md`](docs/community/contributor-handbook.md)
 Bug reports and feature ideas belong in [GitHub Issues](https://github.com/imagray/Shelldone/issues).
+
+### Quality pipeline
+
+`make verify` is an orchestrated front-end for `scripts/verify.sh` and supports
+four modes via the `VERIFY_MODE=fast|prepush|full|ci` environment variable.
+Each run renders a summary table and (with `JSON=1`) a machine-readable report
+under `artifacts/verify/summary.json`.
+
+The QA pipeline enforces two baselines stored in `qa/baselines/`:
+
+- `banned_markers.json` — snapshot of allowed `TODO|FIXME|XXX|???` usages.
+  Update it with `python3 scripts/verify.py --update-marker-baseline` after
+  intentionally removing or reorganising legacy markers.
+- `clippy.json` — snapshot of current Rust lint warnings captured in
+  `--message-format=json`. Update it with
+  `python3 scripts/verify.py --update-clippy-baseline` only after eliminating
+  warnings or when a refactor naturally reorders spans.
+
+Both baselines are diffed against the live code; new warnings fail the run,
+while resolved warnings ask you to refresh the baseline. See
+[`docs/community/contributor-handbook.md`](docs/community/contributor-handbook.md)
+for day-to-day workflows and remediation tips.
+
+The project treats Rust warnings as hard failures. When iterating locally run
+`cargo clippy --workspace --all-targets -- -D warnings` before pushing large
+changes to ensure the baseline remains empty.
+
+To assess roadmap progress run `make roadmap status` — the command reads
+`todo.machine.md`, prints the true completion percentage, and exits with an
+error if declared and computed values diverge. Use `STRICT=0` for a non-fatal
+mode and `JSON=1` for automation.
+
+### Architecture & Operations
+- State and backups: `docs/architecture/state-and-storage.md`
+- Security and secrets: `docs/architecture/security-and-secrets.md`
+- Observability: `docs/architecture/observability.md`
+- Releases and compatibility: `docs/architecture/release-and-compatibility.md`

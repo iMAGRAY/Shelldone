@@ -18,11 +18,11 @@ use deltae::LabValue;
 use image::Pixel;
 use lru::LruCache;
 use luahelper::impl_lua_conversion_dynamic;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 #[derive(FromDynamic, ToDynamic, Debug, Clone, Copy)]
 pub struct ExtractColorParams {
@@ -178,8 +178,8 @@ fn extract_distinct_colors_lab(
     }
 }
 
-pub fn extract_colors_from_image<'lua>(
-    _: &'lua Lua,
+pub fn extract_colors_from_image(
+    _: &Lua,
     (file_name, params): (String, Option<ExtractColorParams>),
 ) -> mlua::Result<Vec<ColorWrap>> {
     let params = params.unwrap_or_default();

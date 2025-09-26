@@ -1,15 +1,21 @@
 //! Bridge our gui config into the terminal crate configuration
 
 use crate::{configuration, ConfigHandle, NewlineCanon};
-use std::sync::Mutex;
-use termwiz::cell::UnicodeVersion;
 use shelldone_term::color::ColorPalette;
 use shelldone_term::config::BidiMode;
+use std::sync::Mutex;
+use termwiz::cell::UnicodeVersion;
 
 #[derive(Debug)]
 pub struct TermConfig {
     config: Mutex<Option<ConfigHandle>>,
     client_palette: Mutex<Option<ColorPalette>>,
+}
+
+impl Default for TermConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TermConfig {

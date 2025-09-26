@@ -4,9 +4,9 @@ use config::lua::mlua::{self, Lua, Value};
 use git2::build::CheckoutBuilder;
 use git2::{Remote, Repository};
 use luahelper::to_lua;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::path::PathBuf;
 use tempfile::TempDir;
-use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 #[derive(FromDynamic, ToDynamic, Debug)]
 struct RepoSpec {
@@ -43,11 +43,9 @@ fn compute_repo_dir(url: &str) -> String {
 
 fn get_remote(repo: &Repository) -> anyhow::Result<Option<Remote<'_>>> {
     let remotes = repo.remotes()?;
-    for remote in remotes.iter() {
-        if let Some(name) = remote {
-            let remote = repo.find_remote(name)?;
-            return Ok(Some(remote));
-        }
+    for name in remotes.iter().flatten() {
+        let remote = repo.find_remote(name)?;
+        return Ok(Some(remote));
     }
     Ok(None)
 }

@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use shelldone_input_types::MousePress;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameClick};
 use smithay_client_toolkit::seat::pointer::{
@@ -11,7 +12,6 @@ use wayland_client::backend::ObjectId;
 use wayland_client::protocol::wl_pointer::{ButtonState, WlPointer};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::{Connection, Proxy, QueueHandle};
-use shelldone_input_types::MousePress;
 
 use crate::wayland::SurfaceUserData;
 
@@ -41,13 +41,13 @@ impl PointerHandler for WaylandState {
                 self.active_surface_id = RefCell::new(Some(surface_id.clone()));
                 pstate.active_surface_id = Some(surface_id);
             }
-            if let Some(serial) = event_serial(&evt) {
+            if let Some(serial) = event_serial(evt) {
                 *self.last_serial.borrow_mut() = serial;
                 pstate.serial = serial;
             }
             if let Some(pending) = self
                 .surface_to_pending
-                .get(&self.active_surface_id.borrow().as_ref().unwrap())
+                .get(self.active_surface_id.borrow().as_ref().unwrap())
             {
                 let mut pending = pending.lock().unwrap();
                 if pending.queue(evt) {

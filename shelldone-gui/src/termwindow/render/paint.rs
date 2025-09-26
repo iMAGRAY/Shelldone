@@ -2,9 +2,9 @@ use crate::termwindow::{RenderFrame, TermWindowNotif};
 use ::window::bitmaps::atlas::OutOfTextureSpace;
 use ::window::WindowOps;
 use anyhow::Context;
+use shelldone_font::ClearShapeCache;
 use smol::Timer;
 use std::time::{Duration, Instant};
-use shelldone_font::ClearShapeCache;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AllowImage {
@@ -127,7 +127,7 @@ impl crate::TermWindow {
                     }
                     _ => {
                         self.scheduled_animation.borrow_mut().replace(next_due);
-                        let window = self.window.clone().take().unwrap();
+                        let window = self.window.clone().unwrap();
                         promise::spawn::spawn(async move {
                             Timer::at(next_due).await;
                             let win = window.clone();
@@ -149,7 +149,7 @@ impl crate::TermWindow {
                 let mut ui_items = computed.ui_items();
 
                 let gl_state = self.render_state.as_ref().unwrap();
-                self.render_element(&computed, gl_state, None)?;
+                self.render_element(computed, gl_state, None)?;
 
                 self.ui_items.append(&mut ui_items);
             }

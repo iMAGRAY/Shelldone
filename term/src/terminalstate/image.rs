@@ -3,11 +3,11 @@ use anyhow::Context;
 use humansize::{SizeFormatter, DECIMAL};
 use num_traits::{One, Zero};
 use ordered_float::NotNan;
-use std::sync::Arc;
 use shelldone_cell::image::{ImageCell, ImageDataType};
 use shelldone_cell::Cell;
 use shelldone_surface::change::ImageData;
 use shelldone_surface::TextureCoordinate;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlacementInfo {

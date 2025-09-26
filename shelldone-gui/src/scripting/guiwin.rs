@@ -9,9 +9,9 @@ use mux::pane::PaneId;
 use mux::window::WindowId as MuxWindowId;
 use mux::Mux;
 use mux_lua::MuxPane;
-use termwiz_funcs::lines_to_escapes;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 use shelldone_toast_notification::ToastNotification;
+use termwiz_funcs::lines_to_escapes;
 use window::{Connection, ConnectionOps, DeadKeyStatus, WindowOps, WindowState};
 
 #[derive(Clone)]

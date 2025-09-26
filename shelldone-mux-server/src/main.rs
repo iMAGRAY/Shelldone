@@ -4,13 +4,13 @@ use mux::activity::Activity;
 use mux::domain::{Domain, LocalDomain};
 use mux::Mux;
 use portable_pty::cmdbuilder::CommandBuilder;
+use shelldone_gui_subcommands::*;
+use shelldone_mux_server_impl::update_mux_domains_for_server;
 use std::ffi::OsString;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::thread;
-use shelldone_gui_subcommands::*;
-use shelldone_mux_server_impl::update_mux_domains_for_server;
 
 mod daemonize;
 
@@ -132,7 +132,7 @@ fn run() -> anyhow::Result<()> {
             // being propagated to its children when they spawn
             if let Some(fd) = pid_file {
                 cmd.arg("--pid-file-fd");
-                cmd.arg(&fd.to_string());
+                cmd.arg(fd.to_string());
             }
         }
         if opts.skip_config {
@@ -144,7 +144,7 @@ fn run() -> anyhow::Result<()> {
         }
         for (name, value) in &opts.config_override {
             cmd.arg("--config");
-            cmd.arg(&format!("{name}={value}"));
+            cmd.arg(format!("{name}={value}"));
         }
         if let Some(cwd) = opts.cwd {
             cmd.arg("--cwd");

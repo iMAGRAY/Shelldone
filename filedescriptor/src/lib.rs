@@ -175,6 +175,11 @@ pub trait IntoRawFileDescriptor {
 /// to indicate that care must be taken by the caller to ensure that it
 /// is used appropriately.
 pub trait FromRawFileDescriptor {
+    /// # Safety
+    ///
+    /// The caller must guarantee that `fd` is a valid descriptor owned by the
+    /// current process and that transferring ownership into the resulting type
+    /// will not lead to double-closing or use-after-close.
     unsafe fn from_raw_file_descriptor(fd: RawFileDescriptor) -> Self;
 }
 
@@ -185,6 +190,11 @@ pub trait IntoRawSocketDescriptor {
     fn into_socket_descriptor(self) -> SocketDescriptor;
 }
 pub trait FromRawSocketDescriptor {
+    /// # Safety
+    ///
+    /// The caller must guarantee that `fd` represents a valid socket descriptor
+    /// that is exclusively owned and should become managed by the returned
+    /// value.
     unsafe fn from_socket_descriptor(fd: SocketDescriptor) -> Self;
 }
 
@@ -195,6 +205,7 @@ pub trait FromRawSocketDescriptor {
 #[derive(Debug)]
 pub struct OwnedHandle {
     handle: RawFileDescriptor,
+    #[cfg(windows)]
     handle_type: HandleType,
 }
 
@@ -206,6 +217,7 @@ impl OwnedHandle {
         let handle = f.into_raw_file_descriptor();
         Self {
             handle,
+            #[cfg(windows)]
             handle_type: Self::probe_handle_type(handle),
         }
     }
@@ -217,7 +229,12 @@ impl OwnedHandle {
     /// The returned handle has a separate lifetime from the source, but
     /// references the same object at the kernel level.
     pub fn try_clone(&self) -> Result<Self> {
-        Self::dup_impl(self, self.handle_type)
+        #[cfg(windows)]
+        let hint = self.handle_type;
+        #[cfg(not(windows))]
+        let hint = ();
+
+        Self::dup_impl(self, hint)
     }
 
     /// Attempt to duplicate the underlying handle from an object that is
@@ -228,7 +245,12 @@ impl OwnedHandle {
     /// The returned handle has a separate lifetime from the source, but
     /// references the same object at the kernel level.
     pub fn dup<F: AsRawFileDescriptor>(f: &F) -> Result<Self> {
-        Self::dup_impl(f, Default::default())
+        #[cfg(windows)]
+        let hint = HandleType::Unknown;
+        #[cfg(not(windows))]
+        let hint = ();
+
+        Self::dup_impl(f, hint)
     }
 }
 

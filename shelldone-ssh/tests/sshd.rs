@@ -1,13 +1,13 @@
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
 use rstest::*;
+use shelldone_ssh::{Config, Session, SessionEvent};
 use std::collections::HashMap;
 use std::io::Result as IoResult;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::LazyLock;
 use std::time::Duration;
-use shelldone_ssh::{Config, Session, SessionEvent};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

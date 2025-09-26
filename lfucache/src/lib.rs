@@ -116,9 +116,9 @@ impl<K: Hash + Eq + Clone + Debug, V, S: Default + BuildHasher> LfuCache<K, V, S
     }
 
     fn bucket_for_key<Q: Hash>(&self, k: &Q) -> usize {
-        let mut hasher = self.hasher.build_hasher();
-        k.hash(&mut hasher);
-        (hasher.finish() as usize) % self.buckets.len()
+        
+        
+        (self.hasher.hash_one(&k) as usize) % self.buckets.len()
     }
 
     pub fn len(&self) -> usize {
@@ -182,7 +182,7 @@ impl<K: Hash + Eq + Clone + Debug, V, S: Default + BuildHasher> LfuCache<K, V, S
                     .unwrap();
                 {
                     let mut freq = entry.freq.borrow_mut();
-                    *freq = *freq / delta;
+                    *freq /= delta;
                 }
                 self.frequency_index.insert(lfu_entry);
             }

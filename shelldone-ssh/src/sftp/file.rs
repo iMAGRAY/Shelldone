@@ -104,8 +104,8 @@ impl File {
                 ),
             )))
             .await?;
-        let result = rx.recv().await??;
-        Ok(result)
+        rx.recv().await??;
+        Ok(())
     }
 
     /// Get the metadata for this handle.
@@ -138,8 +138,8 @@ impl File {
                 reply,
             ))))
             .await?;
-        let result = rx.recv().await??;
-        Ok(result)
+        rx.recv().await??;
+        Ok(())
     }
 }
 
@@ -152,7 +152,7 @@ impl smol::io::AsyncRead for File {
         async fn read(tx: SessionSender, file_id: usize, len: usize) -> io::Result<Vec<u8>> {
             inner_read(tx, file_id, len)
                 .await
-                .map_err(|x| io::Error::new(io::ErrorKind::Other, x))
+                .map_err(|x| io::Error::other(x))
         }
         let tx = self.tx.as_ref().unwrap().clone();
         let file_id = self.file_id;
@@ -172,7 +172,7 @@ impl smol::io::AsyncRead for File {
             Poll::Ready(Err(x)) => Poll::Ready(Err(x)),
             Poll::Ready(Ok(data)) => {
                 let n = data.len();
-                (&mut buf[..n]).copy_from_slice(&data[..n]);
+                buf[..n].copy_from_slice(&data[..n]);
                 Poll::Ready(Ok(n))
             }
         }
@@ -190,7 +190,7 @@ impl smol::io::AsyncWrite for File {
             inner_write(tx, file_id, buf)
                 .await
                 .map(|_| n)
-                .map_err(|x| io::Error::new(io::ErrorKind::Other, x))
+                .map_err(|x| io::Error::other(x))
         }
 
         let tx = self.tx.as_ref().unwrap().clone();
@@ -213,7 +213,7 @@ impl smol::io::AsyncWrite for File {
         async fn flush(tx: SessionSender, file_id: usize) -> io::Result<()> {
             inner_flush(tx, file_id)
                 .await
-                .map_err(|x| io::Error::new(io::ErrorKind::Other, x))
+                .map_err(|x| io::Error::other(x))
         }
 
         let tx = self.tx.as_ref().unwrap().clone();
@@ -236,7 +236,7 @@ impl smol::io::AsyncWrite for File {
         async fn close(tx: SessionSender, file_id: usize) -> io::Result<()> {
             inner_close(tx, file_id)
                 .await
-                .map_err(|x| io::Error::new(io::ErrorKind::Other, x))
+                .map_err(|x| io::Error::other(x))
         }
 
         let tx = self.tx.as_ref().unwrap().clone();
@@ -264,8 +264,8 @@ async fn inner_write(tx: SessionSender, file_id: usize, data: Vec<u8>) -> SftpCh
         reply,
     ))))
     .await?;
-    let result = rx.recv().await??;
-    Ok(result)
+    rx.recv().await??;
+    Ok(())
 }
 
 /// Reads some bytes from the file, returning a vector of bytes read.
@@ -294,8 +294,8 @@ async fn inner_flush(tx: SessionSender, file_id: usize) -> SftpChannelResult<()>
         file_id, reply,
     ))))
     .await?;
-    let result = rx.recv().await??;
-    Ok(result)
+    rx.recv().await??;
+    Ok(())
 }
 
 /// Closes the handle to the remote file
@@ -305,6 +305,6 @@ async fn inner_close(tx: SessionSender, file_id: usize) -> SftpChannelResult<()>
         file_id, reply,
     ))))
     .await?;
-    let result = rx.recv().await??;
-    Ok(result)
+    rx.recv().await??;
+    Ok(())
 }

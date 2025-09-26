@@ -9,6 +9,10 @@ use config::{Shell, SshBackend, SshDomain};
 use filedescriptor::{poll, pollfd, socketpair, AsRawSocketDescriptor, FileDescriptor, POLLIN};
 use portable_pty::cmdbuilder::CommandBuilder;
 use portable_pty::{ChildKiller, ExitStatus, MasterPty, PtySize};
+use shelldone_ssh::{
+    ConfigMap, HostVerificationFailed, Session, SessionEvent, SshChildProcess, SshPty,
+};
+use shelldone_term::TerminalSize;
 use smol::channel::{bounded, Receiver as AsyncReceiver};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -22,10 +26,6 @@ use termwiz::lineedit::*;
 use termwiz::render::terminfo::TerminfoRenderer;
 use termwiz::surface::{Change, LineAttribute};
 use termwiz::terminal::{ScreenSize, Terminal, TerminalWaker};
-use shelldone_ssh::{
-    ConfigMap, HostVerificationFailed, Session, SessionEvent, SshChildProcess, SshPty,
-};
-use shelldone_term::TerminalSize;
 
 #[derive(Default)]
 struct PasswordPromptHost {
@@ -198,7 +198,7 @@ pub fn ssh_domain_to_ssh_config(ssh_dom: &SshDomain) -> anyhow::Result<ConfigMap
         }
     };
 
-    let mut ssh_config = ssh_config.for_host(&remote_host_name);
+    let mut ssh_config = ssh_config.for_host(remote_host_name);
     ssh_config.insert(
         "shelldone_ssh_backend".to_string(),
         match ssh_dom
@@ -279,7 +279,7 @@ impl RemoteSshDomain {
                 format!("cd {};", shell_words::quote(&dir))
             } else if let Some(dir) = cmd.get_cwd() {
                 let dir = dir.to_str().context("converting cwd to string")?;
-                format!("cd {};", shell_words::quote(&dir))
+                format!("cd {};", shell_words::quote(dir))
             } else {
                 String::new()
             };
@@ -553,8 +553,8 @@ fn connect_ssh_session(
                     let size = *self.size.lock().unwrap();
                     if starting_size != size {
                         return Ok(Some(InputEvent::Resized {
-                            cols: size.cols as usize,
-                            rows: size.rows as usize,
+                            cols: size.cols,
+                            rows: size.rows,
                         }));
                     }
                 }
@@ -652,7 +652,7 @@ fn connect_ssh_session(
                 match smol::block_on(session.request_pty(
                     &config::configuration().term,
                     crate::terminal_size_to_pty_size(*size.lock().unwrap())?,
-                    command_line.as_ref().map(|s| s.as_str()),
+                    command_line.as_deref(),
                     Some(env),
                 )) {
                     Err(err) => {
@@ -721,7 +721,7 @@ impl Domain for RemoteSshDomain {
                     &config::configuration().term,
                     crate::terminal_size_to_pty_size(size)
                         .context("compute pty size from terminal size")?,
-                    command_line.as_ref().map(|s| s.as_str()),
+                    command_line.as_deref(),
                     Some(env.clone()),
                 )
                 .await
@@ -973,8 +973,8 @@ impl ChildKiller for WrappedSshChildKiller {
     }
 }
 
-type BoxedReader = Box<(dyn Read + Send + 'static)>;
-type BoxedWriter = Box<(dyn Write + Send + 'static)>;
+type BoxedReader = Box<dyn Read + Send + 'static >;
+type BoxedWriter = Box<dyn Write + Send + 'static >;
 
 pub(crate) struct WrappedSshPty {
     inner: RefCell<WrappedSshPtyInner>,
@@ -1071,7 +1071,7 @@ impl portable_pty::MasterPty for WrappedSshPty {
         }
     }
 
-    fn try_clone_reader(&self) -> anyhow::Result<Box<(dyn Read + Send + 'static)>> {
+    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn Read + Send + 'static >> {
         let mut inner = self.inner.borrow_mut();
         inner.check_connected()?;
         match &mut *inner {
@@ -1083,7 +1083,7 @@ impl portable_pty::MasterPty for WrappedSshPty {
         }
     }
 
-    fn take_writer(&self) -> anyhow::Result<Box<(dyn Write + Send + 'static)>> {
+    fn take_writer(&self) -> anyhow::Result<Box<dyn Write + Send + 'static >> {
         anyhow::bail!("writer must be created during bootstrap");
     }
 

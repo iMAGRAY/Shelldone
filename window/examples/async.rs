@@ -1,9 +1,9 @@
 use ::window::*;
 use config::Dimension;
 use promise::spawn::spawn;
+use shelldone_font::FontConfiguration;
 use std::cell::RefCell;
 use std::rc::Rc;
-use shelldone_font::FontConfiguration;
 
 struct MyWindow {
     allow_close: bool,

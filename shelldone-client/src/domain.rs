@@ -13,9 +13,9 @@ use mux::window::WindowId;
 use mux::{Mux, MuxNotification};
 use portable_pty::CommandBuilder;
 use promise::spawn::spawn_into_new_thread;
+use shelldone_term::TerminalSize;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use shelldone_term::TerminalSize;
 
 pub struct ClientInner {
     pub client: Client,

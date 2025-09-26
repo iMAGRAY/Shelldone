@@ -4,10 +4,10 @@ use config::TlsDomainServer;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream, SslVerifyMode};
 use openssl::x509::X509;
 use promise::spawn::spawn_into_main_thread;
+use shelldone_mux_server_impl::PKI;
 use std::net::TcpListener;
 use std::path::Path;
 use std::sync::Arc;
-use shelldone_mux_server_impl::PKI;
 
 struct OpenSSLNetListener {
     acceptor: Arc<SslAcceptor>,
@@ -127,7 +127,7 @@ pub fn spawn_tls_listener(tls_server: &TlsDomainServer) -> Result<(), Error> {
 
     if let Some(chain_file) = tls_server.pem_ca.as_ref() {
         acceptor
-            .set_certificate_chain_file(&chain_file)
+            .set_certificate_chain_file(chain_file)
             .context(format!(
                 "set_certificate_chain_file to {} for TLS listener",
                 chain_file.display()

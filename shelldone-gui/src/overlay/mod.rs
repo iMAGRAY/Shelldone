@@ -2,9 +2,9 @@ use crate::termwindow::TermWindow;
 use mux::pane::{Pane, PaneId};
 use mux::tab::{Tab, TabId};
 use mux::termwiztermtab::{allocate, TermWizTerminal};
+use shelldone_term::{TerminalConfiguration, TerminalSize};
 use std::pin::Pin;
 use std::sync::Arc;
-use shelldone_term::{TerminalConfiguration, TerminalSize};
 
 pub mod confirm;
 pub mod confirm_close_pane;

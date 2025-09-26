@@ -79,9 +79,9 @@ impl From<&Regex> for RegexWrap {
     }
 }
 
-impl Into<Regex> for RegexWrap {
-    fn into(self) -> Regex {
-        self.0
+impl From<RegexWrap> for Regex {
+    fn from(val: RegexWrap) -> Self {
+        val.0
     }
 }
 
@@ -187,12 +187,10 @@ impl Rule {
     pub fn match_hyperlinks(line: &str, rules: &[Rule]) -> Vec<RuleMatch> {
         let mut matches = Vec::new();
         for rule in rules.iter() {
-            for capture_result in rule.regex.captures_iter(line) {
-                if let Ok(captures) = capture_result {
-                    let m = Match { rule, captures };
-                    if m.highlight().is_some() {
-                        matches.push(m);
-                    }
+            for captures in rule.regex.captures_iter(line).flatten() {
+                let m = Match { rule, captures };
+                if m.highlight().is_some() {
+                    matches.push(m);
                 }
             }
         }

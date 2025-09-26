@@ -14,6 +14,10 @@ use image::{
 };
 use lfucache::LfuCache;
 use ordered_float::NotNan;
+use shelldone_blob_leases::{BlobLease, BlobManager, BoxedReader};
+use shelldone_font::units::*;
+use shelldone_font::{FontConfiguration, GlyphInfo, LoadedFont, LoadedFontId};
+use shelldone_term::Underline;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Seek;
@@ -25,10 +29,6 @@ use std::time::{Duration, Instant};
 use termwiz::color::RgbColor;
 use termwiz::image::{ImageData, ImageDataType};
 use termwiz::surface::CursorShape;
-use shelldone_blob_leases::{BlobLease, BlobManager, BoxedReader};
-use shelldone_font::units::*;
-use shelldone_font::{FontConfiguration, GlyphInfo, LoadedFont, LoadedFontId};
-use shelldone_term::Underline;
 
 static FRAME_ERROR_REPORTED: AtomicBool = AtomicBool::new(false);
 
@@ -142,15 +142,15 @@ impl<'a> std::borrow::Borrow<dyn GlyphKeyTrait + 'a> for GlyphKey {
     }
 }
 
-impl<'a> PartialEq for (dyn GlyphKeyTrait + 'a) {
+impl<'a> PartialEq for dyn GlyphKeyTrait + 'a  {
     fn eq(&self, other: &Self) -> bool {
         self.key().eq(&other.key())
     }
 }
 
-impl<'a> Eq for (dyn GlyphKeyTrait + 'a) {}
+impl<'a> Eq for dyn GlyphKeyTrait + 'a  {}
 
-impl<'a> std::hash::Hash for (dyn GlyphKeyTrait + 'a) {
+impl<'a> std::hash::Hash for dyn GlyphKeyTrait + 'a  {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key().hash(state)
     }
@@ -338,7 +338,7 @@ impl FrameDecoder {
             .context("sending first frame")?;
         decoded_frames.push(decoded_frame);
 
-        while let Some(frame) = frames.next() {
+        for frame in frames.by_ref() {
             let frame = frame?;
 
             let duration: Duration = frame.delay().into();
@@ -459,7 +459,7 @@ impl FrameState {
                 }
             },
             FrameSource::FrameIndex(idx) => {
-                *idx = *idx + 1;
+                *idx += 1;
                 if *idx >= self.frames.len() {
                     *idx = 0;
                 }
@@ -523,7 +523,7 @@ impl DecodedImage {
             ImageDataType::EncodedLease(lease) => {
                 Self::start_frame_decoder(lease.clone(), image_data)
             }
-            ImageDataType::EncodedFile(data) => match BlobManager::store(&data) {
+            ImageDataType::EncodedFile(data) => match BlobManager::store(data) {
                 Ok(lease) => Self::start_frame_decoder(lease, image_data),
                 Err(err) => {
                     log::error!("Unable to move file data to blob manager: {err:#}");
@@ -639,7 +639,7 @@ impl GlyphCache {
         let key = BorrowedGlyphKey {
             font_idx: info.font_idx,
             glyph_pos: info.glyph_pos,
-            num_cells: num_cells,
+            num_cells,
             style,
             followed_by_space,
             metric: metrics.into(),
@@ -834,9 +834,9 @@ impl GlyphCache {
             }
         } else {
             let raw_im = Image::with_rgba32(
-                glyph.width as usize,
-                glyph.height as usize,
-                4 * glyph.width as usize,
+                glyph.width,
+                glyph.height,
+                4 * glyph.width,
                 &glyph.data,
             );
 
@@ -924,7 +924,7 @@ impl GlyphCache {
                     .context("atlas.allocate_with_padding")?;
                 frame_cache.insert(*hash, sprite.clone());
 
-                return Ok((sprite, None, LoadState::Loaded));
+                Ok((sprite, None, LoadState::Loaded))
             }
             ImageDataType::AnimRgba8 {
                 hashes,
@@ -952,12 +952,12 @@ impl GlyphCache {
                         + durations[*decoded_current_frame].max(min_frame_duration);
                     if now >= next_due {
                         // Advance to next frame
-                        *decoded_current_frame = *decoded_current_frame + 1;
+                        *decoded_current_frame += 1;
                         if *decoded_current_frame >= frames.len() {
                             *decoded_current_frame = 0;
                             // Skip potential 0-duration root frame
                             if durations[0].as_millis() == 0 && frames.len() > 1 {
-                                *decoded_current_frame = *decoded_current_frame + 1;
+                                *decoded_current_frame += 1;
                             }
                         }
                         *decoded_frame_start = now;
@@ -981,14 +981,14 @@ impl GlyphCache {
 
                 frame_cache.insert(hash, sprite.clone());
 
-                return Ok((
+                Ok((
                     sprite,
                     Some(
                         *decoded_frame_start
                             + durations[*decoded_current_frame].max(min_frame_duration),
                     ),
                     LoadState::Loaded,
-                ));
+                ))
             }
             ImageDataType::EncodedLease(_) | ImageDataType::EncodedFile(_) => {
                 let mut frames = decoded.frames.borrow_mut();
@@ -1022,7 +1022,7 @@ impl GlyphCache {
                 if now >= next_due {
                     // Advance to next frame
                     if frames.load_next_frame() {
-                        *decoded_current_frame = *decoded_current_frame + 1;
+                        *decoded_current_frame += 1;
                         *decoded_frame_start = now;
                         next_due =
                             *decoded_frame_start + frames.frame_duration().max(min_frame_duration);

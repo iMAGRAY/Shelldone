@@ -1,7 +1,7 @@
 use crate::*;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
-use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic)]
 pub struct DaemonOptions {
@@ -21,8 +21,8 @@ pub fn set_sticky_bit(path: &Path) {
         if let Ok(metadata) = path.metadata() {
             let mut perms = metadata.permissions();
             let mode = perms.mode();
-            perms.set_mode(mode | libc::S_ISVTX as u32);
-            let _ = std::fs::set_permissions(&path, perms);
+            perms.set_mode(mode | libc::S_ISVTX);
+            let _ = std::fs::set_permissions(path, perms);
         }
     }
 

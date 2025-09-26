@@ -23,6 +23,7 @@ pub struct ServerInformation {
     pub spec_version: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 #[proxy(
     interface = "org.freedesktop.Notifications",
     default_service = "org.freedesktop.Notifications",
@@ -90,6 +91,15 @@ async fn show_notif_impl(notif: ToastNotification) -> Result<(), Box<dyn std::er
     let connection = zbus::ConnectionBuilder::session()?.build().await?;
 
     let proxy = NotificationsProxy::new(&connection).await?;
+    if let Ok(info) = proxy.get_server_information().await {
+        log::trace!(
+            "notification server: {} {} v{} (spec {})",
+            info.vendor,
+            info.name,
+            info.version,
+            info.spec_version
+        );
+    }
     let caps = proxy.get_capabilities().await?;
 
     if notif.url.is_some() && !caps.iter().any(|cap| cap == "actions") {

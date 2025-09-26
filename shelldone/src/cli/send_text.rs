@@ -1,8 +1,8 @@
 use anyhow::Context;
 use clap::Parser;
 use mux::pane::PaneId;
-use std::io::Read;
 use shelldone_client::client::Client;
+use std::io::Read;
 
 #[derive(Debug, Parser, Clone)]
 pub struct SendText {

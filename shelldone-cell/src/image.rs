@@ -14,11 +14,11 @@
 use ordered_float::NotNan;
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(feature = "std")]
+use shelldone_blob_leases::{BlobLease, BlobManager};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-#[cfg(feature = "std")]
-use shelldone_blob_leases::{BlobLease, BlobManager};
 
 #[cfg(feature = "use_serde")]
 fn deserialize_notnan<'de, D>(deserializer: D) -> Result<NotNan<f32>, D::Error>
@@ -177,8 +177,8 @@ impl ImageCell {
 
     /// negative z_index is rendered beneath the text layer.
     /// >= 0 is rendered above the text.
-    /// negative z_index < INT32_MIN/2 will be drawn under cells
-    /// with non-default background colors
+    /// > negative z_index < INT32_MIN/2 will be drawn under cells
+    /// > with non-default background colors
     pub fn z_index(&self) -> i32 {
         self.z_index
     }
@@ -331,13 +331,10 @@ impl ImageDataType {
     /// if the speed_factor is negative, non-finite or the result
     /// overflows the allow Duration range.
     pub fn adjust_speed(&mut self, speed_factor: f32) {
-        match self {
-            Self::AnimRgba8 { durations, .. } => {
-                for d in durations {
-                    *d = d.mul_f32(1. / speed_factor);
-                }
+        if let Self::AnimRgba8 { durations, .. } = self {
+            for d in durations {
+                *d = d.mul_f32(1. / speed_factor);
             }
-            _ => {}
         }
     }
 
@@ -392,12 +389,12 @@ impl ImageDataType {
                 match format {
                     ImageFormat::Gif => image::codecs::gif::GifDecoder::new(cursor)
                         .and_then(|decoder| decoder.into_frames().collect_frames())
-                        .and_then(|frames| {
+                        .map(|frames| {
                             if frames.is_empty() {
                                 log::error!("decoded image has 0 frames, using placeholder");
-                                Ok(Self::placeholder())
+                                Self::placeholder()
                             } else {
-                                Ok(Self::decode_frames(frames))
+                                Self::decode_frames(frames)
                             }
                         })
                         .unwrap_or_else(|err| {

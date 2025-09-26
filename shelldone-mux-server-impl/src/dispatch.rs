@@ -4,9 +4,9 @@ use async_ossl::AsyncSslStream;
 use codec::{DecodedPdu, Pdu};
 use futures::FutureExt;
 use mux::{Mux, MuxNotification};
+use shelldone_uds::UnixStream;
 use smol::prelude::*;
 use smol::Async;
-use shelldone_uds::UnixStream;
 
 #[cfg(unix)]
 pub trait AsRawDesc: std::os::unix::io::AsRawFd + std::os::fd::AsFd {}

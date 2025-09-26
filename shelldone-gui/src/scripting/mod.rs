@@ -6,8 +6,8 @@ use config::lua::mlua::{self, Lua};
 use config::{DeferredKeyCode, GpuInfo, Key, KeyNoAction};
 use luahelper::dynamic_to_lua_value;
 use mux::window::WindowId as MuxWindowId;
-use std::collections::HashMap;
 use shelldone_dynamic::ToDynamic;
+use std::collections::HashMap;
 
 pub mod guiwin;
 

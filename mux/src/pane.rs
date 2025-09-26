@@ -7,6 +7,12 @@ use downcast_rs::{impl_downcast, Downcast};
 use parking_lot::MappedMutexGuard;
 use rangeset::RangeSet;
 use serde::{Deserialize, Serialize};
+use shelldone_dynamic::Value;
+use shelldone_term::color::ColorPalette;
+use shelldone_term::{
+    Clipboard, DownloadHandler, KeyCode, KeyModifiers, MouseEvent, Progress, SemanticZone,
+    StableRowIndex, TerminalConfiguration, TerminalSize,
+};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -14,12 +20,6 @@ use termwiz::hyperlink::Rule;
 use termwiz::input::KeyboardEncoding;
 use termwiz::surface::{Line, SequenceNo};
 use url::Url;
-use shelldone_dynamic::Value;
-use shelldone_term::color::ColorPalette;
-use shelldone_term::{
-    Clipboard, DownloadHandler, KeyCode, KeyModifiers, MouseEvent, Progress, SemanticZone,
-    StableRowIndex, TerminalConfiguration, TerminalSize,
-};
 
 static PANE_ID: ::std::sync::atomic::AtomicUsize = ::std::sync::atomic::AtomicUsize::new(0);
 pub type PaneId = usize;

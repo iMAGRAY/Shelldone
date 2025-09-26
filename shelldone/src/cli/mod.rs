@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use clap::Parser;
-use std::ffi::OsString;
 use shelldone_client::client::Client;
+use std::ffi::OsString;
 
 mod activate_pane;
 mod activate_pane_direction;

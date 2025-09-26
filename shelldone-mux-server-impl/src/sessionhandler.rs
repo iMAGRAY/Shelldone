@@ -9,13 +9,13 @@ use mux::renderable::{RenderableDimensions, StableCursorPosition};
 use mux::tab::TabId;
 use mux::{Mux, MuxNotification};
 use promise::spawn::spawn_into_main_thread;
+use shelldone_term::terminal::Alert;
+use shelldone_term::StableRowIndex;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use termwiz::surface::SequenceNo;
 use url::Url;
-use shelldone_term::terminal::Alert;
-use shelldone_term::StableRowIndex;
 
 #[derive(Clone)]
 pub struct PduSender {
@@ -90,7 +90,7 @@ impl PerPane {
             changed = true;
         }
 
-        if !changed && !force_with_input_serial.is_some() {
+        if !changed && force_with_input_serial.is_none() {
             return None;
         }
 

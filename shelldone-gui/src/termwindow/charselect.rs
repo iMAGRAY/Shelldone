@@ -16,12 +16,12 @@ use emojis::{Emoji, Group};
 use frecency::Frecency;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use shelldone_term::{KeyCode, KeyModifiers, MouseEvent};
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use termwiz::input::Modifiers;
-use shelldone_term::{KeyCode, KeyModifiers, MouseEvent};
 use window::color::LinearRgba;
 
 struct MatchResults {
@@ -475,7 +475,7 @@ impl CharSelector {
         let element = Element::new(&font, ElementContent::Children(elements))
             .colors(ElementColors {
                 border: BorderColor::new(
-                    term_window.config.char_select_bg_color.to_linear().into(),
+                    term_window.config.char_select_bg_color.to_linear(),
                 ),
                 bg: term_window.config.char_select_bg_color.to_linear().into(),
                 text: term_window.config.char_select_fg_color.to_linear().into(),

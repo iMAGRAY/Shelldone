@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, Value};
+use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone)]
 pub struct OptPixelUnit(Option<Dimension>);
@@ -174,21 +174,18 @@ impl Dimension {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, FromDynamic, ToDynamic)]
+#[derive(Default)]
 pub enum GeometryOrigin {
     /// x,y relative to overall screen coordinate system.
     /// Selected position might be outside of the regions covered
     /// by the user's selected monitor placement.
+    #[default]
     ScreenCoordinateSystem,
     MainScreen,
     ActiveScreen,
     Named(String),
 }
 
-impl Default for GeometryOrigin {
-    fn default() -> Self {
-        Self::ScreenCoordinateSystem
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, FromDynamic, ToDynamic)]
 pub struct GuiPosition {

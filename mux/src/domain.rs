@@ -17,12 +17,12 @@ use config::{configuration, ExecDomain, SerialDomain, ValueOrFunc, WslDomain};
 use downcast_rs::{impl_downcast, Downcast};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, CommandBuilder, ExitStatus, MasterPty, PtySize, PtySystem};
+use shelldone_term::TerminalSize;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use shelldone_term::TerminalSize;
 
 static DOMAIN_ID: ::std::sync::atomic::AtomicUsize = ::std::sync::atomic::AtomicUsize::new(0);
 pub type DomainId = usize;
@@ -323,10 +323,7 @@ impl LocalDomain {
             for (k, v) in cmd.iter_full_env_as_str() {
                 set_environment_variables.insert(k.to_string(), v.to_string());
             }
-            let cwd = match cmd.get_cwd() {
-                Some(cwd) => Some(PathBuf::from(cwd)),
-                None => None,
-            };
+            let cwd = cmd.get_cwd().map(PathBuf::from);
             let spawn_command = SpawnCommand {
                 label: None,
                 domain: SpawnTabDomain::DomainName(ed.name.clone()),
@@ -339,7 +336,7 @@ impl LocalDomain {
             let spawn_command = config::with_lua_config_on_main_thread(|lua| async {
                 let lua = lua.ok_or_else(|| anyhow::anyhow!("missing lua context"))?;
                 let value = config::lua::emit_async_callback(
-                    &*lua,
+                    &lua,
                     (ed.fixup_command.clone(), (spawn_command.clone())),
                 )
                 .await?;
@@ -529,10 +526,10 @@ impl portable_pty::MasterPty for FailedSpawnPty {
     fn get_size(&self) -> anyhow::Result<PtySize> {
         self.inner.lock().get_size()
     }
-    fn try_clone_reader(&self) -> anyhow::Result<Box<(dyn std::io::Read + Send + 'static)>> {
+    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn std::io::Read + Send + 'static>> {
         self.inner.lock().try_clone_reader()
     }
-    fn take_writer(&self) -> anyhow::Result<Box<(dyn std::io::Write + Send + 'static)>> {
+    fn take_writer(&self) -> anyhow::Result<Box<dyn std::io::Write + Send + 'static>> {
         self.inner.lock().take_writer()
     }
 
@@ -680,7 +677,7 @@ impl Domain for LocalDomain {
                     let label = config::with_lua_config_on_main_thread(|lua| async {
                         let lua = lua.ok_or_else(|| anyhow::anyhow!("missing lua context"))?;
                         let value = config::lua::emit_async_callback(
-                            &*lua,
+                            &lua,
                             (label_func.clone(), (self.name.clone())),
                         )
                         .await?;

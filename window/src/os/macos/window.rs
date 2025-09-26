@@ -42,6 +42,8 @@ use raw_window_handle::{
     AppKitDisplayHandle, AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle,
     HasWindowHandle, RawDisplayHandle, RawWindowHandle, WindowHandle,
 };
+use shelldone_font::FontConfiguration;
+use shelldone_input_types::{is_ascii_control, IntegratedTitleButtonStyle, KeyboardLedStatus};
 use std::any::Any;
 use std::cell::RefCell;
 use std::ffi::{c_void, CStr};
@@ -50,8 +52,6 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Instant;
-use shelldone_font::FontConfiguration;
-use shelldone_input_types::{is_ascii_control, IntegratedTitleButtonStyle, KeyboardLedStatus};
 
 #[allow(non_upper_case_globals)]
 const NSViewLayerContentsPlacementTopLeft: NSInteger = 11;

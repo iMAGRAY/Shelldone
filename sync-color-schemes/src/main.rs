@@ -27,7 +27,7 @@ fn apply_nightly_version(metadata: &mut ColorSchemeMetaData) {
 
 fn make_cache() -> Cache {
     let file_name = "/tmp/shelldone-sync-color-schemes.sqlite";
-    let connection = sqlite_cache::rusqlite::Connection::open(&file_name).unwrap();
+    let connection = sqlite_cache::rusqlite::Connection::open(file_name).unwrap();
     Cache::new(sqlite_cache::CacheConfig::default(), connection).unwrap()
 }
 
@@ -177,14 +177,14 @@ pub const SCHEMES: [(&'static str, &'static str); {count}] = [\n
     }
 
     let json = serde_json::to_string_pretty(&doc_data)?;
-    let update = match std::fs::read_to_string(&DATA_FILE_NAME) {
+    let update = match std::fs::read_to_string(DATA_FILE_NAME) {
         Ok(existing) => existing != json,
         Err(_) => true,
     };
 
     if update {
         println!("Updating {DATA_FILE_NAME}");
-        std::fs::write(&DATA_FILE_NAME, json)?;
+        std::fs::write(DATA_FILE_NAME, json)?;
     }
 
     Ok(())
@@ -209,7 +209,7 @@ impl SchemeSet {
         let mut names_by_color_scheme = BTreeMap::new();
         let mut version_by_name = BTreeMap::new();
 
-        if let Ok(data) = std::fs::read_to_string(&DATA_FILE_NAME) {
+        if let Ok(data) = std::fs::read_to_string(DATA_FILE_NAME) {
             #[derive(Deserialize)]
             struct Entry {
                 colors: serde_json::Value,

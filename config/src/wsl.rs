@@ -1,8 +1,8 @@
 use crate::config::validate_domain_name;
 use crate::*;
 use luahelper::impl_lua_conversion_dynamic;
-use std::collections::HashMap;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
+use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic)]
 pub struct WslDomain {
@@ -65,7 +65,7 @@ impl WslDistro {
 
         /// Ungh: https://github.com/microsoft/WSL/issues/4456
         fn utf16_to_utf8(bytes: &[u8]) -> anyhow::Result<String> {
-            if bytes.len() % 2 != 0 {
+            if !bytes.len().is_multiple_of(2) {
                 anyhow::bail!("input data has odd length, cannot be utf16");
             }
 
@@ -128,7 +128,7 @@ fn parse_wsl_distro_list(output: &str) -> Vec<WslDistro> {
 
         while let Some(start_idx) = iter.next() {
             let end_idx = iter.peek().copied();
-            let label = field_slice(&lines[0], start_idx, end_idx).trim();
+            let label = field_slice(lines[0], start_idx, end_idx).trim();
             field_map.insert(label, (start_idx, end_idx));
         }
     }

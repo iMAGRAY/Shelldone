@@ -4,10 +4,10 @@
 use anyhow::Context;
 use clap::Parser;
 use portable_pty::{Child, MasterPty, PtySize};
+use shelldone_ssh::{Config, Session, SessionEvent};
 use std::io::{Read, Write};
 use termwiz::cell::unicode_column_width;
 use termwiz::lineedit::*;
-use shelldone_ssh::{Config, Session, SessionEvent};
 
 #[derive(Default)]
 struct PasswordPromptHost {

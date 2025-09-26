@@ -1,8 +1,8 @@
 use crate::sshd::*;
 use portable_pty::{MasterPty, PtySize};
 use rstest::*;
-use std::io::Read;
 use shelldone_ssh::Config;
+use std::io::Read;
 
 #[fixture]
 async fn session_with_agent_forward(

@@ -281,11 +281,10 @@ impl<T: Integer + Copy + Debug + ToPrimitive> RangeSet<T> {
             }
         }
         if let Some(r) = self.ranges.get(idx + 1) {
-            if intersects_range(r, range) || r.end == range.start {
-                if first.is_some() {
+            if (intersects_range(r, range) || r.end == range.start)
+                && first.is_some() {
                     return (first, Some(idx + 1));
                 }
-            }
         }
         (first, None)
     }

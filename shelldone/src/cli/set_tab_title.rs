@@ -1,8 +1,8 @@
 use clap::Parser;
 use mux::pane::PaneId;
 use mux::tab::TabId;
-use std::collections::HashMap;
 use shelldone_client::client::Client;
+use std::collections::HashMap;
 
 #[derive(Debug, Parser, Clone)]
 pub struct SetTabTitle {

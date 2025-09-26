@@ -20,6 +20,11 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     WaylandWindowHandle, WindowHandle,
 };
+use shelldone_font::FontConfiguration;
+use shelldone_input_types::{
+    KeyboardLedStatus, Modifiers, MouseButtons, MouseEvent, MouseEventKind, MousePress,
+    ScreenPoint, WindowDecorations,
+};
 use smithay_client_toolkit::compositor::{CompositorHandler, SurfaceData, SurfaceDataExt};
 use smithay_client_toolkit::data_device_manager::ReadPipe;
 use smithay_client_toolkit::globals::GlobalData;
@@ -44,11 +49,6 @@ use wayland_client::{Connection as WConnection, Dispatch, Proxy, QueueHandle};
 use wayland_egl::{is_available as egl_is_available, WlEglSurface};
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur_manager::OrgKdeKwinBlurManager;
-use shelldone_font::FontConfiguration;
-use shelldone_input_types::{
-    KeyboardLedStatus, Modifiers, MouseButtons, MouseEvent, MouseEventKind, MousePress,
-    ScreenPoint, WindowDecorations,
-};
 
 use crate::wayland::WaylandConnection;
 use crate::x11::KeyboardWithFallback;
@@ -474,11 +474,17 @@ impl WindowOps for WaylandWindow {
     }
 
     fn maximize(&self) {
-        WaylandConnection::with_window_inner(self.0, move |inner| Ok(inner.maximize()));
+        WaylandConnection::with_window_inner(self.0, move |inner| {
+            let _: () = inner.maximize();
+            Ok(())
+        });
     }
 
     fn restore(&self) {
-        WaylandConnection::with_window_inner(self.0, move |inner| Ok(inner.restore()));
+        WaylandConnection::with_window_inner(self.0, move |inner| {
+            let _: () = inner.restore();
+            Ok(())
+        });
     }
 
     fn config_did_change(&self, config: &ConfigHandle) {
@@ -664,7 +670,7 @@ impl WaylandWindowInner {
     }
 
     fn get_dpi_factor(&self) -> f64 {
-        self.dimensions.dpi as f64 / crate::DEFAULT_DPI as f64
+        self.dimensions.dpi as f64 / crate::DEFAULT_DPI
     }
 
     fn surface_to_pixels(&self, surface: i32) -> i32 {
@@ -736,7 +742,7 @@ impl WaylandWindowInner {
         }
 
         if let Some((value_x, value_y)) = PendingMouse::scroll(&pending_mouse) {
-            let factor = self.get_dpi_factor() as f64;
+            let factor = self.get_dpi_factor();
 
             if value_x.signum() != self.hscroll_remainder.signum() {
                 // reset accumulator when changing scroll direction
@@ -807,8 +813,8 @@ impl WaylandWindowInner {
             self.window_state = window_state;
         }
 
-        if pending.configure.is_none() {
-            if pending.dpi.is_some() {
+        if pending.configure.is_none()
+            && pending.dpi.is_some() {
                 // Synthesize a pending configure event for the dpi change
                 pending.configure.replace((
                     self.pixels_to_surface(self.dimensions.pixel_width as i32) as u32,
@@ -816,7 +822,6 @@ impl WaylandWindowInner {
                 ));
                 log::debug!("synthesize configure with {:?}", pending.configure);
             }
-        }
 
         if let Some(ref window_config) = pending.window_configure {
             self.window_frame.update_state(window_config.state);
@@ -993,8 +998,8 @@ impl WaylandWindowInner {
         let surface_id = surface.id();
 
         if let Some(active_surface_id) = active_surface_id.as_ref() {
-            if surface_id == active_surface_id.clone() {
-                if self.text_cursor.map(|prior| prior != rect).unwrap_or(true) {
+            if surface_id == active_surface_id.clone()
+                && self.text_cursor.map(|prior| prior != rect).unwrap_or(true) {
                     self.text_cursor.replace(rect);
 
                     let surface_udata = SurfaceUserData::from_wl(&surface);
@@ -1012,7 +1017,6 @@ impl WaylandWindowInner {
                         }
                     }
                 }
-            }
         }
     }
 
@@ -1477,7 +1481,7 @@ impl SurfaceDataExt for SurfaceUserData {
 }
 
 impl HasDisplayHandle for WaylandWindowInner {
-    fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         let conn = WaylandConnection::get().unwrap().wayland();
         let backend = conn.connection.backend();
         let handle = backend.display_handle()?;
@@ -1486,7 +1490,7 @@ impl HasDisplayHandle for WaylandWindowInner {
 }
 
 impl HasWindowHandle for WaylandWindowInner {
-    fn window_handle(&self) -> Result<WindowHandle, HandleError> {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         let handle = WaylandWindowHandle::new(
             NonNull::new(self.surface().id().as_ptr() as _).expect("non-null"),
         );
@@ -1495,7 +1499,7 @@ impl HasWindowHandle for WaylandWindowInner {
 }
 
 impl HasDisplayHandle for WaylandWindow {
-    fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         let conn = WaylandConnection::get().unwrap().wayland();
         let backend = conn.connection.backend();
         let handle = backend.display_handle()?;
@@ -1504,7 +1508,7 @@ impl HasDisplayHandle for WaylandWindow {
 }
 
 impl HasWindowHandle for WaylandWindow {
-    fn window_handle(&self) -> Result<WindowHandle, HandleError> {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         let conn = Connection::get().expect("raw_window_handle only callable on main thread");
         let handle = conn
             .wayland()

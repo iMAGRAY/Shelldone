@@ -1,0 +1,1061 @@
+{
+  "version": 1,
+  "generated_at": "2025-09-26T02:05:52Z",
+  "files": [
+    {
+      "path": "assets/shell-integration/shelldone.sh",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "# TODO: Figure out how to restore PIPESTATUS before each precmd or preexec",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "bidi/src/bidi_class.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "('\\u{1806}', '\\u{1806}', BidiClass::OtherNeutral), // Pd       MONGOLIAN TODO SOFT HYPHEN",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "('\\u{1843}', '\\u{1843}', BidiClass::LeftToRight), // Lm       MONGOLIAN LETTER TODO LONG VOWEL SIGN",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "('\\u{1844}', '\\u{1878}', BidiClass::LeftToRight), // Lo  [53] MONGOLIAN LETTER TODO E..MONGOLIAN LETTER CHA WITH TWO DOTS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "ci/deploy.sh",
+      "markers": [
+        {
+          "token": "XXX",
+          "text": "# The CI runs `cargo build --target XXX --release` which means that",
+          "count": 1
+        },
+        {
+          "token": "XXX",
+          "text": "# the binaries will be deployed in `target/XXX/release` instead of",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "config/src/config.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: also allow deserialziing from bool",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: something smart where we see whether the",
+          "count": 1
+        },
+        {
+          "token": "XXX",
+          "text": "/// When using FontKitXXX font systems, a set of directories to",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "config/src/meta.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "/// TODO: For enum types, the set of possible values",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "/// TODO: For struct types, the fields in the child struct",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "/// TODO: tags to categorize the option",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "config/src/ssh.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: Cmd, PowerShell in the future?",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: Tmux-cc in the future?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "filedescriptor/src/windows.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this isn't a guaranteed conversion!",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "mkdocs_macros.py",
+      "markers": [
+        {
+          "token": "???",
+          "text": "???{expanded} info \"{first_line}\"",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/domain.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: process env list and update WLSENV so that they",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/lib.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: clipboard",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: clipboard?",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: disambiguate with TabId",
+          "count": 2
+        },
+        {
+          "token": "FIXME",
+          "text": "pixel_height: 0, // FIXME: split pane pixel dimensions",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/localpane.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: do we need to proactively list available tabs here?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/ssh.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this isn't useful without a way to talk to the remote mux.",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: TerminalWaker assumes that we're a SystemTerminal but that",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/termwiztermtab.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: TerminalWaker assumes that we're a SystemTerminal but that",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: make a singleton",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "Box::new(Vec::new()), // FIXME: connect to something?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "mux/src/tmux.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "None, /* TODO: pass session here */",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-client/src/client.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: We currently get a bunch of these; we'll need",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-client/src/domain.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: advice remote host of interesting workspaces",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-client/src/pane/clientpane.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: retrieve this from the remote",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: decide how to handle key_up for mux client",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-escape-parser/src/csi.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: data size optimization opportunity: if we could somehow know that we",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-escape-parser/src/esc.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: data size optimization opportunity: if we could somehow know that we",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-escape-parser/src/hyperlink.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: ensure that link.uri doesn't contain characters",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: protect against k, v containing : or =",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-escape-parser/src/parser/sixel.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "let rgb = RgbColor::new_8bpc(r as u8, g as u8, b as u8); // FIXME: from linear",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-font/src/hbwrap.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: hb_paint_funcs_set_custom_palette_color_func",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: pass a callback for querying custom palette colors",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-font/src/parser.rs",
+      "markers": [
+        {
+          "token": "???",
+          "text": "// for a case where freetype returns `?????` for a name.",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-font/src/rasterizer/freetype.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: gradient vectors are expressed as font units,",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: harfbuzz, in COLR.hh, pushes the inverse of",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/commands.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: use domain_label here, but needs to be async",
+          "count": 2
+        },
+        {
+          "token": "FIXME",
+          "text": "keys: vec![], // FIXME: find a new assignment",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/frontend.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: if notification.focus is true, we should do",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: arrange for this to happen on config reload.",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/scripting/guiwin.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: expose other states here",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/tabbar.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: Decide what to do here to indicate this",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/termwindow/keyevent.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: consider eliminating these codes from termwiz::input::KeyCode",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/termwindow/render/fancy_tab_bar.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "left: Dimension::Cells(4.0), // FIXME: determine exact width of macos ... buttons",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/termwindow/render/mod.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "None, // FIXME: need more paragraph context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/termwindow/render/pane.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: render a thingy to jump to prior prompt",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: scrollbar",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: visual bell background layer",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: we only have a single scrollbar in a single position.",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/termwindow/render/screen_line.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: clipping, but we can do that based on pixels",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: remember logical/visual mapping for selection",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-gui/src/unicode_names.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO ALI GALI TA\", 6296),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO ALI GALI ZHA\", 6297),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO ANG\", 6218),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO BA\", 6219),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO CHA\", 6226),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO DA\", 6225),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO DZA\", 6236),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO E\", 6212),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO GA\", 6222),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO GAA\", 6232),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO HAA\", 6233),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO I\", 6213),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO JA\", 6227),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO JIA\", 6234),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO KA\", 6231),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO LONG VOWEL SIGN\", 6211),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO MA\", 6223),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO NIA\", 6235),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO O\", 6214),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO OE\", 6216),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO PA\", 6220),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO QA\", 6221),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO TA\", 6224),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO TSA\", 6228),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO U\", 6215),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO UE\", 6217),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO WA\", 6230),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN LETTER TODO YA\", 6229),",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "(\"MONGOLIAN TODO SOFT HYPHEN\", 6150),",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-input-types/src/lib.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: ideally we'd get the correct unshifted key from",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: Hyper and Meta are not handled yet.",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "Modifiers::SUPER, /* TODO: Hyper and Meta should be added here. */",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-ssh/src/sessioninner.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: Move this somewhere to avoid re-allocating buffer",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "sess.options_parse_config(None)?; // FIXME: overridden config path?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-ssh/tests/e2e/sftp.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: This fails even though the type is a symlink:",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-ssh/tests/sshd.rs",
+      "markers": [
+        {
+          "token": "???",
+          "text": ".unwrap_or_else(|| String::from(\"???\")),",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-surface/src/change.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "/// TODO: check iterm rendering behavior when the image is larger than the width of the screen.",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone-surface/src/line/line.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: let's build a string and a byte-to-cell map here, and",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: we can skip the look-back for second and subsequent iterations",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: look back and look ahead for cells that are hidden by",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "shelldone/src/main.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: ideally we'd do some kind of probing to see if conpty",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "term/src/screen.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: borrow bidi mode from line",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "term/src/terminalstate/kitty.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: send an EINVAL error back here",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "let budget = 320 * 1024 * 1024; // FIXME: make this configurable",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "term/src/terminalstate/mod.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: see https://vt100.net/docs/vt510-rm/DECSTR.html",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: selective_erase when supported",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "term/src/test/c0.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: when we can set the left margin, we should test that here",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "term/src/test/mod.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// mod selection; FIXME: port to render layer",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/examples/widgets_basic.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this is working around a bug where we don't realize",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/examples/widgets_nested.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this is working around a bug where we don't realize",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/src/input.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: also respect self.application_keypad",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: do we want downs instead of ups?",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: we could report caps lock, numlock and scrolllock",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/src/lineedit/mod.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: there's no way we can match anything.",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "termwiz/src/render/terminfo.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "/* TODO: we should record cursor position, shape and color here",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this doesn't behave correctly for terminals without bce.",
+          "count": 2
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: could we use ECMA-48 REP for this?",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: slice out the requested region of the image,",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: this isn't spec'd by terminfo, but some terminals",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: } else if self.caps.sixel() {",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/src/terminal/windows.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: take into account the visible window size here;",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: Implement using CreateConsoleScreenBuffer and",
+          "count": 2
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: Implement using SetConsoleActiveScreenBuffer.",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "termwiz/src/widgets/mod.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: garbage collect unreachable WidgetId's from self.state",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "/// simplify handling for widgets. eg: a TODO: is to synthesize double",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/macos/window.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: CTRL-C is 0x3, should it be normalized to C here",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: docs say to insert the text here,",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: returns NSArray<NSAttributedStringKey> *",
+          "count": 1
+        },
+        {
+          "token": "XXX",
+          "text": "// key combo, our send_composed_key_when_XXX settings",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/connection.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: teach this how to resolve dpi_by_screen once",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: show the protocol error in the display",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/copy_and_paste.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO: do we need to do anything here?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/frame.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: scale emoji",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: font fallback completed, trigger title repaint!",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/inputhandler.rs",
+      "markers": [
+        {
+          "token": "XXX",
+          "text": "// XXX: inner could probably be moved here",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/keyboard.rs",
+      "markers": [
+        {
+          "token": "???",
+          "text": "log::trace!(\"We reached an event here: {:?}???\", event);",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/output.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: teach this how to resolve dpi_by_screen once",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/seat.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// TODO",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: is there a better place to put this? It only needs to be run once. (presumably per-seat)",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/wayland/window.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: teach this how to resolve dpi_by_screen",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: This should the new queue function",
+          "count": 2
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: do we need to do anything here?",
+          "count": 1
+        },
+        {
+          "token": "XXX",
+          "text": "// XXX: configure and window_configure could probably be combined, but right now configure only",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/windows/keycodes.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "(VK_OEM_1, PhysKeyCode::Semicolon), // FIXME: OEM \"can vary by keyboard!\"",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/windows/window.rs",
+      "markers": [
+        {
+          "token": "FIXME",
+          "text": "// FIXME: this resource is specific to the shelldone build and this should",
+          "count": 1
+        },
+        {
+          "token": "FIXME",
+          "text": "// FIXME: verify this behavior: Urgh, special case for ctrl and non-latin layouts.",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "// TODO: XBUTTON1 and XBUTTON2?",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "window/src/os/x11/keyboard.rs",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "// [TODO] consider state  Depressed & consumed mods",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

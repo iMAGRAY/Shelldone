@@ -87,7 +87,7 @@ impl WaylandConnection {
                 if let Err(err) = event_q.dispatch_pending(&mut wayland_state) {
                     // TODO: show the protocol error in the display
                     return Err(err)
-                        .with_context(|| format!("error during event_q.dispatch protcol_error"));
+                        .with_context(|| "error during event_q.dispatch protcol_error".to_string());
                 }
             }
 

@@ -1,9 +1,9 @@
 use crate::customglyph::BlockKey;
 use crate::glyphcache::CachedGlyph;
 use config::TextStyle;
-use std::rc::Rc;
 use shelldone_font::shaper::GlyphInfo;
 use shelldone_font::units::*;
+use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct ShapeCacheKey {
@@ -98,15 +98,15 @@ impl<'a> std::borrow::Borrow<dyn ShapeCacheKeyTrait + 'a> for ShapeCacheKey {
     }
 }
 
-impl<'a> PartialEq for (dyn ShapeCacheKeyTrait + 'a) {
+impl<'a> PartialEq for dyn ShapeCacheKeyTrait + 'a  {
     fn eq(&self, other: &Self) -> bool {
         self.key().eq(&other.key())
     }
 }
 
-impl<'a> Eq for (dyn ShapeCacheKeyTrait + 'a) {}
+impl<'a> Eq for dyn ShapeCacheKeyTrait + 'a  {}
 
-impl<'a> std::hash::Hash for (dyn ShapeCacheKeyTrait + 'a) {
+impl<'a> std::hash::Hash for dyn ShapeCacheKeyTrait + 'a  {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key().hash(state)
     }
@@ -118,12 +118,12 @@ mod test {
     use crate::shapecache::{GlyphPosition, ShapedInfo};
     use crate::utilsprites::RenderMetrics;
     use config::{FontAttributes, TextStyle};
-    use std::rc::Rc;
-    use termwiz::cell::CellAttributes;
-    use termwiz::surface::{Line, SEQ_ZERO};
     use shelldone_bidi::Direction;
     use shelldone_font::shaper::PresentationWidth;
     use shelldone_font::{FontConfiguration, LoadedFont};
+    use std::rc::Rc;
+    use termwiz::cell::CellAttributes;
+    use termwiz::surface::{Line, SEQ_ZERO};
 
     fn cluster_and_shape(
         render_metrics: &RenderMetrics,

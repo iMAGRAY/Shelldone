@@ -11,27 +11,24 @@ use ::window::{RectF, WindowOps};
 use anyhow::anyhow;
 use config::{Dimension, DimensionContext};
 use finl_unicode::grapheme_clusters::Graphemes;
+use shelldone_font::units::PixelUnit;
+use shelldone_font::LoadedFont;
+use shelldone_term::color::{ColorAttribute, ColorPalette};
 use std::cell::RefCell;
 use std::rc::Rc;
 use termwiz::cell::{grapheme_column_width, Presentation};
 use termwiz::surface::Line;
-use shelldone_font::units::PixelUnit;
-use shelldone_font::LoadedFont;
-use shelldone_term::color::{ColorAttribute, ColorPalette};
 use window::bitmaps::atlas::Sprite;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VerticalAlign {
+    #[default]
     Top,
     Bottom,
     Middle,
 }
 
-impl Default for VerticalAlign {
-    fn default() -> VerticalAlign {
-        VerticalAlign::Top
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayType {
@@ -40,16 +37,13 @@ pub enum DisplayType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum Float {
+    #[default]
     None,
     Right,
 }
 
-impl Default for Float {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PixelDimension {
@@ -147,7 +141,9 @@ impl BoxDimension {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum InheritableColor {
+    #[default]
     Inherited,
     Color(LinearRgba),
     Animated {
@@ -158,11 +154,6 @@ pub enum InheritableColor {
     },
 }
 
-impl Default for InheritableColor {
-    fn default() -> Self {
-        Self::Inherited
-    }
-}
 
 impl From<LinearRgba> for InheritableColor {
     fn from(color: LinearRgba) -> InheritableColor {
@@ -598,7 +589,7 @@ impl super::TermWindow {
                 let window = self.window.as_ref().unwrap().clone();
                 let direction = shelldone_bidi::Direction::LeftToRight;
                 let infos = element.font.shape(
-                    &s,
+                    s,
                     move || window.notify(TermWindowNotif::InvalidateShapeCache),
                     BlockKey::filter_out_synthetic,
                     element.presentation,
@@ -628,7 +619,7 @@ impl super::TermWindow {
                         let sprite = glyph_cache.cached_block(key, context.metrics)?;
                         computed_cells.push(ElementCell::Sprite(sprite));
                     } else {
-                        let next_grapheme: Option<&str> = iter.peek().map(|s| *s);
+                        let next_grapheme: Option<&str> = iter.peek().copied();
                         let followed_by_space = next_grapheme == Some(" ");
                         let num_cells = grapheme_column_width(grapheme, None);
                         let glyph = glyph_cache.cached_glyph(
@@ -750,14 +741,11 @@ impl super::TermWindow {
                 let pixel_height = (y_coord + block_pixel_height).max(min_height);
 
                 for (kid, child) in computed_kids.iter_mut().zip(kids.iter()) {
-                    match child.float {
-                        Float::Right => {
-                            max_x = max_x.max(float_max_x);
-                            let x = float_max_x - kid.bounds.width();
-                            float_max_x -= kid.bounds.width();
-                            kid.translate(euclid::vec2(x, 0.));
-                        }
-                        _ => {}
+                    if child.float == Float::Right {
+                        max_x = max_x.max(float_max_x);
+                        let x = float_max_x - kid.bounds.width();
+                        float_max_x -= kid.bounds.width();
+                        kid.translate(euclid::vec2(x, 0.));
                     }
                     match child.vertical_align {
                         VerticalAlign::Bottom => {
@@ -889,7 +877,7 @@ impl super::TermWindow {
                         }
                         ElementCell::Glyph(glyph) => {
                             if let Some(texture) = glyph.texture.as_ref() {
-                                let pos_y = element.content_rect.min_y() as f32 + top
+                                let pos_y = element.content_rect.min_y() + top
                                     - (glyph.y_offset + glyph.bearing_y).get() as f32
                                     + element.baseline;
 
@@ -1112,7 +1100,7 @@ impl super::TermWindow {
                 euclid::rect(
                     element.border_rect.min_x() + top_left_width,
                     element.border_rect.min_y(),
-                    element.border_rect.width() - (top_left_width + top_right_width) as f32,
+                    element.border_rect.width() - (top_left_width + top_right_width),
                     top_left_height.max(top_right_height),
                 ),
                 LinearRgba::TRANSPARENT,
@@ -1192,9 +1180,9 @@ impl super::TermWindow {
                 layers,
                 0,
                 euclid::rect(
-                    element.border_rect.min_x() + top_left_width as f32,
+                    element.border_rect.min_x() + top_left_width,
                     element.border_rect.min_y(),
-                    element.border_rect.width() - (top_left_width + top_right_width) as f32,
+                    element.border_rect.width() - (top_left_width + top_right_width),
                     element.border.top,
                 ),
                 colors.border.top,
@@ -1205,9 +1193,9 @@ impl super::TermWindow {
                 layers,
                 0,
                 euclid::rect(
-                    element.border_rect.min_x() + bottom_left_width as f32,
+                    element.border_rect.min_x() + bottom_left_width,
                     element.border_rect.max_y() - element.border.bottom,
-                    element.border_rect.width() - (bottom_left_width + bottom_right_width) as f32,
+                    element.border_rect.width() - (bottom_left_width + bottom_right_width),
                     element.border.bottom,
                 ),
                 colors.border.bottom,
@@ -1219,9 +1207,9 @@ impl super::TermWindow {
                 0,
                 euclid::rect(
                     element.border_rect.min_x(),
-                    element.border_rect.min_y() + top_left_height as f32,
+                    element.border_rect.min_y() + top_left_height,
                     element.border.left,
-                    element.border_rect.height() - (top_left_height + bottom_left_height) as f32,
+                    element.border_rect.height() - (top_left_height + bottom_left_height),
                 ),
                 colors.border.left,
             )?;
@@ -1232,9 +1220,9 @@ impl super::TermWindow {
                 0,
                 euclid::rect(
                     element.border_rect.max_x() - element.border.right,
-                    element.border_rect.min_y() + top_right_height as f32,
+                    element.border_rect.min_y() + top_right_height,
                     element.border.left,
-                    element.border_rect.height() - (top_right_height + bottom_right_height) as f32,
+                    element.border_rect.height() - (top_right_height + bottom_right_height),
                 ),
                 colors.border.right,
             )?;

@@ -5,9 +5,9 @@ use ::window::color::SrgbaPixel;
 use ::window::{Point, Rect, Size};
 use anyhow::Context;
 use config::DimensionContext;
-use std::rc::Rc;
 use shelldone_font::units::*;
 use shelldone_font::{FontConfiguration, FontMetrics};
+use std::rc::Rc;
 
 #[derive(Copy, Clone, Debug)]
 pub struct RenderMetrics {
@@ -63,7 +63,7 @@ impl RenderMetrics {
     }
 
     pub fn scale_cell_width(&self, scale: f64) -> Self {
-        let mut scaled = self.clone();
+        let mut scaled = *self;
         scaled.cell_size.width = (self.cell_size.width as f64 * scale) as isize;
         scaled
     }

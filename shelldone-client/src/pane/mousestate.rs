@@ -2,10 +2,10 @@ use crate::client::Client;
 use codec::*;
 use mux::tab::TabId;
 use parking_lot::Mutex;
+use shelldone_term::{MouseButton, MouseEvent, MouseEventKind};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use shelldone_term::{MouseButton, MouseEvent, MouseEventKind};
 
 pub struct MouseState {
     pending: AtomicBool,

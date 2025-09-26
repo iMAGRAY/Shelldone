@@ -2,10 +2,10 @@
 use super::*;
 use crate::config::BidiMode;
 use log::debug;
+use shelldone_surface::SequenceNo;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use termwiz::input::KeyboardEncoding;
-use shelldone_surface::SequenceNo;
 
 /// Holds the model of a screen.  This can either be the primary screen
 /// which includes lines of scrollback text, or the alternate screen

@@ -23,10 +23,19 @@ impl<T> __BindgenUnionField<T> {
         __BindgenUnionField(::std::marker::PhantomData)
     }
     #[inline]
+    /// # Safety
+    ///
+    /// The caller must ensure that the union field currently contains a
+    /// valid value of type `T` before reinterpreting it as a reference.
     pub unsafe fn as_ref(&self) -> &T {
         ::std::mem::transmute(self)
     }
     #[inline]
+    /// # Safety
+    ///
+    /// The caller must ensure that the union field currently contains a
+    /// valid value of type `T` before reinterpreting it as a mutable
+    /// reference, and that no other references alias the same data.
     pub unsafe fn as_mut(&mut self) -> &mut T {
         ::std::mem::transmute(self)
     }
@@ -40,7 +49,7 @@ impl<T> ::std::default::Default for __BindgenUnionField<T> {
 impl<T> ::std::clone::Clone for __BindgenUnionField<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self::new()
+        *self
     }
 }
 impl<T> ::std::marker::Copy for __BindgenUnionField<T> {}

@@ -16,7 +16,7 @@ pub fn register(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn open_with<'lua>(_: &'lua Lua, (url, app): (String, Option<String>)) -> mlua::Result<()> {
+fn open_with(_: &Lua, (url, app): (String, Option<String>)) -> mlua::Result<()> {
     if let Some(app) = app {
         shelldone_open_url::open_with(&url, &app);
     } else {

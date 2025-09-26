@@ -1,7 +1,7 @@
 use clap::Parser;
 use mux::pane::PaneId;
-use std::collections::HashMap;
 use shelldone_client::client::Client;
+use std::collections::HashMap;
 
 #[derive(Debug, Parser, Clone)]
 pub struct RenameWorkspace {

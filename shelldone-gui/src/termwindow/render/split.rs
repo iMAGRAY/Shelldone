@@ -41,7 +41,7 @@ impl crate::TermWindow {
                 foreground,
             )?;
             self.ui_items.push(UIItem {
-                x: border.left.get() as usize
+                x: border.left.get()
                     + padding_left as usize
                     + (split.left * cell_width as usize),
                 width: cell_width as usize,
@@ -49,7 +49,7 @@ impl crate::TermWindow {
                     + first_row_offset as usize
                     + split.top * cell_height as usize,
                 height: split.size * cell_height as usize,
-                item_type: UIItemType::Split(split.clone()),
+                item_type: UIItemType::Split(*split),
             });
         } else {
             self.filled_rectangle(
@@ -64,7 +64,7 @@ impl crate::TermWindow {
                 foreground,
             )?;
             self.ui_items.push(UIItem {
-                x: border.left.get() as usize
+                x: border.left.get()
                     + padding_left as usize
                     + (split.left * cell_width as usize),
                 width: split.size * cell_width as usize,
@@ -72,7 +72,7 @@ impl crate::TermWindow {
                     + first_row_offset as usize
                     + split.top * cell_height as usize,
                 height: cell_height as usize,
-                item_type: UIItemType::Split(split.clone()),
+                item_type: UIItemType::Split(*split),
             });
         }
 

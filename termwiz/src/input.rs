@@ -9,8 +9,8 @@ use crate::keymap::{Found, KeyMap};
 use crate::readbuf::ReadBuffer;
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt::Write;
 use shelldone_input_types::ctrl_mapping;
+use std::fmt::Write;
 
 pub use shelldone_input_types::Modifiers;
 
@@ -929,7 +929,7 @@ impl InputParser {
             // Ctrl-[A..=Z] are sent as 1..=26
             let ctrl = [alpha & 0x1f];
             map.insert(
-                &ctrl,
+                ctrl,
                 InputEvent::Key(KeyEvent {
                     key: KeyCode::Char((alpha as char).to_ascii_lowercase()),
                     modifiers: Modifiers::CTRL,
@@ -939,7 +939,7 @@ impl InputParser {
             // ALT A-Z is often sent with a leading ESC
             let alt = [0x1b, alpha];
             map.insert(
-                &alt,
+                alt,
                 InputEvent::Key(KeyEvent {
                     key: KeyCode::Char(alpha as char),
                     modifiers: Modifiers::ALT,
@@ -992,7 +992,7 @@ impl InputParser {
             // Arrow keys in normal mode encoded using CSI
             let arrow = [0x1b, b'[', *dir];
             map.insert(
-                &arrow,
+                arrow,
                 InputEvent::Key(KeyEvent {
                     key: *keycode,
                     modifiers: Modifiers::NONE,
@@ -1021,7 +1021,7 @@ impl InputParser {
                 ([0x1b, b'O', dir], Modifiers::CTRL),
             ] {
                 map.insert(
-                    &seq,
+                    seq,
                     InputEvent::Key(KeyEvent {
                         key: keycode,
                         modifiers: mods,
@@ -1039,7 +1039,7 @@ impl InputParser {
             // Arrow keys in application cursor mode encoded using SS3
             let app = [0x1b, b'O', *dir];
             map.insert(
-                &app,
+                app,
                 InputEvent::Key(KeyEvent {
                     key: *keycode,
                     modifiers: Modifiers::NONE,
@@ -1066,7 +1066,7 @@ impl InputParser {
         ] {
             let key = [0x1b, b'O', *c];
             map.insert(
-                &key,
+                key,
                 InputEvent::Key(KeyEvent {
                     key: *keycode,
                     modifiers: Modifiers::NONE,
@@ -1150,7 +1150,7 @@ impl InputParser {
         }
 
         map.insert(
-            &[0x7f],
+            [0x7f],
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Backspace,
                 modifiers: Modifiers::NONE,
@@ -1158,7 +1158,7 @@ impl InputParser {
         );
 
         map.insert(
-            &[0x8],
+            [0x8],
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Backspace,
                 modifiers: Modifiers::NONE,
@@ -1166,7 +1166,7 @@ impl InputParser {
         );
 
         map.insert(
-            &[0x1b],
+            [0x1b],
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Escape,
                 modifiers: Modifiers::NONE,
@@ -1174,7 +1174,7 @@ impl InputParser {
         );
 
         map.insert(
-            &[b'\t'],
+            b"\t",
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Tab,
                 modifiers: Modifiers::NONE,
@@ -1189,14 +1189,14 @@ impl InputParser {
         );
 
         map.insert(
-            &[b'\r'],
+            b"\r",
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Enter,
                 modifiers: Modifiers::NONE,
             }),
         );
         map.insert(
-            &[b'\n'],
+            b"\n",
             InputEvent::Key(KeyEvent {
                 key: KeyCode::Enter,
                 modifiers: Modifiers::NONE,
@@ -1366,8 +1366,8 @@ impl InputParser {
                                     modifiers,
                                 } => {
                                     callback(InputEvent::PixelMouse(PixelMouseEvent {
-                                        x_pixels: x_pixels,
-                                        y_pixels: y_pixels,
+                                        x_pixels,
+                                        y_pixels,
                                         mouse_buttons: button.into(),
                                         modifiers,
                                     }));

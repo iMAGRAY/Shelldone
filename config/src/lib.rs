@@ -4,6 +4,8 @@ use anyhow::{anyhow, bail, Context, Error};
 use lazy_static::lazy_static;
 use mlua::Lua;
 use ordered_float::NotNan;
+use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, UnknownFieldAction, Value};
+use shelldone_term::UnicodeVersion;
 use smol::channel::{Receiver, Sender};
 use smol::prelude::*;
 use std::cell::RefCell;
@@ -17,8 +19,6 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, UnknownFieldAction, Value};
-use shelldone_term::UnicodeVersion;
 
 mod background;
 mod bell;
@@ -82,7 +82,7 @@ lazy_static! {
 }
 
 thread_local! {
-    static LUA_CONFIG: RefCell<Option<LuaConfigState>> = RefCell::new(None);
+    static LUA_CONFIG: RefCell<Option<LuaConfigState>> = const { RefCell::new(None) };
 }
 
 fn toml_table_has_numeric_keys(t: &toml::value::Table) -> bool {
@@ -395,7 +395,7 @@ fn config_dirs() -> Vec<PathBuf> {
 
     #[cfg(unix)]
     if let Some(d) = std::env::var_os("XDG_CONFIG_DIRS") {
-        dirs.extend(std::env::split_paths(&d).map(|s| PathBuf::from(s).join("shelldone")));
+        dirs.extend(std::env::split_paths(&d).map(|s| s.join("shelldone")));
     }
 
     dirs
@@ -562,10 +562,8 @@ impl ConfigInner {
 
     fn accumulate_watch_paths(lua: &Lua, watch_paths: &mut Vec<PathBuf>) {
         if let Ok(mlua::Value::Table(tbl)) = lua.named_registry_value("shelldone-watch-paths") {
-            for path in tbl.sequence_values::<String>() {
-                if let Ok(path) = path {
-                    watch_paths.push(PathBuf::from(path));
-                }
+            for path in tbl.sequence_values::<String>().flatten() {
+                watch_paths.push(PathBuf::from(path));
             }
         }
     }
@@ -596,7 +594,7 @@ impl ConfigInner {
                 // don't keep reloading every time something in the
                 // home dir changes!
                 // <https://github.com/shelldone/shelldone/issues/1895>
-                if parent != &*HOME_DIR {
+                if parent != *HOME_DIR {
                     watch_paths.push(parent.to_path_buf());
                 }
             }
@@ -687,6 +685,12 @@ impl ConfigInner {
 
 pub struct Configuration {
     inner: Mutex<ConfigInner>,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Configuration {
@@ -810,7 +814,7 @@ impl ConfigHandle {
 impl std::ops::Deref for ConfigHandle {
     type Target = Config;
     fn deref(&self) -> &Config {
-        &*self.config
+        &self.config
     }
 }
 

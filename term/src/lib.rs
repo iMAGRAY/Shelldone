@@ -18,10 +18,10 @@
 use anyhow::Error;
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut, Range};
-use std::str;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 use shelldone_surface::SequenceNo;
+use std::ops::{Deref, DerefMut, Range};
+use std::str;
 
 pub mod config;
 pub use config::TerminalConfiguration;

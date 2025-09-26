@@ -3,18 +3,18 @@ use luahelper::mlua::LuaSerdeExt;
 use luahelper::{dynamic_to_lua_value, from_lua, to_lua};
 use mlua::Value;
 use mux::pane::CachePolicy;
+use shelldone_term::{SemanticZone, StableRowIndex};
 use std::cmp::Ordering;
 use std::sync::Arc;
 use termwiz::cell::SemanticType;
 use termwiz_funcs::lines_to_escapes;
 use url_funcs::Url;
-use shelldone_term::{SemanticZone, StableRowIndex};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MuxPane(pub PaneId);
 
 impl MuxPane {
-    pub fn resolve<'a>(&self, mux: &'a Arc<Mux>) -> mlua::Result<Arc<dyn Pane>> {
+    pub fn resolve(&self, mux: &Arc<Mux>) -> mlua::Result<Arc<dyn Pane>> {
         mux.get_pane(self.0)
             .ok_or_else(|| mlua::Error::external(format!("pane id {} not found in mux", self.0)))
     }

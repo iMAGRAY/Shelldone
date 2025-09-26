@@ -2,8 +2,8 @@ use config::{ConfigHandle, SshMultiplexing};
 use mux::domain::{Domain, LocalDomain};
 use mux::ssh::RemoteSshDomain;
 use mux::Mux;
-use std::sync::Arc;
 use shelldone_client::domain::{ClientDomain, ClientDomainConfig};
+use std::sync::Arc;
 
 pub mod dispatch;
 pub mod local;
@@ -39,7 +39,7 @@ pub fn update_mux_domains_for_server(config: &ConfigHandle) -> anyhow::Result<()
 fn update_mux_domains_impl(config: &ConfigHandle, is_standalone_mux: bool) -> anyhow::Result<()> {
     let mux = Mux::get();
 
-    for client_config in client_domains(&config) {
+    for client_config in client_domains(config) {
         if mux.get_domain_by_name(client_config.name()).is_some() {
             continue;
         }
@@ -97,11 +97,9 @@ fn update_mux_domains_impl(config: &ConfigHandle, is_standalone_mux: bool) -> an
                 mux.set_default_domain(&dom);
             }
         }
-    } else {
-        if let Some(name) = &config.default_domain {
-            if let Some(dom) = mux.get_domain_by_name(name) {
-                mux.set_default_domain(&dom);
-            }
+    } else if let Some(name) = &config.default_domain {
+        if let Some(dom) = mux.get_domain_by_name(name) {
+            mux.set_default_domain(&dom);
         }
     }
 

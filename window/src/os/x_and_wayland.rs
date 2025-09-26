@@ -18,9 +18,9 @@ use promise::*;
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
+use shelldone_font::FontConfiguration;
 use std::any::Any;
 use std::rc::Rc;
-use shelldone_font::FontConfiguration;
 
 pub enum Connection {
     X11(Rc<XConnection>),

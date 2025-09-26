@@ -5,6 +5,7 @@ use http_req::request::{HttpVersion, Request};
 use http_req::uri::Uri;
 use mux::connui::ConnectionUI;
 use serde::*;
+use shelldone_toast_notification::*;
 use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -14,7 +15,6 @@ use termwiz::color::AnsiColor;
 use termwiz::escape::csi::{Cursor, Sgr};
 use termwiz::escape::osc::{ITermDimension, ITermFileData, ITermProprietary};
 use termwiz::escape::{OneBased, OperatingSystemCommand, CSI};
-use shelldone_toast_notification::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Release {
@@ -61,7 +61,9 @@ pub fn get_latest_release_info() -> anyhow::Result<Release> {
 
 #[allow(unused)]
 pub fn get_nightly_release_info() -> anyhow::Result<Release> {
-    get_github_release_info("https://api.github.com/repos/shelldone/shelldone/releases/tags/nightly")
+    get_github_release_info(
+        "https://api.github.com/repos/shelldone/shelldone/releases/tags/nightly",
+    )
 }
 
 lazy_static::lazy_static! {

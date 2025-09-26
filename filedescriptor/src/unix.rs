@@ -85,7 +85,8 @@ impl FromRawFd for OwnedHandle {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self {
             handle: fd,
-            handle_type: (),
+            #[cfg(windows)]
+                handle_type: (),
         }
     }
 }
@@ -115,6 +116,7 @@ impl OwnedHandle {
         } else {
             let mut owned = OwnedHandle {
                 handle: duped,
+                #[cfg(windows)]
                 handle_type: (),
             };
             owned.cloexec()?;
@@ -133,6 +135,7 @@ impl OwnedHandle {
         } else {
             let mut owned = OwnedHandle {
                 handle: duped,
+                #[cfg(windows)]
                 handle_type: (),
             };
             owned.cloexec()?;
@@ -194,15 +197,14 @@ impl OwnedHandle {
             } else {
                 Ok(OwnedHandle {
                     handle: duped,
-                    handle_type: (),
+                    #[cfg(windows)]
+                handle_type: (),
                 })
             }
         }
     }
 
-    pub(crate) fn probe_handle_type(_handle: RawFileDescriptor) -> HandleType {
-        ()
-    }
+    pub(crate) fn probe_handle_type(_handle: RawFileDescriptor) -> HandleType {}
 }
 
 impl std::io::Read for FileDescriptor {
@@ -291,6 +293,13 @@ impl FileDescriptor {
     /// resources that may not be available, this is a potentially fallible operation.
     /// The returned handle has a separate lifetime from the source, but
     /// references the same object at the kernel level.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `dest_fd` is either closed or otherwise safe
+    /// to overwrite, and that no other thread concurrently uses it while the
+    /// duplication happens.  The provided `f` must remain valid for the duration
+    /// of this call.
     pub unsafe fn dup2<F: AsRawFileDescriptor>(f: &F, dest_fd: RawFd) -> Result<Self> {
         OwnedHandle::dup2_impl(f, dest_fd).map(|handle| Self { handle })
     }
@@ -342,13 +351,15 @@ impl Pipe {
             let read = FileDescriptor {
                 handle: OwnedHandle {
                     handle: fds[0],
-                    handle_type: (),
+                    #[cfg(windows)]
+                handle_type: (),
                 },
             };
             let write = FileDescriptor {
                 handle: OwnedHandle {
                     handle: fds[1],
-                    handle_type: (),
+                    #[cfg(windows)]
+                handle_type: (),
                 },
             };
             Ok(Pipe { read, write })
@@ -365,13 +376,15 @@ impl Pipe {
             let mut read = FileDescriptor {
                 handle: OwnedHandle {
                     handle: fds[0],
-                    handle_type: (),
+                    #[cfg(windows)]
+                handle_type: (),
                 },
             };
             let mut write = FileDescriptor {
                 handle: OwnedHandle {
                     handle: fds[1],
-                    handle_type: (),
+                    #[cfg(windows)]
+                handle_type: (),
                 },
             };
             read.handle.cloexec()?;
@@ -399,12 +412,14 @@ pub fn socketpair_impl() -> Result<(FileDescriptor, FileDescriptor)> {
         let read = FileDescriptor {
             handle: OwnedHandle {
                 handle: fds[0],
+                #[cfg(windows)]
                 handle_type: (),
             },
         };
         let write = FileDescriptor {
             handle: OwnedHandle {
                 handle: fds[1],
+                #[cfg(windows)]
                 handle_type: (),
             },
         };
@@ -423,12 +438,14 @@ pub fn socketpair_impl() -> Result<(FileDescriptor, FileDescriptor)> {
         let mut read = FileDescriptor {
             handle: OwnedHandle {
                 handle: fds[0],
+                #[cfg(windows)]
                 handle_type: (),
             },
         };
         let mut write = FileDescriptor {
             handle: OwnedHandle {
                 handle: fds[1],
+                #[cfg(windows)]
                 handle_type: (),
             },
         };

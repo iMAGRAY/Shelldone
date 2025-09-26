@@ -3,6 +3,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use shelldone_input_types::{KeyCode, KeyEvent, KeyboardLedStatus, Modifiers};
 use smithay_client_toolkit::globals::GlobalData;
 use wayland_client::backend::ObjectId;
 use wayland_client::globals::{BindError, GlobalList};
@@ -14,7 +15,6 @@ use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::Z
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
     Event as TextInputEvent, ZwpTextInputV3,
 };
-use shelldone_input_types::{KeyCode, KeyEvent, KeyboardLedStatus, Modifiers};
 
 use crate::{DeadKeyStatus, WindowEvent};
 
@@ -55,15 +55,15 @@ impl TextInputState {
         let inner = self.inner.lock().unwrap();
         let keyboard_id = keyboard.id();
         let seat_id = inner.keyboard_to_seat.get(&keyboard_id)?;
-        inner.input_by_seat.get(&seat_id).cloned()
+        inner.input_by_seat.get(seat_id).cloned()
     }
 
     pub(super) fn get_text_input_for_surface(&self, surface: &WlSurface) -> Option<ZwpTextInputV3> {
         let inner = self.inner.lock().unwrap();
         let surface_id = surface.id();
         let keyboard_id = inner.surface_to_keyboard.get(&surface_id)?;
-        let seat_id = inner.keyboard_to_seat.get(&keyboard_id)?;
-        inner.input_by_seat.get(&seat_id).cloned()
+        let seat_id = inner.keyboard_to_seat.get(keyboard_id)?;
+        inner.input_by_seat.get(seat_id).cloned()
     }
 
     fn get_text_input_for_seat(
@@ -75,8 +75,8 @@ impl TextInputState {
         let mut inner = self.inner.lock().unwrap();
         let seat_id = seat.id();
         let input = inner.input_by_seat.entry(seat_id).or_insert_with(|| {
-            let input = mgr.get_text_input(seat, &qh, TextInputData::default());
-            input.into()
+            let input = mgr.get_text_input(seat, qh, TextInputData::default());
+            input
         });
         Some(input.clone())
     }

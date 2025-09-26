@@ -1,12 +1,12 @@
 use crate::*;
 use luahelper::impl_lua_conversion_dynamic;
+use shelldone_dynamic::{FromDynamic, ToDynamic};
+use shelldone_term::color::ColorPalette;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use termwiz::cell::CellAttributes;
 use termwiz::color::ColorSpec as TWColorSpec;
 pub use termwiz::color::{AnsiColor, ColorAttribute, RgbColor, SrgbaTuple};
-use shelldone_dynamic::{FromDynamic, ToDynamic};
-use shelldone_term::color::ColorPalette;
 
 #[derive(Debug, Copy, Clone, FromDynamic, ToDynamic)]
 pub struct HsbTransform {
@@ -201,7 +201,7 @@ impl Palette {
             ansi: overlay!(ansi),
             brights: overlay!(brights),
             tab_bar: match (&self.tab_bar, &other.tab_bar) {
-                (Some(a), Some(b)) => Some(a.overlay_with(&b)),
+                (Some(a), Some(b)) => Some(a.overlay_with(b)),
                 (None, Some(b)) => Some(b.clone()),
                 (Some(a), None) => Some(a.clone()),
                 (None, None) => None,
@@ -458,11 +458,11 @@ pub enum IntegratedTitleButtonColor {
     Custom(RgbaColor),
 }
 
-impl Into<String> for IntegratedTitleButtonColor {
-    fn into(self) -> String {
-        match self {
-            Self::Auto => "auto".to_string(),
-            Self::Custom(color) => color.into(),
+impl From<IntegratedTitleButtonColor> for String {
+    fn from(val: IntegratedTitleButtonColor) -> Self {
+        match val {
+            IntegratedTitleButtonColor::Auto => "auto".to_string(),
+            IntegratedTitleButtonColor::Custom(color) => color.into(),
         }
     }
 }
@@ -621,8 +621,8 @@ impl Default for WindowFrameConfig {
             active_titlebar_fg: default_active_titlebar_fg(),
             inactive_titlebar_border_bottom: default_inactive_titlebar_border_bottom(),
             active_titlebar_border_bottom: default_active_titlebar_border_bottom(),
-            button_fg: default_button_fg().into(),
-            button_bg: default_button_bg().into(),
+            button_fg: default_button_fg(),
+            button_bg: default_button_bg(),
             button_hover_fg: default_button_hover_fg(),
             button_hover_bg: default_button_hover_bg(),
             font: None,
@@ -756,7 +756,7 @@ impl ColorSchemeFile {
 
     pub fn to_toml_value(&self) -> anyhow::Result<toml::Value> {
         let value = self.to_dynamic();
-        Ok(dynamic_to_toml(value)?)
+        dynamic_to_toml(value)
     }
 
     pub fn from_json_value(value: &serde_json::Value) -> anyhow::Result<Self> {

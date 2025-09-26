@@ -1,0 +1,1071 @@
+## Program
+```yaml
+program: v1
+updated_at: 2025-09-26T00:00:00Z
+program_id: shelldone-core
+name: Shelldone Terminal Platform
+objectives:
+  - Maintain benchmark terminal quality with a decade-long horizon
+  - Become the base platform for plugins, themes, automation, and AI agents
+  - Deliver uncompromising performance and low latency
+kpis:
+  uptime_pct: 99.9
+  tti_ms: 20
+  render_switch_ms: 80
+  error_rate_pct: 0.2
+progress_pct: 18
+health: yellow
+milestones:
+  - { id: m1, title: "QA Hardening", due: 2025-10-31T00:00:00Z, status: in_progress }
+  - { id: m2, title: "Plugin Platform MVP", due: 2025-11-30T00:00:00Z, status: planned }
+  - { id: m3, title: "Animation Engine GA", due: 2025-12-20T00:00:00Z, status: planned }
+policies:
+  task_min_points: 5
+```
+
+## Epics
+```yaml
+id: epic-qa-hardening
+title: "QA Pipeline and Quality Budgets"
+type: epic
+status: done
+priority: P0
+size_points: 20
+scope_paths:
+  - scripts/**
+  - ci/**
+  - docs/architecture/perf-budget.md
+  - docs/community/**
+spec: |
+  Given a modernised QA pipeline
+  When make verify runs in fast/prepush/full modes
+  Then checks stay within budgets and block regressions
+budgets:
+  latency_ms: 900000
+  memory_mb: 4096
+  bundle_kb: 0
+risks:
+  - Limited automation on rare platforms can slow verification
+  - Enlarged pipeline can increase CI times if not optimised
+dependencies: []
+big_tasks_planned:
+  - task-qa-orchestrator
+  - task-qa-perf-probes
+  - task-qa-marker-baseline
+  - task-state-persistence
+  - task-security-hardening
+  - task-observability-pipeline
+progress_pct: 53
+health: yellow
+tests_required:
+  - make verify-prepush
+  - cargo nextest run --workspace
+verify_commands:
+  - make verify-prepush
+  - make verify-full
+docs_updates:
+  - docs/architecture/perf-budget.md
+  - docs/community/contributor-handbook.md
+artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
+audit:
+  created_at: 2025-09-20T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: epic-plugin-platform
+title: "Plugin Architecture and IDE Layer"
+type: epic
+status: planned
+priority: P0
+size_points: 20
+scope_paths:
+  - plugins/**
+  - docs/architecture/customization-and-plugins.md
+  - shelldone-gui/**
+  - mux/**
+spec: |
+  Given an extensible platform
+  When developers install plugins and themes
+  Then IDE capabilities and automation are available without performance loss
+budgets:
+  latency_ms: 40
+  memory_mb: 512
+  bundle_kb: 5120
+risks:
+  - Plugin API stabilisation may take longer than expected
+dependencies:
+  - epic-qa-hardening
+big_tasks_planned:
+  - task-plugin-sdk
+  - task-plugin-examples
+  - task-observability-reports
+progress_pct: 13
+health: yellow
+tests_required:
+  - make verify-prepush
+  - cargo test -p plugins
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/customization-and-plugins.md
+  - docs/recipes/plugins.md
+artifacts:
+  - artifacts/plugins/
+  - docs/recipes/
+audit:
+  created_at: 2025-09-22T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: epic-ai-automation
+title: "AI Integration and Agent Workflows"
+type: epic
+status: in_progress
+priority: P1
+size_points: 13
+scope_paths:
+  - docs/architecture/ai-integration.md
+  - shelldone-client/**
+  - mux/**
+  - docs/community/communications.md
+spec: |
+  Given MCP and agent protocols
+  When an agent controls the terminal
+  Then safety and observability are guaranteed while workflows execute end-to-end
+budgets:
+  latency_ms: 50
+  memory_mb: 768
+  bundle_kb: 2048
+risks:
+  - Security reviews may slow delivery
+  - CLI automation must remain backward compatible
+dependencies:
+  - epic-qa-hardening
+big_tasks_planned:
+  - task-mcp-bridge
+  - task-agent-policy
+  - task-security-agent-gov
+progress_pct: 11
+health: yellow
+tests_required:
+  - make verify-prepush
+  - cargo test -p shelldone-client
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/ai-integration.md
+  - docs/community/communications.md
+artifacts:
+  - artifacts/agents/
+  - docs/ROADMAP/notes/
+audit:
+  created_at: 2025-09-23T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: epic-animation-engine
+title: "High-performance Animation Engine"
+type: epic
+status: planned
+priority: P1
+size_points: 13
+scope_paths:
+  - docs/architecture/animation-framework.md
+  - shelldone-gui/**
+  - termwiz/**
+  - docs/recipes/animations.md
+spec: |
+  Given the new render loop
+  When complex visual effects are enabled
+  Then FPS stays stable and effects remain configurable via plugins and themes
+budgets:
+  latency_ms: 16
+  memory_mb: 256
+  bundle_kb: 4096
+risks:
+  - GPU variability across platforms
+dependencies:
+  - epic-qa-hardening
+  - epic-plugin-platform
+big_tasks_planned:
+  - task-animation-core
+  - task-animation-toolkit
+  - task-observability-visual
+progress_pct: 8
+health: yellow
+tests_required:
+  - make verify-full
+  - cargo test -p shelldone-gui
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/animation-framework.md
+  - docs/recipes/animations.md
+artifacts:
+  - artifacts/perf/
+  - docs/recipes/animations.md
+audit:
+  created_at: 2025-09-24T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: epic-ide-dx
+title: "IDE Functionality and DX"
+type: epic
+status: planned
+priority: P2
+size_points: 8
+scope_paths:
+  - term/**
+  - docs/recipes/workflows.md
+  - docs/community/contributor-handbook.md
+  - plugins/examples/**
+spec: |
+  Given IDE-grade extensions
+  When Shelldone is used as the primary workspace
+  Then file manager, LSP/DAP, and automation features remain instantaneous and reliable
+budgets:
+  latency_ms: 30
+  memory_mb: 384
+  bundle_kb: 6144
+risks:
+  - UX research complexity
+dependencies:
+  - epic-plugin-platform
+  - epic-ai-automation
+big_tasks_planned:
+  - task-ide-file-manager
+  - task-state-sync-ui
+progress_pct: 3
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/recipes/workflows.md
+  - docs/community/contributor-handbook.md
+artifacts:
+  - docs/recipes/
+  - artifacts/verify/
+audit:
+  created_at: 2025-09-25T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: epic-platform-resilience
+title: "Resilience, Security, and Operations"
+type: epic
+status: in_progress
+priority: P0
+size_points: 20
+scope_paths:
+  - docs/architecture/state-and-storage.md
+  - docs/architecture/security-and-secrets.md
+  - docs/architecture/observability.md
+  - docs/architecture/release-and-compatibility.md
+spec: |
+  Given comprehensive platform guarantees
+  When Shelldone updates, crashes, or runs agent scenarios
+  Then state is preserved, secrets stay protected, and the team has full observability
+budgets:
+  latency_ms: 100
+  memory_mb: 256
+  bundle_kb: 0
+risks:
+  - High integration cost in existing code paths
+  - Coordination required with security/compliance partners
+dependencies:
+  - epic-qa-hardening
+big_tasks_planned:
+  - task-state-persistence
+  - task-security-hardening
+  - task-observability-pipeline
+  - task-release-hardening
+progress_pct: 7
+health: yellow
+tests_required:
+  - make verify-full
+  - make roadmap status
+verify_commands:
+  - make verify-full
+  - make roadmap status
+  - make verify VERIFY_MODE=ci JSON=1
+docs_updates:
+  - docs/architecture/state-and-storage.md
+  - docs/architecture/security-and-secrets.md
+  - docs/architecture/observability.md
+  - docs/architecture/release-and-compatibility.md
+artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
+  - qa/baselines/
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+
+## Big Tasks
+```yaml
+id: task-qa-orchestrator
+title: "make verify Orchestrator"
+type: ops
+status: in_progress
+priority: P0
+size_points: 8
+parent_epic: epic-qa-hardening
+scope_paths:
+  - scripts/verify.py
+  - scripts/verify.sh
+  - Makefile
+spec: |
+  Given the new pipeline
+  When make verify runs
+  Then it prints the summary, JSON report, and enforces strict checks across stacks
+budgets:
+  latency_ms: 600000
+  memory_mb: 2048
+  bundle_kb: 0
+risks:
+  - Third-party tools can hang and stall the pipeline
+dependencies: []
+progress_pct: 100
+health: green
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - CONTRIBUTING.md
+  - docs/community/contributor-handbook.md
+artifacts:
+  - artifacts/verify/summary.json
+audit:
+  created_at: 2025-09-20T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-qa-perf-probes
+title: "Performance Probes for verify"
+type: perf
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-qa-hardening
+scope_paths:
+  - docs/architecture/perf-budget.md
+  - ci/**
+  - artifacts/perf/**
+spec: |
+  Given performance budgets
+  When verify-full runs
+  Then profiles are collected and compared without regressions
+budgets:
+  latency_ms: 900000
+  memory_mb: 4096
+  bundle_kb: 0
+risks:
+  - Perf tooling may be unavailable in CI environments
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/perf-budget.md
+artifacts:
+  - artifacts/perf/
+audit:
+  created_at: 2025-09-21T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-qa-marker-baseline
+title: "Forbidden Marker Control"
+type: ops
+status: in_progress
+priority: P0
+size_points: 5
+parent_epic: epic-qa-hardening
+scope_paths:
+  - qa/baselines/banned_markers.json
+  - scripts/verify.py
+spec: |
+  Given a marker baseline
+  When make verify runs
+  Then new TODO/FIXME/XXX/??? markers are blocked unless baseline is updated
+budgets:
+  latency_ms: 30000
+  memory_mb: 128
+  bundle_kb: 0
+risks:
+  - Large vendor code drops can disturb the baseline
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 80
+health: green
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates: []
+artifacts:
+  - qa/baselines/banned_markers.json
+audit:
+  created_at: 2025-09-22T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+updated_by: gpt-5-codex
+```
+```yaml
+id: task-plugin-sdk
+title: "Plugin SDK and Specification"
+type: feature
+status: planned
+priority: P0
+size_points: 13
+parent_epic: epic-plugin-platform
+scope_paths:
+  - plugins/sdk/**
+  - docs/architecture/customization-and-plugins.md
+  - docs/recipes/plugins.md
+spec: |
+  Given a developer building a plugin
+  When they use the Shelldone SDK
+  Then functionality is available without unsafe APIs
+budgets:
+  latency_ms: 30
+  memory_mb: 256
+  bundle_kb: 2048
+risks:
+  - Legacy plugins might require adapters
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 20
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - docs/architecture/customization-and-plugins.md
+artifacts:
+  - plugins/sdk/
+audit:
+  created_at: 2025-09-22T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-plugin-examples
+title: "Reference Plugins and Themes"
+type: doc
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-plugin-platform
+scope_paths:
+  - plugins/examples/**
+  - docs/recipes/plugins.md
+spec: |
+  Given new contributors
+  When they study the examples
+  Then they can launch plugins within minutes
+budgets:
+  latency_ms: 10
+  memory_mb: 64
+  bundle_kb: 1024
+risks:
+  - Examples demand ongoing maintenance
+dependencies:
+  - task-plugin-sdk
+progress_pct: 10
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - docs/recipes/plugins.md
+artifacts:
+  - plugins/examples/
+audit:
+  created_at: 2025-09-23T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-mcp-bridge
+title: "MCP/gRPC Bridge"
+type: feature
+status: in_progress
+priority: P1
+size_points: 8
+parent_epic: epic-ai-automation
+scope_paths:
+  - docs/architecture/ai-integration.md
+  - shelldone-client/**
+  - mux/**
+spec: |
+  Given an agent connecting via MCP
+  When it controls the terminal
+  Then actions are auditable with traceability
+budgets:
+  latency_ms: 25
+  memory_mb: 256
+  bundle_kb: 1024
+risks:
+  - Agreement on safe operations required
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 15
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - docs/architecture/ai-integration.md
+artifacts:
+  - docs/ROADMAP/notes/
+audit:
+  created_at: 2025-09-23T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-agent-policy
+title: "Agent Policy Documentation"
+type: doc
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-ai-automation
+scope_paths:
+  - docs/community/communications.md
+  - docs/architecture/ai-integration.md
+spec: |
+  Given approval policies for agents
+  When an agent requests access
+  Then the user can audit and constrain actions easily
+budgets:
+  latency_ms: 5
+  memory_mb: 32
+  bundle_kb: 256
+risks:
+  - Requires alignment with legal/compliance
+dependencies:
+  - task-mcp-bridge
+progress_pct: 10
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - docs/community/communications.md
+artifacts:
+  - docs/ROADMAP/notes/
+audit:
+  created_at: 2025-09-24T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-animation-core
+title: "Render Loop and Animation Core"
+type: perf
+status: planned
+priority: P1
+size_points: 8
+parent_epic: epic-animation-engine
+scope_paths:
+  - docs/architecture/animation-framework.md
+  - shelldone-gui/**
+  - termwiz/**
+spec: |
+  Given the new animation engine
+  When visual effects are active
+  Then rendering maintains high FPS and smoothness
+budgets:
+  latency_ms: 16
+  memory_mb: 256
+  bundle_kb: 4096
+risks:
+  - Platform-specific GPU behaviour
+dependencies:
+  - task-plugin-sdk
+progress_pct: 12
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/animation-framework.md
+  - docs/recipes/animations.md
+artifacts:
+  - artifacts/perf/
+audit:
+  created_at: 2025-09-24T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-animation-toolkit
+title: "Effect Authoring Toolkit"
+type: feature
+status: planned
+priority: P2
+size_points: 5
+parent_epic: epic-animation-engine
+scope_paths:
+  - docs/recipes/animations.md
+  - plugins/examples/**
+  - docs/architecture/animation-framework.md
+spec: |
+  Given a creator building an effect
+  When they use the toolkit
+  Then they can develop, test, and share effects quickly
+budgets:
+  latency_ms: 20
+  memory_mb: 128
+  bundle_kb: 2048
+risks:
+  - Requires UI presets for designers
+dependencies:
+  - task-animation-core
+progress_pct: 8
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/recipes/animations.md
+artifacts:
+  - docs/recipes/animations.md
+audit:
+  created_at: 2025-09-25T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-ide-file-manager
+title: "File Manager and IDE UX"
+type: feature
+status: planned
+priority: P2
+size_points: 8
+parent_epic: epic-ide-dx
+scope_paths:
+  - term/**
+  - docs/recipes/workflows.md
+  - plugins/examples/**
+spec: |
+  Given IDE mode in the terminal
+  When the user switches projects
+  Then the file browser and panels respond instantly and reliably
+budgets:
+  latency_ms: 30
+  memory_mb: 384
+  bundle_kb: 6144
+risks:
+  - UX complexity can accumulate debt
+dependencies:
+  - task-plugin-examples
+  - task-mcp-bridge
+progress_pct: 5
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/recipes/workflows.md
+artifacts:
+  - docs/recipes/workflows.md
+audit:
+  created_at: 2025-09-25T00:00:00Z
+  created_by: imagray
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-state-persistence
+title: "Persistent State & Recovery"
+type: feature
+status: planned
+priority: P0
+size_points: 8
+parent_epic: epic-platform-resilience
+scope_paths:
+  - docs/architecture/state-and-storage.md
+  - shelldone/**
+spec: |
+  Given snapshot and sync infrastructure
+  When Shelldone exits or recovers
+  Then sessions, settings, and agents are restored deterministically
+budgets:
+  latency_ms: 200
+  memory_mb: 512
+  bundle_kb: 0
+risks:
+  - Data corruption during abnormal shutdowns
+  - Migration complexity when formats change
+dependencies:
+  - task-qa-orchestrator
+  - task-release-hardening
+progress_pct: 10
+health: yellow
+tests_required:
+  - make verify-full
+  - JSON=1 make roadmap status
+verify_commands:
+  - make verify-full
+  - make roadmap status
+  - JSON=1 make roadmap status
+artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
+docs_updates:
+  - docs/architecture/state-and-storage.md
+  - docs/recipes/state-backup.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-security-hardening
+title: "Secrets Model and Sandbox"
+type: perf
+status: planned
+priority: P0
+size_points: 5
+parent_epic: epic-platform-resilience
+scope_paths:
+  - docs/architecture/security-and-secrets.md
+  - lua-api-crates/**
+  - plugins/**
+spec: |
+  Given key management and sandboxing
+  When plugins/agents request privileged operations
+  Then policies are enforced and audited without leaks
+budgets:
+  latency_ms: 100
+  memory_mb: 256
+  bundle_kb: 0
+risks:
+  - Sandbox overhead may impact plugin performance
+  - Coordination with security/legal teams
+dependencies:
+  - task-state-persistence
+  - task-mcp-bridge
+progress_pct: 5
+health: yellow
+tests_required:
+  - make verify-full
+  - make verify VERIFY_MODE=ci JSON=1
+verify_commands:
+  - make verify-full
+  - make verify VERIFY_MODE=ci JSON=1
+artifacts:
+  - artifacts/verify/
+  - qa/baselines/
+docs_updates:
+  - docs/architecture/security-and-secrets.md
+  - docs/security/runbook.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-observability-pipeline
+title: "Observability Stack"
+type: ops
+status: planned
+priority: P0
+size_points: 5
+parent_epic: epic-platform-resilience
+scope_paths:
+  - docs/architecture/observability.md
+  - scripts/verify.py
+  - ci/**
+spec: |
+  Given unified metrics/logs/traces
+  When make verify-full or make verify-ci runs
+  Then SLOs are enforced and artifacts archived
+budgets:
+  latency_ms: 300000
+  memory_mb: 1024
+  bundle_kb: 0
+risks:
+  - Longer verify-full runtime
+  - Collectors must be available in CI
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 5
+health: yellow
+tests_required:
+  - make verify-full
+  - make verify VERIFY_MODE=ci JSON=1
+  - JSON=1 make roadmap status
+verify_commands:
+  - make verify-full
+  - make verify VERIFY_MODE=ci JSON=1
+  - make roadmap status
+  - JSON=1 make roadmap status
+  - make verify VERIFY_MODE=fast
+artifacts:
+  - artifacts/perf/
+  - artifacts/verify/
+docs_updates:
+  - docs/architecture/observability.md
+  - docs/recipes/observability.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-release-hardening
+title: "Release Pipeline & Migrations"
+type: ops
+status: planned
+priority: P0
+size_points: 5
+parent_epic: epic-platform-resilience
+scope_paths:
+  - docs/architecture/release-and-compatibility.md
+  - ci/**
+  - scripts/ship/**
+spec: |
+  Given enterprise-grade delivery
+  When make ship or self-update runs
+  Then packages are signed, migrations executed, and rollback available
+budgets:
+  latency_ms: 600000
+  memory_mb: 512
+  bundle_kb: 0
+risks:
+  - Heterogeneous package managers increase complexity
+  - Revocation processes must be reliable
+dependencies:
+  - task-observability-pipeline
+progress_pct: 5
+health: yellow
+tests_required:
+  - make verify VERIFY_MODE=prepush
+  - make verify VERIFY_MODE=ci JSON=1
+verify_commands:
+  - make verify VERIFY_MODE=prepush
+  - make verify VERIFY_MODE=ci JSON=1
+artifacts:
+  - artifacts/verify/
+  - release/keys/
+docs_updates:
+  - docs/architecture/release-and-compatibility.md
+  - docs/recipes/update-guide.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-security-agent-gov
+title: "Agent Access Policies"
+type: doc
+status: planned
+priority: P0
+size_points: 5
+parent_epic: epic-ai-automation
+scope_paths:
+  - docs/architecture/security-and-secrets.md
+  - docs/architecture/ai-integration.md
+  - config/policies/**
+spec: |
+  Given strict policies for agents
+  When an agent requests an approval-required action
+  Then the policy executes automatically, decisions are logged, and secrets remain safe
+budgets:
+  latency_ms: 50
+  memory_mb: 128
+  bundle_kb: 0
+risks:
+  - Approval UX may become noisy
+dependencies:
+  - task-security-hardening
+progress_pct: 5
+health: yellow
+tests_required:
+  - make verify-full
+  - make roadmap status
+verify_commands:
+  - make verify-full
+  - make roadmap status
+artifacts:
+  - qa/baselines/
+  - artifacts/verify/
+docs_updates:
+  - docs/architecture/security-and-secrets.md
+  - docs/architecture/ai-integration.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-observability-reports
+title: "Plugin Observability Reporting"
+type: doc
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-plugin-platform
+scope_paths:
+  - docs/architecture/observability.md
+  - docs/recipes/plugins.md
+spec: |
+  Given an extensible ecosystem
+  When third-party plugins run
+  Then telemetry/observability captures their footprint without leaking data
+budgets:
+  latency_ms: 100
+  memory_mb: 128
+  bundle_kb: 0
+risks:
+  - Many plugins can create significant load
+dependencies:
+  - task-observability-pipeline
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+artifacts:
+  - artifacts/perf/
+  - artifacts/verify/
+docs_updates:
+  - docs/architecture/customization-and-plugins.md
+  - docs/architecture/observability.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-observability-visual
+title: "Performance Visualisation"
+type: feature
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-animation-engine
+scope_paths:
+  - docs/architecture/observability.md
+  - shelldone-gui/src/termwindow/**
+spec: |
+  Given a visually rich terminal
+  When users analyse perf/trace data
+  Then overlays and dashboards present meaningful insights without FPS drops
+budgets:
+  latency_ms: 20
+  memory_mb: 128
+  bundle_kb: 0
+risks:
+  - Rendering overhead from diagnostics
+dependencies:
+  - task-observability-pipeline
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+artifacts:
+  - artifacts/perf/
+docs_updates:
+  - docs/architecture/animation-framework.md
+  - docs/architecture/observability.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-state-sync-ui
+title: "State Sync UI"
+type: feature
+status: planned
+priority: P2
+size_points: 5
+parent_epic: epic-ide-dx
+scope_paths:
+  - docs/architecture/state-and-storage.md
+  - shelldone-gui/src/**
+spec: |
+  Given multi-device workflows
+  When users synchronise sessions
+  Then an intuitive UI/CLI lets them view, choose, and merge snapshots
+budgets:
+  latency_ms: 100
+  memory_mb: 256
+  bundle_kb: 0
+risks:
+  - Conflict resolution and UX complexity
+dependencies:
+  - task-state-persistence
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+verify_commands:
+  - make verify-full
+artifacts:
+  - artifacts/verify/
+docs_updates:
+  - docs/architecture/state-and-storage.md
+  - docs/recipes/workflows.md
+audit:
+  created_at: 2025-09-26T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```

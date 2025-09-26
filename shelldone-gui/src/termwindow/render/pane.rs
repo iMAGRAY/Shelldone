@@ -14,10 +14,10 @@ use mux::pane::{PaneId, WithPaneLines};
 use mux::renderable::{RenderableDimensions, StableCursorPosition};
 use mux::tab::PositionedPane;
 use ordered_float::NotNan;
-use std::time::Instant;
 use shelldone_dynamic::Value;
 use shelldone_term::color::{ColorAttribute, ColorPalette};
 use shelldone_term::{Line, StableRowIndex};
+use std::time::Instant;
 use window::color::LinearRgba;
 
 impl crate::TermWindow {
@@ -137,16 +137,16 @@ impl crate::TermWindow {
                 x,
                 y,
                 // Go all the way to the right edge if we're right-most
-                if pos.left + pos.width >= self.terminal_size.cols as usize {
+                if pos.left + pos.width >= self.terminal_size.cols {
                     self.dimensions.pixel_width as f32 - x
                 } else {
                     (pos.width as f32 * cell_width) + width_delta
                 },
                 // Go all the way to the bottom if we're bottom-most
-                if pos.top + pos.height >= self.terminal_size.rows as usize {
+                if pos.top + pos.height >= self.terminal_size.rows {
                     self.dimensions.pixel_height as f32 - y
                 } else {
-                    (pos.height as f32 * cell_height) + height_delta as f32
+                    (pos.height as f32 * cell_height) + height_delta
                 },
             )
         };
@@ -245,7 +245,7 @@ impl crate::TermWindow {
 
             // Adjust the scrollbar thumb position
             let config = &self.config;
-            let padding = self.effective_right_padding(&config) as f32;
+            let padding = self.effective_right_padding(config) as f32;
 
             let thumb_x = self.dimensions.pixel_width - padding as usize - border.right.get();
 
@@ -291,7 +291,7 @@ impl crate::TermWindow {
 
         let (selrange, rectangular) = {
             let sel = self.selection(pos.pane.pane_id());
-            (sel.range.clone(), sel.rectangular)
+            (sel.range, sel.rectangular)
         };
 
         let start = Instant::now();
@@ -495,10 +495,10 @@ impl crate::TermWindow {
                                 pixel_width: self.dims.cols as f32
                                     * self.term_window.render_metrics.cell_size.width as f32,
                                 stable_line_idx: Some(stable_row),
-                                line: &line,
+                                line,
                                 selection: selrange.clone(),
-                                cursor: &self.cursor,
-                                palette: &self.palette,
+                                cursor: self.cursor,
+                                palette: self.palette,
                                 dims: &self.dims,
                                 config: &self.term_window.config,
                                 cursor_border_color: self.cursor_border_color,
@@ -632,16 +632,16 @@ impl crate::TermWindow {
             x,
             y,
             // Go all the way to the right edge if we're right-most
-            if pos.left + pos.width >= self.terminal_size.cols as usize {
+            if pos.left + pos.width >= self.terminal_size.cols {
                 self.dimensions.pixel_width as f32 - x
             } else {
                 (pos.width as f32 * cell_width) + width_delta
             },
             // Go all the way to the bottom if we're bottom-most
-            if pos.top + pos.height >= self.terminal_size.rows as usize {
+            if pos.top + pos.height >= self.terminal_size.rows {
                 self.dimensions.pixel_height as f32 - y
             } else {
-                (pos.height as f32 * cell_height) + height_delta as f32
+                (pos.height as f32 * cell_height) + height_delta
             },
         );
 

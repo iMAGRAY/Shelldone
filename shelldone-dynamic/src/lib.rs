@@ -17,6 +17,6 @@ pub use array::Array;
 pub use error::Error;
 pub use fromdynamic::{FromDynamic, FromDynamicOptions, UnknownFieldAction};
 pub use object::{BorrowedKey, Object, ObjectKeyTrait};
+pub use shelldone_dynamic_derive::{FromDynamic, ToDynamic};
 pub use todynamic::{PlaceDynamic, ToDynamic};
 pub use value::Value;
-pub use shelldone_dynamic_derive::{FromDynamic, ToDynamic};
