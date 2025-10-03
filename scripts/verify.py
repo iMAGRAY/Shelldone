@@ -577,54 +577,9 @@ def check_banned_markers(ctx: VerificationContext) -> str:
     return f"Forbidden markers under control (total {sum(sum(c.values()) for c in markers.values())})"
 
 
-def check_agent_adapters(_: VerificationContext) -> str:
-    adapters = [
-        {
-            "name": "agents-openai",
-            "cmd": [sys.executable, str(ROOT / "agents" / "openai" / "bridge.py")],
-            "expect": ["openai-agents"],
-        },
-        {
-            "name": "agents-claude",
-            "cmd": ["node", str(ROOT / "agents" / "claude" / "bridge.mjs")],
-            "expect": ["@anthropic-ai/sdk", "ANTHROPIC_API_KEY"],
-        },
-    ]
-
-    errors: List[str] = []
-    for adapter in adapters:
-        proc = subprocess.run(
-            adapter["cmd"],
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-        )
-        stdout = proc.stdout.strip().splitlines()
-        if not stdout:
-            errors.append(f"{adapter['name']}: no output")
-            continue
-
-        try:
-            payload = json.loads(stdout[0])
-        except json.JSONDecodeError as exc:
-            errors.append(f"{adapter['name']}: invalid JSON output ({exc})")
-            continue
-
-        if payload.get("status") != "error":
-            errors.append(
-                f"{adapter['name']}: expected status=error, got {payload.get('status')}"
-            )
-            continue
-
-        error_text = str(payload.get("error", ""))
-        if not any(token in error_text for token in adapter["expect"]):
-            errors.append(
-                f"{adapter['name']}: unexpected error message: {error_text!r}"
-            )
-
-    if errors:
-        raise CheckFailure("; ".join(errors))
-
+def check_agent_adapters(ctx: VerificationContext) -> str:
+    cmd = [sys.executable, str(ROOT / "scripts" / "agentd.py"), "smoke"]
+    ctx.run_command("agent-smoke", cmd)
     return "Agent adapters emit structured errors without dependencies"
 
 

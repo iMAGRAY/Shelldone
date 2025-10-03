@@ -42,6 +42,13 @@
 
 Shelldone встраивает два внешних стека агентных SDK. Они поставляются как отдельные адаптеры, которые подключаются к единой шине `shelldone-agentd` (gRPC/MCP). Каждый адаптер реализует контракт `AgentAdapter` (инициализация, трансляция сообщений, управление сессиями) и живёт в собственном каталоге `agents/<vendor>/`.
 
+Определения адаптеров хранятся в `agents/manifest.json`. Утилита `python scripts/agentd.py` умеет:
+
+- `python scripts/agentd.py list` — вывести список доступных адаптеров;
+- `python scripts/agentd.py run <id>` — запустить адаптер и проксировать STDIN/STDOUT (ручной режим);
+- `python scripts/agentd.py smoke` — выполнить smoke-тесты (используется в `make verify`).
+
+
 ### OpenAI Agents SDK
 - **Источник:** [openai-agents-python](https://github.com/openai/openai-agents-python) — многоагентный каркас с поддержкой Responses/Chat Completions и handoff/guardrail-механизмами.
 - **Развёртывание:**

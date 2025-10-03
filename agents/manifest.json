@@ -1,0 +1,16 @@
+{
+  "adapters": [
+    {
+      "id": "openai",
+      "description": "OpenAI Agents SDK bridge",
+      "command": ["{python}", "agents/openai/bridge.py"],
+      "error_contains": ["openai-agents"]
+    },
+    {
+      "id": "claude",
+      "description": "Claude Agent SDK bridge",
+      "command": ["node", "agents/claude/bridge.mjs"],
+      "error_contains": ["@anthropic-ai/sdk", "ANTHROPIC_API_KEY"]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev verify verify-fast verify-prepush verify-full verify-ci roadmap status roadmap-status ship clippy lint
+.PHONY: all fmt build check test docs servedocs dev verify verify-fast verify-prepush verify-full verify-ci roadmap status roadmap-status ship clippy lint agents-smoke
 
 all: build
 
@@ -58,3 +58,6 @@ docs:
 
 servedocs:
 	ci/build-docs.sh serve
+
+agents-smoke:
+	python3 scripts/agentd.py smoke
