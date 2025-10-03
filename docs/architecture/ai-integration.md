@@ -45,29 +45,29 @@ Shelldone встраивает два внешних стека агентных
 ### OpenAI Agents SDK
 - **Источник:** [openai-agents-python](https://github.com/openai/openai-agents-python) — многоагентный каркас с поддержкой Responses/Chat Completions и handoff/guardrail-механизмами.
 - **Развёртывание:**
-  - Каталог `agents/openai/` содержит `pyproject.toml` и `uv.lock`, которые фиксируют версию `openai-agents` и опциональные экстры (`voice`, `redis`).
-  - Runtime стартует как отдельный процесс (venv/uv), общается с Shelldone через локальный gRPC-коннектор `openai_agents_adapter`.
+  - Каталог `agents/openai/` содержит `pyproject.toml`, `requirements.lock`, `bridge.py`, `README.md`.
+  - Runtime стартует как отдельный процесс (venv + `pip install -r requirements.lock`), общается с Shelldone через STDIO-коннектор `bridge.py`.
 - **Обновление:**
-  - Для ручного обновления используем `uv lock --upgrade-package openai-agents` -> `uv sync` -> `make verify`.
-  - В CI добавляется периодический job, который выполняет `uv lock --check --frozen` и «падает» при дрейфе.
+  - Ручной апдейт: `pip install --upgrade openai-agents openai`, `pip freeze > requirements.lock`, затем `make verify`.
+  - В CI добавляется периодическая проверка `pip install -r requirements.lock --dry-run`.
 - **Особенности интеграции:**
   - Используем SDK sessions для сохранения контекста терминала (SQLiteSession по умолчанию, RedisSession по желанию пользователя).
   - Guardrails/hand-offs маппятся на policy-файлы Shelldone и наш механизм approval UI.
 
-### Claude Code Agent SDK
-- **Источник:** [@anthropic-ai/claude-code](https://github.com/anthropics/claude-code) — терминальный агент-ассистент с поддержкой natural language git/workflow.
+### Claude Agent SDK
+- **Источник:** [@anthropic-ai/sdk](https://www.npmjs.com/package/@anthropic-ai/sdk) — официальный Claude Agent SDK для Node.js.
 - **Развёртывание:**
-  - Каталог `agents/claude/` содержит `package.json` и `package-lock.json`; зависимости (Node.js ≥ 18) управляются через `npm ci`.
-  - Запускаем CLI `claude` в headless-режиме и подключаем его STDIO к адаптеру `claude_code_adapter`, который маппит команды на API Shelldone.
+  - Каталог `agents/claude/` содержит `package.json`, `package-lock.json`, `bridge.mjs`, `README.md`.
+  - Runtime запускается через `node bridge.mjs` (Node.js ≥ 18). STDIO-коннектор маппит команды Shelldone на Claude и хранит краткосрочную историю сессии.
 - **Обновление:**
-  - Ручной апдейт: `npm update @anthropic-ai/claude-code && npm install --package-lock-only` в каталоге адаптера, затем `make verify`.
+  - Ручной апдейт: `npm update @anthropic-ai/sdk`, затем `npm install --package-lock-only` и `npm ci`.
   - В CI выполняем `npm ci --ignore-scripts` для проверки lock-файла.
 - **Особенности интеграции:**
-  - Поддерживаем режимы terminal/IDE: адаптер переводит запросы Claude (`/bug`, git-workflow) в унифицированные операции Shelldone.
-  - Данные Usage/feedback, которые SDK отправляет в Anthropic, агрегируются и отображаются в панели наблюдаемости (опционально отключается политикой).
+  - Адаптер транслирует git/workflow-команды и `/bug`-репорты в унифицированные операции Shelldone.
+  - Usage/feedback, отправляемые SDK в Anthropic, агрегируются и отображаются в панели наблюдаемости (можно отключить политикой).
 
 ### Общие требования к адаптерам
-- Жёсткая фиксация версий и воспроизводимость: `uv.lock` и `package-lock.json` — часть репозитория.
+- Жёсткая фиксация версий и воспроизводимость: lock-файлы (`requirements.lock`, `package-lock.json`) являются частью репозитория.
 - Тестирование: `make verify` вызывает smoke-тесты `agents:<vendor>:test`, которые запускают адаптер в offline-режиме и проверяют hand-off/undo.
 - Наблюдаемость: каждый адаптер публикует метрики (`agent.bridge.latency`, `agent.bridge.errors`) в общую систему telemetry (см. `docs/architecture/observability.md`).
 - Безопасность: адаптеры читают политики (`config/policies/*.yaml`) и выставляют capabilities при старте; несоответствие политике приводит к отказу запуска.

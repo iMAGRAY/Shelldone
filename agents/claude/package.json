@@ -1,0 +1,21 @@
+{
+  "name": "@shelldone/claude-adapter",
+  "version": "0.1.0",
+  "description": "Shelldone bridge for the Claude Agent SDK",
+  "main": "bridge.mjs",
+  "scripts": {
+    "start": "node bridge.mjs",
+    "lint": "node --check bridge.mjs"
+  },
+  "keywords": [
+    "shelldone",
+    "agent",
+    "claude"
+  ],
+  "author": "Shelldone Team",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.21.1"
+  }
+}

@@ -10,7 +10,7 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 
 ## Thematic Specifications
 - `docs/architecture/customization-and-plugins.md` — plugin model, themes, hooks, and IDE capabilities.
-- `docs/architecture/ai-integration.md` — MCP/AI interaction protocols, агентные адаптеры (OpenAI Agents SDK, Claude Code) и политика обновлений.
+- `docs/architecture/ai-integration.md` — MCP/AI interaction protocols, агентные адаптеры (OpenAI Agents SDK, Claude Agent SDK) и политика обновлений.
 - `docs/architecture/animation-framework.md` — high-performance effects and animation system.
 - `docs/architecture/perf-budget.md` — performance budgets, profiling, and fallback modes.
 - `docs/architecture/state-and-storage.md` — lifecycle of state, snapshots, sync, and backups.
