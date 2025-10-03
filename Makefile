@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev verify verify-fast verify-prepush verify-full verify-ci roadmap status roadmap-status ship clippy lint agents-smoke
+.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke roadmap status roadmap-status ship clippy lint
 
 all: build
 
@@ -52,6 +52,9 @@ ship: verify
 
 dev:
 	cargo run --bin shelldone-gui
+
+shelldone:
+	cargo run --release --bin shelldone-gui
 
 docs:
 	ci/build-docs.sh
