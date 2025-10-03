@@ -28,7 +28,7 @@ policies:
 id: epic-qa-hardening
 title: "QA Pipeline and Quality Budgets"
 type: epic
-status: done
+status: in_progress
 priority: P0
 size_points: 20
 scope_paths:
@@ -55,7 +55,7 @@ big_tasks_planned:
   - task-state-persistence
   - task-security-hardening
   - task-observability-pipeline
-progress_pct: 67
+progress_pct: 72
 health: yellow
 tests_required:
   - make verify-prepush
@@ -324,7 +324,7 @@ audit:
 id: task-qa-orchestrator
 title: "make verify Orchestrator"
 type: ops
-status: in_progress
+status: done
 priority: P0
 size_points: 8
 parent_epic: epic-qa-hardening
@@ -404,7 +404,7 @@ audit:
 id: task-qa-marker-baseline
 title: "Forbidden Marker Control"
 type: ops
-status: in_progress
+status: done
 priority: P0
 size_points: 5
 parent_epic: epic-qa-hardening
