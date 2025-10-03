@@ -5,12 +5,22 @@ use enum_display_derive::Display;
 use luahelper::impl_lua_conversion_dynamic;
 use shelldone_dynamic::{FromDynamic, FromDynamicOptions, ToDynamic, Value};
 use std::convert::TryFrom;
-use std::fmt::Display;
+use std::fmt::{self, Display};
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Display, PartialOrd, Ord, FromDynamic, ToDynamic,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    PartialOrd,
+    Ord,
+    FromDynamic,
+    ToDynamic,
+    Default,
 )]
-#[derive(Default)]
 pub enum FontStyle {
     #[default]
     Normal,
@@ -18,11 +28,20 @@ pub enum FontStyle {
     Oblique,
 }
 
-
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Display, PartialOrd, Ord, FromDynamic, ToDynamic,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    PartialOrd,
+    Ord,
+    FromDynamic,
+    ToDynamic,
+    Default,
 )]
-#[derive(Default)]
 pub enum FontStretch {
     UltraCondensed,
     ExtraCondensed,
@@ -67,7 +86,6 @@ impl FontStretch {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FontWeight(u16);
@@ -289,9 +307,9 @@ impl From<&FreeTypeLoadFlags> for String {
     }
 }
 
-impl ToString for FreeTypeLoadFlags {
-    fn to_string(&self) -> String {
-        let mut s = vec![];
+impl fmt::Display for FreeTypeLoadFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = Vec::new();
         if *self == Self::DEFAULT {
             s.push("DEFAULT");
         }
@@ -316,7 +334,7 @@ impl ToString for FreeTypeLoadFlags {
         if self.contains(Self::NO_AUTOHINT) {
             s.push("NO_AUTOHINT");
         }
-        s.join("|")
+        write!(f, "{}", s.join("|"))
     }
 }
 
@@ -643,15 +661,13 @@ pub struct StyleRule {
     pub font: TextStyle,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum AllowSquareGlyphOverflow {
     Never,
     Always,
     #[default]
     WhenFollowedBySpace,
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
 pub enum FontLocatorSelection {

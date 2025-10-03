@@ -19,12 +19,12 @@ use raw_window_handle::{
 use shelldone_font::FontConfiguration;
 use shelldone_input_types::{KeyCode, KeyEvent, KeyboardLedStatus, Modifiers};
 use std::any::Any;
+use std::cell::RefCell;
 use std::convert::TryInto;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
-use std::sync::{Arc, Mutex};
 use url::Url;
 use xcb::x::{Atom, PropMode};
 use xcb::{Event, Xid};
@@ -81,6 +81,14 @@ impl Default for DragAndDrop {
             target_action: xcb::x::ATOM_NONE,
         }
     }
+}
+
+struct ButtonEventContext {
+    time: xcb::x::Timestamp,
+    detail: xcb::x::Button,
+    event_pos: (i16, i16),
+    root_pos: (i16, i16),
+    state: xcb::x::KeyButMask,
 }
 
 pub(crate) struct XWindowInner {
@@ -414,25 +422,15 @@ impl XWindowInner {
         Ok(())
     }
 
-    fn button_event(
-        &mut self,
-        pressed: bool,
-        time: xcb::x::Timestamp,
-        detail: xcb::x::Button,
-        event_x: i16,
-        event_y: i16,
-        root_x: i16,
-        root_y: i16,
-        state: xcb::x::KeyButMask,
-    ) -> anyhow::Result<()> {
-        self.copy_and_paste.time = time;
+    fn button_event(&mut self, pressed: bool, ctx: ButtonEventContext) -> anyhow::Result<()> {
+        self.copy_and_paste.time = ctx.time;
 
         if self.cancel_drag() {
-            log::debug!("cancel drag due to button {detail} {state:?}");
+            log::debug!("cancel drag due to button {} {:?}", ctx.detail, ctx.state);
             return Ok(());
         }
 
-        let kind = match detail {
+        let kind = match ctx.detail {
             b @ 1..=3 => {
                 let button = match b {
                     1 => MousePress::Left,
@@ -463,16 +461,16 @@ impl XWindowInner {
                 })
             }
             _ => {
-                log::trace!("button {} is not implemented", detail);
+                log::trace!("button {} is not implemented", ctx.detail);
                 return Ok(());
             }
         };
 
         let event = MouseEvent {
             kind,
-            coords: Point::new(event_x.into(), event_y.into()),
-            screen_coords: ScreenPoint::new(root_x.into(), root_y.into()),
-            modifiers: xkeysyms::modifiers_from_state(state.bits()),
+            coords: Point::new(ctx.event_pos.0.into(), ctx.event_pos.1.into()),
+            screen_coords: ScreenPoint::new(ctx.root_pos.0.into(), ctx.root_pos.1.into()),
+            modifiers: xkeysyms::modifiers_from_state(ctx.state.bits()),
             mouse_buttons: MouseButtons::default(),
         };
         self.do_mouse_event(event)
@@ -588,7 +586,7 @@ impl XWindowInner {
                         property: conn.atom_xdndtypelist,
                         r#type: xcb::x::ATOM_ATOM,
                         long_offset: 0,
-                        long_length: u32::max_value(),
+                        long_length: u32::MAX,
                     }) {
                         Ok(prop) => prop.value::<Atom>().to_vec(),
                         Err(err) => {
@@ -721,14 +719,8 @@ impl XWindowInner {
             Event::X(xcb::x::Event::MotionNotify(motion)) => {
                 let event = MouseEvent {
                     kind: MouseEventKind::Move,
-                    coords: Point::new(
-                        motion.event_x().into(),
-                        motion.event_y().into(),
-                    ),
-                    screen_coords: ScreenPoint::new(
-                        motion.root_x().into(),
-                        motion.root_y().into(),
-                    ),
+                    coords: Point::new(motion.event_x().into(), motion.event_y().into()),
+                    screen_coords: ScreenPoint::new(motion.root_x().into(), motion.root_y().into()),
                     modifiers: xkeysyms::modifiers_from_state(motion.state().bits()),
                     mouse_buttons: MouseButtons::default(),
                 };
@@ -737,25 +729,25 @@ impl XWindowInner {
             Event::X(xcb::x::Event::ButtonPress(e)) => {
                 self.button_event(
                     true,
-                    e.time(),
-                    e.detail(),
-                    e.event_x(),
-                    e.event_y(),
-                    e.root_x(),
-                    e.root_y(),
-                    e.state(),
+                    ButtonEventContext {
+                        time: e.time(),
+                        detail: e.detail(),
+                        event_pos: (e.event_x(), e.event_y()),
+                        root_pos: (e.root_x(), e.root_y()),
+                        state: e.state(),
+                    },
                 )?;
             }
             Event::X(xcb::x::Event::ButtonRelease(e)) => {
                 self.button_event(
                     false,
-                    e.time(),
-                    e.detail(),
-                    e.event_x(),
-                    e.event_y(),
-                    e.root_x(),
-                    e.root_y(),
-                    e.state(),
+                    ButtonEventContext {
+                        time: e.time(),
+                        detail: e.detail(),
+                        event_pos: (e.event_x(), e.event_y()),
+                        root_pos: (e.root_x(), e.root_y()),
+                        state: e.state(),
+                    },
                 )?;
             }
             Event::X(xcb::x::Event::ClientMessage(msg)) => {
@@ -1101,7 +1093,7 @@ impl XWindowInner {
                 property: selection.property(),
                 r#type: selection.target(),
                 long_offset: 0,
-                long_length: u32::max_value(),
+                long_length: u32::MAX,
             }) {
                 Ok(prop) => {
                     if let Some(mut promise) = self.copy_and_paste.request_mut(clipboard).take() {
@@ -1143,7 +1135,7 @@ impl XWindowInner {
                     property: selection.property(),
                     r#type: selection.target(),
                     long_offset: 0,
-                    long_length: u32::max_value(),
+                    long_length: u32::MAX,
                 }) {
                     Ok(prop) => {
                         if selection.target() == conn.atom_utf8_string {
@@ -1337,7 +1329,7 @@ pub struct XWindow(xcb::x::Window);
 
 impl PartialOrd for XWindow {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.resource_id().partial_cmp(&other.0.resource_id())
+        Some(self.cmp(other))
     }
 }
 
@@ -1472,7 +1464,7 @@ impl XWindow {
 
             let appearance = conn.get_appearance();
 
-            Arc::new(Mutex::new(XWindowInner {
+            Rc::new(RefCell::new(XWindowInner {
                 title: String::new(),
                 appearance,
                 window_id,
@@ -1542,8 +1534,7 @@ impl XWindow {
         })?;
 
         window
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .adjust_decorations(config.window_decorations)?;
 
         let window_handle = Window::X11(XWindow::from_id(window_id));
@@ -1938,7 +1929,7 @@ impl HasWindowHandle for XWindow {
             .window_by_id(self.0)
             .expect("window handle invalid!?");
 
-        let inner = handle.lock().unwrap();
+        let inner = handle.borrow();
         let handle = inner.window_handle()?;
         unsafe { Ok(WindowHandle::borrow_raw(handle.as_raw())) }
     }
@@ -1950,7 +1941,7 @@ impl WindowOps for XWindow {
         let window = self.0;
         promise::spawn::spawn(async move {
             if let Some(handle) = Connection::get().unwrap().x11().window_by_id(window) {
-                let mut inner = handle.lock().unwrap();
+                let mut inner = handle.borrow_mut();
                 inner.enable_opengl()
             } else {
                 anyhow::bail!("invalid window");

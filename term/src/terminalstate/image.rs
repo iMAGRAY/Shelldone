@@ -3,7 +3,7 @@ use anyhow::Context;
 use humansize::{SizeFormatter, DECIMAL};
 use num_traits::{One, Zero};
 use ordered_float::NotNan;
-use shelldone_cell::image::{ImageCell, ImageDataType};
+use shelldone_cell::image::{ImageCell, ImageCellIdentity, ImageCellPadding, ImageDataType};
 use shelldone_cell::Cell;
 use shelldone_surface::change::ImageData;
 use shelldone_surface::TextureCoordinate;
@@ -193,18 +193,22 @@ impl TerminalState {
                     .get_cell(cursor_x + x, cursor_y)
                     .cloned()
                     .unwrap_or_else(Cell::blank);
-                let img = Box::new(ImageCell::with_z_index(
+                let img = ImageCell::with_z_index(
                     TextureCoordinate::new(xpos, ypos),
                     TextureCoordinate::new(xpos + x_delta, ypos + y_delta),
                     params.data.clone(),
                     params.z_index,
-                    cell_padding_left,
-                    cell_padding_top,
-                    padding_right,
-                    padding_bottom,
-                    params.image_id,
-                    params.placement_id,
-                ));
+                    ImageCellPadding::new(
+                        cell_padding_left,
+                        cell_padding_top,
+                        padding_right,
+                        padding_bottom,
+                    ),
+                    ImageCellIdentity {
+                        image_id: params.image_id,
+                        placement_id: params.placement_id,
+                    },
+                );
                 match params.style {
                     ImageAttachStyle::Kitty => cell.attrs_mut().attach_image(img),
                     ImageAttachStyle::Sixel | ImageAttachStyle::Iterm => {

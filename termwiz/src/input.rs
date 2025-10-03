@@ -571,10 +571,7 @@ impl KeyCode {
 /// or could be a key that a user legitimately wants to process in their
 /// terminal application
 fn is_ambiguous_ascii_ctrl(c: char) -> bool {
-    match c {
-        'i' | 'I' | 'm' | 'M' | '[' | '{' | '@' => true,
-        _ => false,
-    }
+    matches!(c, 'i' | 'I' | 'm' | 'M' | '[' | '{' | '@')
 }
 
 fn is_ascii(c: char) -> bool {

@@ -190,7 +190,7 @@ fn strftime(_: &Lua, format: String) -> mlua::Result<String> {
     Ok(local.format(&format).to_string())
 }
 
-async fn sleep_ms<'lua>(_: &'lua Lua, milliseconds: u64) -> mlua::Result<()> {
+async fn sleep_ms(_: &Lua, milliseconds: u64) -> mlua::Result<()> {
     let duration = std::time::Duration::from_millis(milliseconds);
     smol::Timer::after(duration).await;
     Ok(())

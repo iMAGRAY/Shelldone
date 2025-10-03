@@ -4,8 +4,8 @@ use crate::level::{Level, MAX_DEPTH};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum Override {
     Neutral,
-    LTR,
-    RTL,
+    Ltr,
+    Rtl,
 }
 
 /// An implementation of the stack/STATUSSTACKELEMENT from bidiref
@@ -66,8 +66,8 @@ impl LevelStack {
 
     pub fn apply_override(&self, bc: &mut BidiClass) {
         match self.override_status() {
-            Override::LTR => *bc = BidiClass::LeftToRight,
-            Override::RTL => *bc = BidiClass::RightToLeft,
+            Override::Ltr => *bc = BidiClass::LeftToRight,
+            Override::Rtl => *bc = BidiClass::RightToLeft,
             Override::Neutral => {}
         }
     }

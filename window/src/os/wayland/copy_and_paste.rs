@@ -135,7 +135,7 @@ fn write_pipe_with_timeout(mut file: WritePipe, data: &[u8]) -> anyhow::Result<(
     while !buf.is_empty() {
         if unsafe { libc::poll(&mut pfd, 1, 3000) == 1 } {
             match file.write(buf) {
-                Ok(size) if size == 0 => {
+                Ok(0) => {
                     bail!("zero byte write");
                 }
                 Ok(size) => {

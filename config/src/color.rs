@@ -731,7 +731,7 @@ fn dynamic_to_toml(value: Value) -> anyhow::Result<toml::Value> {
             toml::Value::Table(map)
         }
         Value::U64(i) => toml::Value::Integer(i.try_into()?),
-        Value::I64(i) => toml::Value::Integer(i.try_into()?),
+        Value::I64(i) => toml::Value::Integer(i),
         Value::F64(f) => toml::Value::Float(*f),
     })
 }

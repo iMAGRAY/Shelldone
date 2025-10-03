@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::str::FromStr;
 #[cfg(feature = "std")]
@@ -321,7 +322,13 @@ impl SrgbaTuple {
 
 impl ToDynamic for SrgbaTuple {
     fn to_dynamic(&self) -> Value {
-        self.to_string().to_dynamic()
+        self.to_css_string().to_dynamic()
+    }
+}
+
+impl fmt::Display for SrgbaTuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_css_string())
     }
 }
 
@@ -487,7 +494,7 @@ impl SrgbaTuple {
         )
     }
 
-    pub fn to_string(self) -> String {
+    pub fn to_css_string(self) -> String {
         if self.3 == 1.0 {
             self.to_rgb_string()
         } else {
@@ -830,7 +837,7 @@ impl FromStr for SrgbaTuple {
                 return Ok(Self(red, green, blue, alpha));
             }
 
-            let fields: Vec<_> = s[5..].split_ascii_whitespace().collect();
+            let fields: Vec<_> = value.split_ascii_whitespace().collect();
             if fields.len() == 4 {
                 fn field(s: &str) -> Result<f32, ()> {
                     if s.ends_with('%') {
@@ -854,8 +861,8 @@ impl FromStr for SrgbaTuple {
             } else {
                 Err(())
             }
-        } else if s.starts_with("hsl:") {
-            let fields: Vec<_> = s[4..].split_ascii_whitespace().collect();
+        } else if let Some(rest) = s.strip_prefix("hsl:") {
+            let fields: Vec<_> = rest.split_ascii_whitespace().collect();
             if fields.len() == 3 {
                 // Expected to be degrees in range 0-360, but we allow for negative and wrapping
                 let h: i32 = fields[0].parse().map_err(|_| ())?;
@@ -872,7 +879,8 @@ impl FromStr for SrgbaTuple {
                     let a = sat * light.min(1. - light);
                     let f = |n: f32| -> f32 {
                         let k = (n + hue / 30.) % 12.;
-                        light - a * (k - 3.).min(9. - k).min(1.).max(-1.)
+                        let g = (k - 3.).min(9. - k).clamp(-1., 1.);
+                        light - a * g
                     };
                     (f(0.), f(8.), f(4.))
                 }
@@ -1028,7 +1036,7 @@ impl LinearRgba {
     }
 
     #[cfg(feature = "std")]
-    fn to_oklaba(&self) -> [f32; 4] {
+    fn to_oklaba(self) -> [f32; 4] {
         let (r, g, b, alpha) = (self.0, self.1, self.2, self.3);
         let l_ = (0.412_221_46 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
         let m_ = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
@@ -1085,10 +1093,9 @@ impl LinearRgba {
         let increased_ratio = reduced_col.contrast_ratio(other);
 
         // Prefer the reduced luminance version if the fg is dimmer than bg
-        if fg_lum < bg_lum
-            && reduced_ratio >= min_ratio {
-                return Some(reduced_col);
-            }
+        if fg_lum < bg_lum && reduced_ratio >= min_ratio {
+            return Some(reduced_col);
+        }
         // Otherwise, let's find a satisfactory alternative
         if increased_ratio >= min_ratio {
             return Some(increased_col);

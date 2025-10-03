@@ -284,9 +284,7 @@ impl<'lua> Eq for ValuePrinterHelper<'lua> {}
 
 impl<'lua> PartialOrd for ValuePrinterHelper<'lua> {
     fn partial_cmp(&self, rhs: &Self) -> Option<std::cmp::Ordering> {
-        let lhs = lua_value_to_dynamic(self.value.clone()).unwrap_or(DynValue::Null);
-        let rhs = lua_value_to_dynamic(rhs.value.clone()).unwrap_or(DynValue::Null);
-        lhs.partial_cmp(&rhs)
+        Some(self.cmp(rhs))
     }
 }
 
@@ -365,14 +363,15 @@ impl<'lua> std::fmt::Debug for ValuePrinterHelper<'lua> {
                     drop(list);
                     Ok(())
                 } else {
-                    // Treat as map; put it into a BTreeMap so that we have a stable
-                    // order for our tests.
-                    let mut map = BTreeMap::new();
+                    // Treat as map; collect entries and sort them by their dynamic form
+                    // so that debug output is stable for tests.
+                    let mut map_entries: Vec<(ValuePrinterHelper<'lua>, ValuePrinterHelper<'lua>)> =
+                        Vec::new();
                     for pair in t.clone().pairs::<LuaValue, LuaValue>() {
                         match pair {
                             Ok(pair) => {
                                 let is_cycle = self.has_cycle(&pair.1);
-                                map.insert(
+                                map_entries.push((
                                     Self {
                                         visited: Rc::clone(&self.visited),
                                         value: pair.0,
@@ -383,7 +382,7 @@ impl<'lua> std::fmt::Debug for ValuePrinterHelper<'lua> {
                                         value: pair.1,
                                         is_cycle,
                                     },
-                                );
+                                ));
                             }
                             Err(err) => {
                                 log::error!("error while retrieving map entry: {}", err);
@@ -391,7 +390,10 @@ impl<'lua> std::fmt::Debug for ValuePrinterHelper<'lua> {
                             }
                         }
                     }
-                    fmt.debug_map().entries(&map).finish()
+                    map_entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                    fmt.debug_map()
+                        .entries(map_entries.iter().map(|(k, v)| (k, v)))
+                        .finish()
                 }
             }
             LuaValue::UserData(_) if self.is_cycle => {

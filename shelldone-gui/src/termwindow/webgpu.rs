@@ -201,7 +201,7 @@ fn compute_compatibility_list(
             let compatible = a.is_surface_supported(surface);
             format!(
                 "{}, compatible={}",
-                info.to_string(),
+                info,
                 if compatible { "yes" } else { "NO" }
             )
         })
@@ -238,7 +238,7 @@ impl WebGpuState {
             for a in instance.enumerate_adapters(backends) {
                 if !a.is_surface_supported(&surface) {
                     let info = adapter_info_to_gpu_info(a.get_info());
-                    log::warn!("{} is not compatible with surface", info.to_string());
+                    log::warn!("{} is not compatible with surface", info);
                     continue;
                 }
 
@@ -281,7 +281,7 @@ impl WebGpuState {
                 log::warn!(
                     "Your webgpu preferred adapter '{}' was either not \
                      found or is not compatible with your display. Available:\n{}",
-                    preference.to_string(),
+                    preference,
                     adapters.join("\n")
                 );
             }

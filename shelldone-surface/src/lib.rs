@@ -45,18 +45,15 @@ pub enum Position {
 }
 
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum CursorVisibility {
     Hidden,
     #[default]
     Visible,
 }
 
-
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromDynamic, ToDynamic, Default)]
 pub enum CursorShape {
     #[default]
     Default,
@@ -67,7 +64,6 @@ pub enum CursorShape {
     BlinkingBar,
     SteadyBar,
 }
-
 
 impl CursorShape {
     pub fn is_blinking(self) -> bool {
@@ -345,7 +341,7 @@ impl Surface {
                         ' ',
                         self.attributes
                             .clone()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new(
                                     image.top_left.x + xpos,
                                     image.top_left.y + ypos,
@@ -355,7 +351,7 @@ impl Surface {
                                     image.top_left.y + ypos + ysize,
                                 ),
                                 image.image.clone(),
-                            )))
+                            ))
                             .clone(),
                     ),
                     self.seqno,
@@ -1669,41 +1665,41 @@ mod test {
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.0, 0.0),
                                 TextureCoordinate::new_f32(0.25, 0.5),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.25, 0.0),
                                 TextureCoordinate::new_f32(0.5, 0.5),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.5, 0.0),
                                 TextureCoordinate::new_f32(0.75, 0.5),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.75, 0.0),
                                 TextureCoordinate::new_f32(1.0, 0.5),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                 ],
@@ -1711,41 +1707,41 @@ mod test {
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.0, 0.5),
                                 TextureCoordinate::new_f32(0.25, 1.0),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.25, 0.5),
                                 TextureCoordinate::new_f32(0.5, 1.0),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.5, 0.5),
                                 TextureCoordinate::new_f32(0.75, 1.0),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                     Cell::new(
                         ' ',
                         CellAttributes::default()
-                            .set_image(Box::new(ImageCell::new(
+                            .set_image(ImageCell::new(
                                 TextureCoordinate::new_f32(0.75, 0.5),
                                 TextureCoordinate::new_f32(1.0, 1.0),
                                 data.clone()
-                            )))
+                            ))
                             .clone()
                     ),
                 ],
@@ -1767,13 +1763,13 @@ mod test {
             [[Cell::new(
                 ' ',
                 CellAttributes::default()
-                    .set_image(Box::new(ImageCell::new(
+                    .set_image(ImageCell::new(
                         TextureCoordinate::new_f32(0.25, 0.3),
                         TextureCoordinate::new_f32(0.75, 0.8),
                         data.clone()
-                    )))
-                    .clone()
-            ),]]
+                    ))
+                    .clone(),
+            )]]
         );
     }
 }

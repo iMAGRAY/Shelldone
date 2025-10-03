@@ -25,10 +25,7 @@ fn open_with(_: &Lua, (url, app): (String, Option<String>)) -> mlua::Result<()> 
     Ok(())
 }
 
-async fn run_child_process<'lua>(
-    _: &'lua Lua,
-    args: Vec<String>,
-) -> mlua::Result<(bool, BString, BString)> {
+async fn run_child_process(_: &Lua, args: Vec<String>) -> mlua::Result<(bool, BString, BString)> {
     let mut cmd = smol::process::Command::new(&args[0]);
 
     if args.len() > 1 {
@@ -50,7 +47,7 @@ async fn run_child_process<'lua>(
     ))
 }
 
-async fn background_child_process<'lua>(_: &'lua Lua, args: Vec<String>) -> mlua::Result<()> {
+async fn background_child_process(_: &Lua, args: Vec<String>) -> mlua::Result<()> {
     let mut cmd = smol::process::Command::new(&args[0]);
 
     if args.len() > 1 {

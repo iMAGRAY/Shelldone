@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,7 +7,6 @@ use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameClick}
 use smithay_client_toolkit::seat::pointer::{
     PointerData, PointerDataExt, PointerEvent, PointerEventKind, PointerHandler,
 };
-use wayland_client::backend::ObjectId;
 use wayland_client::protocol::wl_pointer::{ButtonState, WlPointer};
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_client::{Connection, Proxy, QueueHandle};
@@ -37,8 +35,8 @@ impl PointerHandler for WaylandState {
 
         for evt in events {
             if let PointerEventKind::Enter { .. } = &evt.kind {
-                let surface_id = evt.surface.id();
-                self.active_surface_id = RefCell::new(Some(surface_id.clone()));
+                let surface_id = evt.surface.id().protocol_id();
+                *self.active_surface_id.borrow_mut() = Some(surface_id);
                 pstate.active_surface_id = Some(surface_id);
             }
             if let Some(serial) = event_serial(evt) {
@@ -78,7 +76,7 @@ impl PointerUserData {
 
 #[derive(Default)]
 pub(super) struct PointerState {
-    active_surface_id: Option<ObjectId>,
+    active_surface_id: Option<u32>,
     pub(super) drag_and_drop: DragAndDrop,
     serial: u32,
 }
@@ -206,7 +204,7 @@ impl WaylandState {
 
         for evt in events {
             let surface = &evt.surface;
-            if surface.id() == self.active_surface_id.borrow().as_ref().unwrap().clone() {
+            if surface.id().protocol_id() == *self.active_surface_id.borrow().as_ref().unwrap() {
                 let (x, y) = evt.position;
                 let parent_surface = match evt.surface.data::<SurfaceData>() {
                     Some(data) => match data.parent_surface() {
@@ -241,11 +239,7 @@ impl WaylandState {
                     }
                     PointerEventKind::Press { button, serial, .. }
                     | PointerEventKind::Release { button, serial, .. } => {
-                        let pressed = if matches!(evt.kind, PointerEventKind::Press { .. }) {
-                            true
-                        } else {
-                            false
-                        };
+                        let pressed = matches!(evt.kind, PointerEventKind::Press { .. });
                         let click = match button {
                             0x110 => FrameClick::Normal,
                             0x111 => FrameClick::Alternate,

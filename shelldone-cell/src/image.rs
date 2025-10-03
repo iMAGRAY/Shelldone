@@ -77,6 +77,32 @@ impl TextureCoordinate {
 /// its "texture coordinates" within that image so that we can render the
 /// right slice.
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ImageCellPadding {
+    pub left: u16,
+    pub top: u16,
+    pub right: u16,
+    pub bottom: u16,
+}
+
+impl ImageCellPadding {
+    pub const fn new(left: u16, top: u16, right: u16, bottom: u16) -> Self {
+        Self {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+}
+
+#[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ImageCellIdentity {
+    pub image_id: Option<u32>,
+    pub placement_id: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageCell {
     /// Texture coordinate for the top left of this cell.
@@ -105,7 +131,14 @@ impl ImageCell {
         bottom_right: TextureCoordinate,
         data: Arc<ImageData>,
     ) -> Self {
-        Self::with_z_index(top_left, bottom_right, data, 0, 0, 0, 0, 0, None, None)
+        Self::with_z_index(
+            top_left,
+            bottom_right,
+            data,
+            0,
+            ImageCellPadding::default(),
+            ImageCellIdentity::default(),
+        )
     }
 
     pub fn compute_shape_hash<H: Hasher>(&self, hasher: &mut H) {
@@ -126,24 +159,20 @@ impl ImageCell {
         bottom_right: TextureCoordinate,
         data: Arc<ImageData>,
         z_index: i32,
-        padding_left: u16,
-        padding_top: u16,
-        padding_right: u16,
-        padding_bottom: u16,
-        image_id: Option<u32>,
-        placement_id: Option<u32>,
+        padding: ImageCellPadding,
+        identity: ImageCellIdentity,
     ) -> Self {
         Self {
             top_left,
             bottom_right,
             data,
             z_index,
-            padding_left,
-            padding_top,
-            padding_right,
-            padding_bottom,
-            image_id,
-            placement_id,
+            padding_left: padding.left,
+            padding_top: padding.top,
+            padding_right: padding.right,
+            padding_bottom: padding.bottom,
+            image_id: identity.image_id,
+            placement_id: identity.placement_id,
         }
     }
 
@@ -571,8 +600,15 @@ impl ImageData {
             ImageDataType::EncodedFile(d) => d.len(),
             ImageDataType::EncodedLease(_) => 0,
             ImageDataType::Rgba8 { data, .. } => data.len(),
-            ImageDataType::AnimRgba8 { frames, .. } => frames.len() * frames[0].len(),
+            ImageDataType::AnimRgba8 { frames, .. } => frames
+                .first()
+                .map(|frame| frames.len() * frame.len())
+                .unwrap_or(0),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn data(&self) -> MutexGuard<'_, ImageDataType> {

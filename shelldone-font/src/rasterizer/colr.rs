@@ -15,6 +15,19 @@ pub struct ColorStop {
     pub color: SrgbaPixel,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct LinearGradientParams {
+    pub start: (f64, f64),
+    pub control: (f64, f64),
+    pub end: (f64, f64),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RadialGradientParams {
+    pub start: (f64, f64, f64),
+    pub end: (f64, f64, f64),
+}
+
 #[derive(Clone, Debug)]
 pub struct ColorLine {
     pub color_stops: Vec<ColorStop>,
@@ -86,23 +99,11 @@ pub enum DrawOp {
 
 pub fn paint_linear_gradient(
     context: &Context,
-    x0: f64,
-    y0: f64,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
+    geometry: LinearGradientParams,
     mut color_line: ColorLine,
 ) -> anyhow::Result<()> {
     let (min_stop, max_stop) = normalize_color_line(&mut color_line);
-    let anchors = reduce_anchors(ReduceAnchorsIn {
-        x0,
-        y0,
-        x1,
-        y1,
-        x2,
-        y2,
-    });
+    let anchors = reduce_anchors(geometry.into());
 
     let xxx0 = anchors.xx0 + min_stop * (anchors.xx1 - anchors.xx0);
     let yyy0 = anchors.yy0 + min_stop * (anchors.yy1 - anchors.yy0);
@@ -125,16 +126,13 @@ pub fn paint_linear_gradient(
 
 pub fn paint_radial_gradient(
     context: &Context,
-    x0: f64,
-    y0: f64,
-    r0: f64,
-    x1: f64,
-    y1: f64,
-    r1: f64,
+    params: RadialGradientParams,
     mut color_line: ColorLine,
 ) -> anyhow::Result<()> {
     let (min_stop, max_stop) = normalize_color_line(&mut color_line);
 
+    let (x0, y0, r0) = params.start;
+    let (x1, y1, r1) = params.end;
     let xx0 = x0 + min_stop * (x1 - x0);
     let yy0 = y0 + min_stop * (y1 - y0);
     let xx1 = x0 + max_stop * (x1 - x0);
@@ -526,6 +524,19 @@ struct ReduceAnchorsIn {
     y1: f64,
     x2: f64,
     y2: f64,
+}
+
+impl From<LinearGradientParams> for ReduceAnchorsIn {
+    fn from(value: LinearGradientParams) -> Self {
+        Self {
+            x0: value.start.0,
+            y0: value.start.1,
+            x1: value.control.0,
+            y1: value.control.1,
+            x2: value.end.0,
+            y2: value.end.1,
+        }
+    }
 }
 
 struct ReduceAnchorsOut {

@@ -178,7 +178,12 @@ impl SpawnQueue {
         // iteration.
         let mut byte = [0u8; 64];
         use std::io::Read;
-        self.read.lock().unwrap().read(&mut byte).ok();
+        let mut reader = self.read.lock().unwrap();
+        while let Ok(read) = reader.read(&mut byte) {
+            if read == 0 || read < byte.len() {
+                break;
+            }
+        }
 
         self.has_any_queued()
     }

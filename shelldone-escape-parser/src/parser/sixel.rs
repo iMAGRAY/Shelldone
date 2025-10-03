@@ -20,10 +20,7 @@ impl SixelBuilder {
             2 => 5,
             _ => 2,
         };
-        let background_is_transparent = match params.get(1).unwrap_or(&0) {
-            1 => true,
-            _ => false,
-        };
+        let background_is_transparent = matches!(params.get(1), Some(&1));
         let horizontal_grid_size = params.get(2).copied();
 
         Self {

@@ -50,6 +50,7 @@ fn lock_pid_file(config: &config::ConfigHandle) -> anyhow::Result<std::fs::File>
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
+        .truncate(true)
         .open(&pid_file)
         .with_context(|| format!("opening pid file {}", pid_file.display()))?;
     config::set_sticky_bit(&pid_file);

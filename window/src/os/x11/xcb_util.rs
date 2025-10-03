@@ -10,6 +10,16 @@ pub type xcb_image_t = ();
 
 pub struct XcbImage(*mut xcb_image_t);
 
+pub struct XcbImageParams {
+    pub width: u16,
+    pub height: u16,
+    pub format: xcb_image_format_t,
+    pub depth: u8,
+    pub base: *mut c_void,
+    pub bytes: u32,
+    pub data: *mut u8,
+}
+
 impl Drop for XcbImage {
     fn drop(&mut self) {
         unsafe {
@@ -19,26 +29,25 @@ impl Drop for XcbImage {
 }
 
 impl XcbImage {
-    pub fn create_native(
+    /// # Safety
+    /// The caller must ensure that the pointers stored in `params.base` and
+    /// `params.data` remain valid for the lifetime of the returned image. The
+    /// underlying XCB routine expects them to reference memory of at least
+    /// `params.bytes` bytes.
+    pub unsafe fn create_native(
         c: &xcb::Connection,
-        width: u16,
-        height: u16,
-        format: xcb_image_format_t,
-        depth: u8,
-        base: *mut c_void,
-        bytes: u32,
-        data: *mut u8,
+        params: XcbImageParams,
     ) -> anyhow::Result<Self> {
         let image = unsafe {
             xcb_image_create_native(
                 c.get_raw_conn(),
-                width,
-                height,
-                format,
-                depth,
-                base,
-                bytes,
-                data,
+                params.width,
+                params.height,
+                params.format,
+                params.depth,
+                params.base,
+                params.bytes,
+                params.data,
             )
         };
         if image.is_null() {

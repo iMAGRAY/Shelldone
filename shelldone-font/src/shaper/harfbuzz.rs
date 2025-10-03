@@ -1,7 +1,7 @@
 use crate::parser::ParsedFont;
 use crate::shaper::{FallbackIdx, FontMetrics, FontShaper, GlyphInfo, PresentationWidth};
 use crate::units::*;
-use crate::{ftwrap, hbwrap as harfbuzz};
+use crate::{ftwrap, hbwrap as harfbuzz, ShapeOptions};
 use anyhow::{anyhow, Context};
 use config::ConfigHandle;
 use finl_unicode::grapheme_clusters::Graphemes;
@@ -209,11 +209,15 @@ impl HarfbuzzShaper {
         font_size: f64,
         dpi: u32,
         no_glyphs: &mut Vec<char>,
-        presentation: Option<Presentation>,
-        direction: Direction,
-        range: Range<usize>,
-        presentation_width: Option<&PresentationWidth>,
+        options: ShapeOptions<'_>,
     ) -> anyhow::Result<Vec<GlyphInfo>> {
+        let ShapeOptions {
+            presentation,
+            direction,
+            range,
+            presentation_width,
+        } = options;
+        let range = range.unwrap_or(0..s.len());
         let mut buf = harfbuzz::Buffer::new()?;
         // We deliberately omit setting the script and leave it to harfbuzz
         // to infer from the buffer contents so that it can correctly
@@ -324,10 +328,12 @@ impl HarfbuzzShaper {
                             font_size,
                             dpi,
                             no_glyphs,
-                            None,
-                            direction,
-                            range,
-                            presentation_width,
+                            ShapeOptions {
+                                presentation: None,
+                                direction,
+                                range: Some(range.clone()),
+                                presentation_width,
+                            },
                         );
                     }
 
@@ -485,11 +491,12 @@ impl HarfbuzzShaper {
                     font_size,
                     dpi,
                     no_glyphs,
-                    presentation,
-                    direction,
-                    // NOT! substr; this is a coalesced sequence of incomplete clusters!
-                    first_info.cluster..first_info.cluster + first_info.len,
-                    presentation_width,
+                    ShapeOptions {
+                        presentation,
+                        direction,
+                        range: Some(first_info.cluster..first_info.cluster + first_info.len),
+                        presentation_width,
+                    },
                 ) {
                     Ok(shape) => Ok(shape),
                     Err(e) => {
@@ -500,10 +507,12 @@ impl HarfbuzzShaper {
                             font_size,
                             dpi,
                             no_glyphs,
-                            presentation,
-                            direction,
-                            sub_range,
-                            presentation_width,
+                            ShapeOptions {
+                                presentation,
+                                direction,
+                                range: Some(sub_range),
+                                presentation_width,
+                            },
                         )
                     }
                 }?;
@@ -570,29 +579,17 @@ impl FontShaper for HarfbuzzShaper {
         size: f64,
         dpi: u32,
         no_glyphs: &mut Vec<char>,
-        presentation: Option<Presentation>,
-        direction: Direction,
-        range: Option<Range<usize>>,
-        presentation_width: Option<&PresentationWidth>,
+        mut options: ShapeOptions<'_>,
     ) -> anyhow::Result<Vec<GlyphInfo>> {
-        let range = range.unwrap_or_else(|| 0..text.len());
-
+        let range = options.range.clone().unwrap_or_else(|| 0..text.len());
+        options.range = Some(range.clone());
         log::trace!(
-            "shape {range:?} `{}` with presentation={presentation:?}",
-            text.escape_debug()
+            "shape {range:?} `{}` with presentation={:?}",
+            text.escape_debug(),
+            options.presentation
         );
         let start = std::time::Instant::now();
-        let result = self.do_shape(
-            0,
-            text,
-            size,
-            dpi,
-            no_glyphs,
-            presentation,
-            direction,
-            range,
-            presentation_width,
-        );
+        let result = self.do_shape(0, text, size, dpi, no_glyphs, options);
         metrics::histogram!("shape.harfbuzz").record(start.elapsed());
         /*
         if let Ok(glyphs) = &result {
@@ -839,6 +836,15 @@ mod test {
     use crate::FontDatabase;
     use config::FontAttributes;
 
+    fn ltr_no_presentation() -> ShapeOptions<'static> {
+        ShapeOptions {
+            presentation: None,
+            direction: Direction::LeftToRight,
+            range: None,
+            presentation_width: None,
+        }
+    }
+
     #[test]
     fn ligatures() {
         let _ = env_logger::Builder::new()
@@ -874,16 +880,7 @@ mod test {
         {
             let mut no_glyphs = vec![];
             let info = shaper
-                .shape(
-                    "abc",
-                    10.,
-                    72,
-                    &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
-                )
+                .shape("abc", 10., 72, &mut no_glyphs, ltr_no_presentation())
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);
             k9::snapshot!(
@@ -942,16 +939,7 @@ mod test {
         {
             let mut no_glyphs = vec![];
             let info = shaper
-                .shape(
-                    "<",
-                    10.,
-                    72,
-                    &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
-                )
+                .shape("<", 10., 72, &mut no_glyphs, ltr_no_presentation())
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);
             k9::snapshot!(
@@ -982,16 +970,7 @@ mod test {
             // from this info :-/
             let mut no_glyphs = vec![];
             let info = shaper
-                .shape(
-                    "<-",
-                    10.,
-                    72,
-                    &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
-                )
+                .shape("<-", 10., 72, &mut no_glyphs, ltr_no_presentation())
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);
             k9::snapshot!(
@@ -1035,16 +1014,7 @@ mod test {
         {
             let mut no_glyphs = vec![];
             let info = shaper
-                .shape(
-                    "<--",
-                    10.,
-                    72,
-                    &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
-                )
+                .shape("<--", 10., 72, &mut no_glyphs, ltr_no_presentation())
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);
             k9::snapshot!(
@@ -1109,10 +1079,12 @@ mod test {
                     10.,
                     72,
                     &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
+                    ShapeOptions {
+                        presentation: None,
+                        direction: Direction::LeftToRight,
+                        range: None,
+                        presentation_width: None,
+                    },
                 )
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);
@@ -1178,10 +1150,12 @@ mod test {
                     10.,
                     72,
                     &mut no_glyphs,
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    None,
+                    ShapeOptions {
+                        presentation: None,
+                        direction: Direction::LeftToRight,
+                        range: None,
+                        presentation_width: None,
+                    },
                 )
                 .unwrap();
             assert!(no_glyphs.is_empty(), "{:?}", no_glyphs);

@@ -473,19 +473,19 @@ impl TerminalState {
                     frame.h,
                 )?;
 
-                let mut dest: ImageBuffer<Rgba<u8>, &mut [u8]> =
-                    ImageBuffer::from_raw(*width, *height, data.as_mut_slice())
-                        .ok_or_else(|| anyhow::anyhow!("ill formed image"))?;
+                {
+                    let mut dest: ImageBuffer<Rgba<u8>, &mut [u8]> =
+                        ImageBuffer::from_raw(*width, *height, data.as_mut_slice())
+                            .ok_or_else(|| anyhow::anyhow!("ill formed image"))?;
 
-                blit(
-                    &mut dest,
-                    &src,
-                    frame.x.unwrap_or(0),
-                    frame.y.unwrap_or(0),
-                    frame.composition_mode,
-                )?;
-
-                drop(dest);
+                    blit(
+                        &mut dest,
+                        &src,
+                        frame.x.unwrap_or(0),
+                        frame.y.unwrap_or(0),
+                        frame.composition_mode,
+                    )?;
+                }
 
                 *hash = ImageDataType::hash_bytes(data);
             }
@@ -517,19 +517,22 @@ impl TerminalState {
                     frame.h,
                 )?;
 
-                let mut dest: ImageBuffer<Rgba<u8>, &mut [u8]> =
-                    ImageBuffer::from_raw(*width, *height, frames[target_frame - 1].as_mut_slice())
-                        .ok_or_else(|| anyhow::anyhow!("ill formed image"))?;
+                {
+                    let mut dest: ImageBuffer<Rgba<u8>, &mut [u8]> = ImageBuffer::from_raw(
+                        *width,
+                        *height,
+                        frames[target_frame - 1].as_mut_slice(),
+                    )
+                    .ok_or_else(|| anyhow::anyhow!("ill formed image"))?;
 
-                blit(
-                    &mut dest,
-                    &src,
-                    frame.x.unwrap_or(0),
-                    frame.y.unwrap_or(0),
-                    frame.composition_mode,
-                )?;
-
-                drop(dest);
+                    blit(
+                        &mut dest,
+                        &src,
+                        frame.x.unwrap_or(0),
+                        frame.y.unwrap_or(0),
+                        frame.composition_mode,
+                    )?;
+                }
                 hashes[target_frame - 1] = ImageDataType::hash_bytes(&frames[target_frame - 1]);
             }
         }
@@ -624,21 +627,21 @@ impl TerminalState {
                     Some(1) => {
                         // Edit in place
                         let len = data.len();
-                        let mut anim_img: ImageBuffer<Rgba<u8>, &mut [u8]> =
-                            ImageBuffer::from_raw(*width, *height, data.as_mut_slice())
-                                .ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "ImageBuffer::from_raw failed for single \
+                        {
+                            let mut anim_img: ImageBuffer<Rgba<u8>, &mut [u8]> =
+                                ImageBuffer::from_raw(*width, *height, data.as_mut_slice())
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!(
+                                            "ImageBuffer::from_raw failed for single \
                                          frame of {}x{} ({} bytes)",
-                                        width,
-                                        height,
-                                        len
-                                    )
-                                })?;
+                                            width,
+                                            height,
+                                            len
+                                        )
+                                    })?;
 
-                        blit(&mut anim_img, &img, x, y, frame.composition_mode)?;
-
-                        drop(anim_img);
+                            blit(&mut anim_img, &img, x, y, frame.composition_mode)?;
+                        }
                         *hash = ImageDataType::hash_bytes(data);
                     }
                     Some(2) | None => {
@@ -717,21 +720,24 @@ impl TerminalState {
                     let frame_no = frame_no as usize;
 
                     let len = frames[frame_no - 1].len();
-                    let mut anim_img: ImageBuffer<Rgba<u8>, &mut [u8]> =
-                        ImageBuffer::from_raw(*width, *height, frames[frame_no - 1].as_mut_slice())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "ImageBuffer::from_raw failed for single \
+                    {
+                        let mut anim_img: ImageBuffer<Rgba<u8>, &mut [u8]> = ImageBuffer::from_raw(
+                            *width,
+                            *height,
+                            frames[frame_no - 1].as_mut_slice(),
+                        )
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "ImageBuffer::from_raw failed for single \
                                          frame of {}x{} ({} bytes)",
-                                    width,
-                                    height,
-                                    len
-                                )
-                            })?;
+                                width,
+                                height,
+                                len
+                            )
+                        })?;
 
-                    blit(&mut anim_img, &img, x, y, frame.composition_mode)?;
-
-                    drop(anim_img);
+                        blit(&mut anim_img, &img, x, y, frame.composition_mode)?;
+                    }
                     hashes[frame_no - 1] = ImageDataType::hash_bytes(&frames[frame_no - 1]);
                 }
             }

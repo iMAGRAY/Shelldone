@@ -74,10 +74,10 @@ impl TextInputState {
         let mgr = &self.text_input_manager;
         let mut inner = self.inner.lock().unwrap();
         let seat_id = seat.id();
-        let input = inner.input_by_seat.entry(seat_id).or_insert_with(|| {
-            let input = mgr.get_text_input(seat, qh, TextInputData::default());
-            input
-        });
+        let input = inner
+            .input_by_seat
+            .entry(seat_id)
+            .or_insert_with(|| mgr.get_text_input(seat, qh, TextInputData::default()));
         Some(input.clone())
     }
 

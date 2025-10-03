@@ -10,7 +10,7 @@ use crate::allocate::*;
 /// usecase for this!
 #[derive(thiserror::Error, Debug)]
 #[error(transparent)]
-pub struct Error(pub(crate) InternalError);
+pub struct Error(pub(crate) Box<InternalError>);
 
 /// A Result whose error type is a termwiz Error
 pub type Result<T> = core::result::Result<T, Error>;
@@ -20,7 +20,7 @@ where
     E: Into<InternalError>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self(Box::new(err.into()))
     }
 }
 
@@ -70,7 +70,7 @@ pub enum InternalError {
 
     #[cfg(feature = "tmux_cc")]
     #[error(transparent)]
-    Pest(#[from] pest::error::Error<crate::tmux_cc::parser::Rule>),
+    Pest(#[from] Box<pest::error::Error<crate::tmux_cc::parser::Rule>>),
 
     #[error("{}", .context)]
     Context {
@@ -82,6 +82,13 @@ pub enum InternalError {
 impl From<String> for InternalError {
     fn from(s: String) -> Self {
         InternalError::StringErr(StringWrap(s))
+    }
+}
+
+#[cfg(feature = "tmux_cc")]
+impl From<pest::error::Error<crate::tmux_cc::parser::Rule>> for InternalError {
+    fn from(err: pest::error::Error<crate::tmux_cc::parser::Rule>) -> Self {
+        InternalError::Pest(Box::new(err))
     }
 }
 
@@ -161,10 +168,10 @@ where
         C: Display + Send + Sync + 'static,
     {
         self.map_err(|error| {
-            Error(InternalError::Context {
+            Error(Box::new(InternalError::Context {
                 context: context.to_string(),
                 source: Box::new(error),
-            })
+            }))
         })
     }
 
@@ -174,10 +181,10 @@ where
         F: FnOnce() -> C,
     {
         self.map_err(|error| {
-            Error(InternalError::Context {
+            Error(Box::new(InternalError::Context {
                 context: context().to_string(),
                 source: Box::new(error),
-            })
+            }))
         })
     }
 }

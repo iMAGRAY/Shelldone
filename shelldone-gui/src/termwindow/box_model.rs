@@ -3,6 +3,7 @@ use crate::color::LinearRgba;
 use crate::customglyph::{BlockKey, Poly};
 use crate::glyphcache::CachedGlyph;
 use crate::quad::{QuadImpl, QuadTrait, TripleLayerQuadAllocator, TripleLayerQuadAllocatorTrait};
+use crate::termwindow::render::PolyQuadParams;
 use crate::termwindow::{
     ColorEase, MouseCapture, RenderState, TermWindowNotif, UIItem, UIItemType,
 };
@@ -11,8 +12,8 @@ use ::window::{RectF, WindowOps};
 use anyhow::anyhow;
 use config::{Dimension, DimensionContext};
 use finl_unicode::grapheme_clusters::Graphemes;
-use shelldone_font::units::PixelUnit;
-use shelldone_font::LoadedFont;
+use shelldone_font::units::{IntPixelLength, PixelUnit};
+use shelldone_font::{LoadedFont, ShapeOptions};
 use shelldone_term::color::{ColorAttribute, ColorPalette};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -20,8 +21,7 @@ use termwiz::cell::{grapheme_column_width, Presentation};
 use termwiz::surface::Line;
 use window::bitmaps::atlas::Sprite;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VerticalAlign {
     #[default]
     Top,
@@ -29,21 +29,18 @@ pub enum VerticalAlign {
     Middle,
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayType {
     Block,
     Inline,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Float {
     #[default]
     None,
     Right,
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PixelDimension {
@@ -68,7 +65,7 @@ pub struct SizedPoly {
 }
 
 impl SizedPoly {
-    pub fn to_pixels(&self, context: &LayoutContext) -> PixelSizedPoly {
+    pub fn as_pixels(&self, context: &LayoutContext) -> PixelSizedPoly {
         PixelSizedPoly {
             poly: self.poly,
             width: self.width.evaluate_as_pixels(context.width),
@@ -102,12 +99,12 @@ pub struct Corners {
 }
 
 impl Corners {
-    pub fn to_pixels(&self, context: &LayoutContext) -> PixelCorners {
+    pub fn as_pixels(&self, context: &LayoutContext) -> PixelCorners {
         PixelCorners {
-            top_left: self.top_left.to_pixels(context),
-            top_right: self.top_right.to_pixels(context),
-            bottom_left: self.bottom_left.to_pixels(context),
-            bottom_right: self.bottom_right.to_pixels(context),
+            top_left: self.top_left.as_pixels(context),
+            top_right: self.top_right.as_pixels(context),
+            bottom_left: self.bottom_left.as_pixels(context),
+            bottom_right: self.bottom_right.as_pixels(context),
         }
     }
 }
@@ -130,7 +127,7 @@ impl BoxDimension {
         }
     }
 
-    pub fn to_pixels(&self, context: &LayoutContext) -> PixelDimension {
+    pub fn as_pixels(&self, context: &LayoutContext) -> PixelDimension {
         PixelDimension {
             left: self.left.evaluate_as_pixels(context.width),
             top: self.top.evaluate_as_pixels(context.height),
@@ -140,8 +137,7 @@ impl BoxDimension {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum InheritableColor {
     #[default]
     Inherited,
@@ -153,7 +149,6 @@ pub enum InheritableColor {
         one_shot: bool,
     },
 }
-
 
 impl From<LinearRgba> for InheritableColor {
     fn from(color: LinearRgba) -> InheritableColor {
@@ -491,9 +486,9 @@ struct Rects {
 
 impl Element {
     fn compute_rects(&self, context: &LayoutContext, content_rect: RectF) -> Rects {
-        let padding = self.padding.to_pixels(context);
-        let margin = self.margin.to_pixels(context);
-        let border = self.border.to_pixels(context);
+        let padding = self.padding.as_pixels(context);
+        let margin = self.margin.as_pixels(context);
+        let border = self.border.as_pixels(context);
 
         let padding = euclid::rect(
             content_rect.min_x() - padding.left,
@@ -530,7 +525,7 @@ impl Element {
 }
 
 impl super::TermWindow {
-    pub fn compute_element<'a>(
+    pub fn compute_element(
         &self,
         context: &LayoutContext,
         element: &Element,
@@ -558,10 +553,10 @@ impl super::TermWindow {
         let border_corners = element
             .border_corners
             .as_ref()
-            .map(|c| c.to_pixels(context));
+            .map(|c| c.as_pixels(context));
         let style = element.font.style();
-        let border = element.border.to_pixels(context);
-        let padding = element.padding.to_pixels(context);
+        let border = element.border.as_pixels(context);
+        let padding = element.padding.as_pixels(context);
         let baseline = context.height.pixel_cell + context.metrics.descender.get() as f32;
         let min_width = match element.min_width {
             Some(w) => w.evaluate_as_pixels(context.width),
@@ -588,14 +583,17 @@ impl super::TermWindow {
             ElementContent::Text(s) => {
                 let window = self.window.as_ref().unwrap().clone();
                 let direction = shelldone_bidi::Direction::LeftToRight;
+                let options = ShapeOptions {
+                    presentation: element.presentation,
+                    direction,
+                    range: None,
+                    presentation_width: None,
+                };
                 let infos = element.font.shape(
                     s,
                     move || window.notify(TermWindowNotif::InvalidateShapeCache),
                     BlockKey::filter_out_synthetic,
-                    element.presentation,
-                    direction,
-                    None,
-                    None,
+                    options,
                 )?;
                 let mut computed_cells = vec![];
                 let mut glyph_cache = context.gl_state.glyph_cache.borrow_mut();
@@ -786,7 +784,7 @@ impl super::TermWindow {
                 })
             }
             ElementContent::Poly { poly, line_width } => {
-                let poly = poly.to_pixels(context);
+                let poly = poly.as_pixels(context);
                 let content_rect = euclid::rect(0., 0., poly.width, poly.height.max(min_height));
                 let rects = element.compute_rects(context, content_rect);
 
@@ -811,7 +809,7 @@ impl super::TermWindow {
         }
     }
 
-    pub fn render_element<'a>(
+    pub fn render_element(
         &self,
         element: &ComputedElement,
         gl_state: &RenderState,
@@ -916,16 +914,20 @@ impl super::TermWindow {
             }
             ComputedElementContent::Poly { poly, line_width } => {
                 if element.content_rect.width() >= poly.width {
-                    let mut quad = self.poly_quad(
+                    self.poly_quad(
                         &mut layers,
-                        1,
-                        element.content_rect.origin,
-                        poly.poly,
-                        *line_width,
-                        euclid::size2(poly.width, poly.height),
-                        LinearRgba::TRANSPARENT,
+                        PolyQuadParams {
+                            layer: 1,
+                            position: element.content_rect.origin,
+                            polys: poly.poly,
+                            underline_height: *line_width,
+                            cell_size: euclid::size2(poly.width, poly.height),
+                            color: LinearRgba::TRANSPARENT,
+                        },
+                        |quad| {
+                            self.resolve_text(colors, inherited_colors).apply(quad);
+                        },
                     )?;
-                    self.resolve_text(colors, inherited_colors).apply(&mut quad);
                 }
             }
         }
@@ -995,13 +997,14 @@ impl super::TermWindow {
         }
     }
 
-    fn render_element_background<'a>(
+    fn render_element_background(
         &self,
         element: &ComputedElement,
         colors: &ElementColors,
-        layers: &mut TripleLayerQuadAllocator,
+        layers_allocator: &mut TripleLayerQuadAllocator,
         inherited_colors: Option<&ElementColors>,
     ) -> anyhow::Result<()> {
+        let layers_ref = &mut *layers_allocator;
         let mut top_left_width = 0.;
         let mut top_left_height = 0.;
         let mut top_right_width = 0.;
@@ -1023,62 +1026,75 @@ impl super::TermWindow {
             bottom_right_width = c.bottom_right.width;
             bottom_right_height = c.bottom_right.height;
 
+            let mut corner_specs = Vec::with_capacity(4);
             if top_left_width > 0. && top_left_height > 0. {
-                self.poly_quad(
-                    layers,
-                    0,
-                    element.border_rect.origin,
-                    c.top_left.poly,
-                    element.border.top as isize,
-                    euclid::size2(top_left_width, top_left_height),
-                    colors.border.top,
-                )?
-                .set_grayscale();
+                corner_specs.push((
+                    PolyQuadParams {
+                        layer: 0,
+                        position: element.border_rect.origin,
+                        polys: c.top_left.poly,
+                        underline_height: element.border.top as IntPixelLength,
+                        cell_size: euclid::size2(top_left_width, top_left_height),
+                        color: colors.border.top,
+                    },
+                    true,
+                ));
             }
             if top_right_width > 0. && top_right_height > 0. {
-                self.poly_quad(
-                    layers,
-                    0,
-                    euclid::point2(
-                        element.border_rect.max_x() - top_right_width,
-                        element.border_rect.min_y(),
-                    ),
-                    c.top_right.poly,
-                    element.border.top as isize,
-                    euclid::size2(top_right_width, top_right_height),
-                    colors.border.top,
-                )?
-                .set_grayscale();
+                corner_specs.push((
+                    PolyQuadParams {
+                        layer: 0,
+                        position: euclid::point2(
+                            element.border_rect.max_x() - top_right_width,
+                            element.border_rect.min_y(),
+                        ),
+                        polys: c.top_right.poly,
+                        underline_height: element.border.top as IntPixelLength,
+                        cell_size: euclid::size2(top_right_width, top_right_height),
+                        color: colors.border.top,
+                    },
+                    true,
+                ));
             }
             if bottom_left_width > 0. && bottom_left_height > 0. {
-                self.poly_quad(
-                    layers,
-                    0,
-                    euclid::point2(
-                        element.border_rect.min_x(),
-                        element.border_rect.max_y() - bottom_left_height,
-                    ),
-                    c.bottom_left.poly,
-                    element.border.bottom as isize,
-                    euclid::size2(bottom_left_width, bottom_left_height),
-                    colors.border.bottom,
-                )?
-                .set_grayscale();
+                corner_specs.push((
+                    PolyQuadParams {
+                        layer: 0,
+                        position: euclid::point2(
+                            element.border_rect.min_x(),
+                            element.border_rect.max_y() - bottom_left_height,
+                        ),
+                        polys: c.bottom_left.poly,
+                        underline_height: element.border.bottom as IntPixelLength,
+                        cell_size: euclid::size2(bottom_left_width, bottom_left_height),
+                        color: colors.border.bottom,
+                    },
+                    true,
+                ));
             }
             if bottom_right_width > 0. && bottom_right_height > 0. {
-                self.poly_quad(
-                    layers,
-                    0,
-                    euclid::point2(
-                        element.border_rect.max_x() - bottom_right_width,
-                        element.border_rect.max_y() - bottom_right_height,
-                    ),
-                    c.bottom_right.poly,
-                    element.border.bottom as isize,
-                    euclid::size2(bottom_right_width, bottom_right_height),
-                    colors.border.bottom,
-                )?
-                .set_grayscale();
+                corner_specs.push((
+                    PolyQuadParams {
+                        layer: 0,
+                        position: euclid::point2(
+                            element.border_rect.max_x() - bottom_right_width,
+                            element.border_rect.max_y() - bottom_right_height,
+                        ),
+                        polys: c.bottom_right.poly,
+                        underline_height: element.border.bottom as IntPixelLength,
+                        cell_size: euclid::size2(bottom_right_width, bottom_right_height),
+                        color: colors.border.bottom,
+                    },
+                    true,
+                ));
+            }
+
+            for (params, grayscale) in corner_specs {
+                self.poly_quad(layers_ref, params, |quad| {
+                    if grayscale {
+                        quad.set_grayscale();
+                    }
+                })?;
             }
 
             // Filling the background is more complex because we can't
@@ -1095,7 +1111,7 @@ impl super::TermWindow {
 
             // The `T` piece
             let mut quad = self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x() + top_left_width,
@@ -1109,7 +1125,7 @@ impl super::TermWindow {
 
             // The `B` piece
             let mut quad = self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x() + bottom_left_width,
@@ -1123,7 +1139,7 @@ impl super::TermWindow {
 
             // The `L` piece
             let mut quad = self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x(),
@@ -1137,7 +1153,7 @@ impl super::TermWindow {
 
             // The `R` piece
             let mut quad = self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.max_x() - top_right_width,
@@ -1151,7 +1167,7 @@ impl super::TermWindow {
 
             // The `C` piece
             let mut quad = self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x() + top_left_width,
@@ -1166,7 +1182,7 @@ impl super::TermWindow {
             self.resolve_bg(colors, inherited_colors).apply(&mut quad);
         } else if colors.bg != InheritableColor::Color(LinearRgba::TRANSPARENT) {
             let mut quad =
-                self.filled_rectangle(layers, 0, element.padding, LinearRgba::TRANSPARENT)?;
+                self.filled_rectangle(layers_ref, 0, element.padding, LinearRgba::TRANSPARENT)?;
             self.resolve_bg(colors, inherited_colors).apply(&mut quad);
         }
 
@@ -1177,7 +1193,7 @@ impl super::TermWindow {
 
         if element.border.top > 0. && colors.border.top != LinearRgba::TRANSPARENT {
             self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x() + top_left_width,
@@ -1190,7 +1206,7 @@ impl super::TermWindow {
         }
         if element.border.bottom > 0. && colors.border.bottom != LinearRgba::TRANSPARENT {
             self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x() + bottom_left_width,
@@ -1203,7 +1219,7 @@ impl super::TermWindow {
         }
         if element.border.left > 0. && colors.border.left != LinearRgba::TRANSPARENT {
             self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.min_x(),
@@ -1216,7 +1232,7 @@ impl super::TermWindow {
         }
         if element.border.right > 0. && colors.border.right != LinearRgba::TRANSPARENT {
             self.filled_rectangle(
-                layers,
+                layers_ref,
                 0,
                 euclid::rect(
                     element.border_rect.max_x() - element.border.right,

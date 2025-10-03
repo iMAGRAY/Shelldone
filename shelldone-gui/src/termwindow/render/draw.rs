@@ -168,14 +168,14 @@ impl crate::TermWindow {
         )
         .to_arrays_transposed();
 
-        let use_subpixel = match self
+        let render_target = self
             .config
             .freetype_render_target
-            .unwrap_or(self.config.freetype_load_target)
-        {
-            FreeTypeLoadTarget::HorizontalLcd | FreeTypeLoadTarget::VerticalLcd => true,
-            _ => false,
-        };
+            .unwrap_or(self.config.freetype_load_target);
+        let use_subpixel = matches!(
+            render_target,
+            FreeTypeLoadTarget::HorizontalLcd | FreeTypeLoadTarget::VerticalLcd
+        );
 
         let dual_source_blending = glium::DrawParameters {
             blend: glium::Blend {

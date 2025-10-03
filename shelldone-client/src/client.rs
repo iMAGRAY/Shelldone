@@ -45,7 +45,7 @@ struct ChannelSendError;
 
 enum ReaderMessage {
     SendPdu {
-        pdu: Pdu,
+        pdu: Box<Pdu>,
         promise: Sender<anyhow::Result<Pdu>>,
     },
     Readable,
@@ -78,6 +78,23 @@ pub struct IncompatibleVersionError {
 }
 
 macro_rules! rpc {
+    ($method_name:ident, $request_type:ident => Box, $response_type:ident) => {
+        pub async fn $method_name(&self, pdu: $request_type) -> anyhow::Result<$response_type> {
+            let start = std::time::Instant::now();
+            let result = self
+                .send_pdu(Pdu::$request_type(Box::new(pdu)))
+                .await;
+            let elapsed = start.elapsed();
+            metrics::histogram!("rpc", "method" => stringify!($method_name)).record(elapsed);
+            metrics::counter!("rpc.count", "method" => stringify!($method_name)).increment(1);
+            match result {
+                Ok(Pdu::$response_type(res)) => Ok(res),
+                Ok(_) => bail!("unexpected response {:?}", result),
+                Err(err) => Err(err),
+            }
+        }
+    };
+
     ($method_name:ident, $request_type:ident, $response_type:ident) => {
         pub async fn $method_name(&self, pdu: $request_type) -> anyhow::Result<$response_type> {
             let start = std::time::Instant::now();
@@ -1304,7 +1321,10 @@ impl Client {
     pub async fn send_pdu(&self, pdu: Pdu) -> anyhow::Result<Pdu> {
         let (promise, rx) = bounded(1);
         self.sender
-            .send(ReaderMessage::SendPdu { pdu, promise })
+            .send(ReaderMessage::SendPdu {
+                pdu: Box::new(pdu),
+                promise,
+            })
             .await
             .map_err(|_| ChannelSendError)
             .context("send_pdu send")?;
@@ -1378,7 +1398,7 @@ impl Client {
     rpc!(set_window_workspace, SetWindowWorkspace, UnitResponse);
     rpc!(set_focused_pane_id, SetFocusedPane, UnitResponse);
     rpc!(get_image_cell, GetImageCell, GetImageCellResponse);
-    rpc!(set_configured_palette_for_pane, SetPalette, UnitResponse);
+    rpc!(set_configured_palette_for_pane, SetPalette => Box, UnitResponse);
     rpc!(set_tab_title, TabTitleChanged, UnitResponse);
     rpc!(set_window_title, WindowTitleChanged, UnitResponse);
     rpc!(rename_workspace, RenameWorkspace, UnitResponse);

@@ -160,6 +160,7 @@ SKIP_MARKER_DIRS = {
     "docs/ROADMAP/notes",
     "docs/architecture/adr",
     "artifacts",
+    "qa/baselines",
 }
 SKIP_MARKER_SUFFIXES = {".md", ".markdown", ".rst", ".txt"}
 ALLOW_MARKER_BASENAMES = {"Makefile", "makefile"}

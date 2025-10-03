@@ -1,8 +1,8 @@
 use crate::quad::{QuadTrait, TripleLayerQuadAllocator, TripleLayerQuadAllocatorTrait};
 use crate::termwindow::render::{
     resolve_fg_color_attr, same_hyperlink, update_next_frame_time, ClusterStyleCache,
-    ComputeCellFgBgParams, ComputeCellFgBgResult, LineToElementParams, LineToElementShape,
-    RenderScreenLineParams, RenderScreenLineResult,
+    ComputeCellFgBgParams, ComputeCellFgBgResult, ImageQuadParams, LineToElementParams,
+    LineToElementShape, RenderScreenLineParams, RenderScreenLineResult,
 };
 use crate::termwindow::LineToElementShapeItem;
 use ::window::DeadKeyStatus;
@@ -472,14 +472,16 @@ impl crate::TermWindow {
                     for img in &images {
                         if img.z_index() < 0 {
                             self.populate_image_quad(
-                                img,
-                                gl_state,
                                 layers,
-                                0,
-                                visual_cell_idx + glyph_idx,
-                                &params,
-                                hsv,
-                                item.fg_color,
+                                ImageQuadParams {
+                                    image: img,
+                                    gl_state,
+                                    layer: 0,
+                                    cell_index: visual_cell_idx + glyph_idx,
+                                    params: &params,
+                                    hsv,
+                                    glyph_color: item.fg_color,
+                                },
                             )?;
                         }
                     }
@@ -698,14 +700,16 @@ impl crate::TermWindow {
 
         for (cell_idx, img, glyph_color) in overlay_images {
             self.populate_image_quad(
-                &img,
-                gl_state,
                 layers,
-                2,
-                phys(cell_idx, num_cols, direction),
-                &params,
-                hsv,
-                glyph_color,
+                ImageQuadParams {
+                    image: &img,
+                    gl_state,
+                    layer: 2,
+                    cell_index: phys(cell_idx, num_cols, direction),
+                    params: &params,
+                    hsv,
+                    glyph_color,
+                },
             )
             .context("populate_image_quad")?;
         }

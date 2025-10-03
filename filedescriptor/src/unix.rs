@@ -86,7 +86,7 @@ impl FromRawFd for OwnedHandle {
         Self {
             handle: fd,
             #[cfg(windows)]
-                handle_type: (),
+            handle_type: (),
         }
     }
 }
@@ -114,11 +114,7 @@ impl OwnedHandle {
                 source: std::io::Error::last_os_error(),
             })
         } else {
-            let mut owned = OwnedHandle {
-                handle: duped,
-                #[cfg(windows)]
-                handle_type: (),
-            };
+            let mut owned = unsafe { OwnedHandle::from_raw_fd(duped) };
             owned.cloexec()?;
             Ok(owned)
         }
@@ -133,11 +129,7 @@ impl OwnedHandle {
                 source: std::io::Error::last_os_error(),
             })
         } else {
-            let mut owned = OwnedHandle {
-                handle: duped,
-                #[cfg(windows)]
-                handle_type: (),
-            };
+            let mut owned = unsafe { OwnedHandle::from_raw_fd(duped) };
             owned.cloexec()?;
             Ok(owned)
         }
@@ -146,7 +138,7 @@ impl OwnedHandle {
     #[inline]
     pub(crate) fn dup_impl<F: AsRawFileDescriptor>(
         fd: &F,
-        handle_type: HandleType,
+        _handle_type: HandleType,
     ) -> Result<Self> {
         let fd = fd.as_raw_file_descriptor();
         let duped = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0) };
@@ -163,10 +155,7 @@ impl OwnedHandle {
                 })
             }
         } else {
-            Ok(OwnedHandle {
-                handle: duped,
-                handle_type,
-            })
+            Ok(unsafe { OwnedHandle::from_raw_fd(duped) })
         }
     }
 
@@ -195,16 +184,10 @@ impl OwnedHandle {
                     })
                 }
             } else {
-                Ok(OwnedHandle {
-                    handle: duped,
-                    #[cfg(windows)]
-                handle_type: (),
-                })
+                Ok(unsafe { OwnedHandle::from_raw_fd(duped) })
             }
         }
     }
-
-    pub(crate) fn probe_handle_type(_handle: RawFileDescriptor) -> HandleType {}
 }
 
 impl std::io::Read for FileDescriptor {
@@ -349,18 +332,10 @@ impl Pipe {
             Err(Error::Pipe(std::io::Error::last_os_error()))
         } else {
             let read = FileDescriptor {
-                handle: OwnedHandle {
-                    handle: fds[0],
-                    #[cfg(windows)]
-                handle_type: (),
-                },
+                handle: unsafe { OwnedHandle::from_raw_fd(fds[0]) },
             };
             let write = FileDescriptor {
-                handle: OwnedHandle {
-                    handle: fds[1],
-                    #[cfg(windows)]
-                handle_type: (),
-                },
+                handle: unsafe { OwnedHandle::from_raw_fd(fds[1]) },
             };
             Ok(Pipe { read, write })
         }
@@ -374,18 +349,10 @@ impl Pipe {
             Err(Error::Pipe(std::io::Error::last_os_error()))
         } else {
             let mut read = FileDescriptor {
-                handle: OwnedHandle {
-                    handle: fds[0],
-                    #[cfg(windows)]
-                handle_type: (),
-                },
+                handle: unsafe { OwnedHandle::from_raw_fd(fds[0]) },
             };
             let mut write = FileDescriptor {
-                handle: OwnedHandle {
-                    handle: fds[1],
-                    #[cfg(windows)]
-                handle_type: (),
-                },
+                handle: unsafe { OwnedHandle::from_raw_fd(fds[1]) },
             };
             read.handle.cloexec()?;
             write.handle.cloexec()?;
@@ -410,18 +377,10 @@ pub fn socketpair_impl() -> Result<(FileDescriptor, FileDescriptor)> {
         Err(Error::Socketpair(std::io::Error::last_os_error()))
     } else {
         let read = FileDescriptor {
-            handle: OwnedHandle {
-                handle: fds[0],
-                #[cfg(windows)]
-                handle_type: (),
-            },
+            handle: unsafe { OwnedHandle::from_raw_fd(fds[0]) },
         };
         let write = FileDescriptor {
-            handle: OwnedHandle {
-                handle: fds[1],
-                #[cfg(windows)]
-                handle_type: (),
-            },
+            handle: unsafe { OwnedHandle::from_raw_fd(fds[1]) },
         };
         Ok((read, write))
     }
@@ -436,18 +395,10 @@ pub fn socketpair_impl() -> Result<(FileDescriptor, FileDescriptor)> {
         Err(Error::Socketpair(std::io::Error::last_os_error()))
     } else {
         let mut read = FileDescriptor {
-            handle: OwnedHandle {
-                handle: fds[0],
-                #[cfg(windows)]
-                handle_type: (),
-            },
+            handle: unsafe { OwnedHandle::from_raw_fd(fds[0]) },
         };
         let mut write = FileDescriptor {
-            handle: OwnedHandle {
-                handle: fds[1],
-                #[cfg(windows)]
-                handle_type: (),
-            },
+            handle: unsafe { OwnedHandle::from_raw_fd(fds[1]) },
         };
         read.handle.cloexec()?;
         write.handle.cloexec()?;

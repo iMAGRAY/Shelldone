@@ -58,7 +58,7 @@ pub(crate) enum CharSet {
 pub(crate) enum MouseEncoding {
     X10,
     Utf8,
-    SGR,
+    Sgr,
     SgrPixels,
 }
 
@@ -574,6 +574,18 @@ impl TerminalState {
         }
     }
 
+    fn write_all_or_log(&mut self, bytes: &[u8]) {
+        if let Err(err) = self.writer.write_all(bytes) {
+            log::error!("failed to write terminal response: {err:#}");
+        }
+    }
+
+    fn flush_writer_or_log(&mut self) {
+        if let Err(err) = self.writer.flush() {
+            log::error!("failed to flush terminal response: {err:#}");
+        }
+    }
+
     pub fn enable_conpty_quirks(&mut self) {
         self.enable_conpty_quirks = true;
         self.suppress_initial_title_change = true;
@@ -762,7 +774,7 @@ impl TerminalState {
             // notify app of release of buttons
             let buttons = self.current_mouse_buttons.clone();
             for b in buttons {
-                self.mouse_event(MouseEvent {
+                if let Err(err) = self.mouse_event(MouseEvent {
                     kind: MouseEventKind::Release,
                     button: b,
                     modifiers: KeyModifiers::NONE,
@@ -770,13 +782,16 @@ impl TerminalState {
                     y: 0,
                     x_pixel_offset: 0,
                     y_pixel_offset: 0,
-                })
-                .ok();
+                }) {
+                    log::error!("failed to send mouse release event: {err:#}");
+                }
             }
         }
         if self.focus_tracking {
-            write!(self.writer, "{}{}", CSI, if focused { "I" } else { "O" }).ok();
-            self.writer.flush().ok();
+            if let Err(err) = write!(self.writer, "{}{}", CSI, if focused { "I" } else { "O" }) {
+                log::error!("failed to write focus report: {err:#}");
+            }
+            self.flush_writer_or_log();
         }
         self.focused = focused;
         if !focused {
@@ -1232,8 +1247,8 @@ impl TerminalState {
             names,
             res.escape_debug()
         );
-        self.writer.write_all(res.as_bytes()).ok();
-        self.writer.flush().ok();
+        self.write_all_or_log(res.as_bytes());
+        self.flush_writer_or_log();
     }
 
     fn perform_device(&mut self, dev: Device) {
@@ -1280,8 +1295,8 @@ impl TerminalState {
                 ident.push_str(";52"); // Clipboard access
                 ident.push('c');
 
-                self.writer.write(ident.as_bytes()).ok();
-                self.writer.flush().ok();
+                self.write_all_or_log(ident.as_bytes());
+                self.flush_writer_or_log();
             }
             Device::RequestSecondaryDeviceAttributes => {
                 // Response is: Pp ; Pv ; Pc
@@ -1295,33 +1310,28 @@ impl TerminalState {
                 // pv >= 95 < 277 -> ttymouse=xterm2
                 // pv >= 277 -> ttymouse=sgr
                 // pv >= 279 - xterm will probe for additional device settings.
-                self.writer.write(b"\x1b[>1;277;0c").ok();
-                self.writer.flush().ok();
+                self.write_all_or_log(b"\x1b[>1;277;0c");
+                self.flush_writer_or_log();
             }
             Device::RequestTertiaryDeviceAttributes => {
-                self.writer
-                    .write(format!("\x1bP!|00000000{}", ST).as_bytes())
-                    .ok();
-                self.writer.flush().ok();
+                let response = format!("\x1bP!|00000000{}", ST);
+                self.write_all_or_log(response.as_bytes());
+                self.flush_writer_or_log();
             }
             Device::RequestTerminalNameAndVersion => {
-                self.writer.write(DCS.as_bytes()).ok();
-                self.writer
-                    .write(
-                        format!(">|{} {}{}", self.term_program, self.term_version, ST).as_bytes(),
-                    )
-                    .ok();
-                self.writer.flush().ok();
+                self.write_all_or_log(DCS.as_bytes());
+                let body = format!(">|{} {}{}", self.term_program, self.term_version, ST);
+                self.write_all_or_log(body.as_bytes());
+                self.flush_writer_or_log();
             }
             Device::RequestTerminalParameters(a) => {
-                self.writer
-                    .write(format!("\x1b[{};1;1;128;128;1;0x", a + 2).as_bytes())
-                    .ok();
-                self.writer.flush().ok();
+                let response = format!("\x1b[{};1;1;128;128;1;0x", a + 2);
+                self.write_all_or_log(response.as_bytes());
+                self.flush_writer_or_log();
             }
             Device::StatusReport => {
-                self.writer.write(b"\x1b[0n").ok();
-                self.writer.flush().ok();
+                self.write_all_or_log(b"\x1b[0n");
+                self.flush_writer_or_log();
             }
             Device::XtSmGraphics(g) => {
                 let response = if matches!(g.item, XtSmGraphicsItem::Unspecified(_)) {
@@ -1362,8 +1372,10 @@ impl TerminalState {
 
                 let dev = Device::XtSmGraphics(response);
 
-                write!(self.writer, "\x1b[{}", dev).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "\x1b[{dev}") {
+                    log::error!("failed to write XtSmGraphics response: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
         }
     }
@@ -1380,8 +1392,10 @@ impl TerminalState {
 
         let prefix = if is_dec { "?" } else { "" };
 
-        write!(self.writer, "\x1b[{prefix}{number};3$y").ok();
-        self.writer.flush().ok();
+        if let Err(err) = write!(self.writer, "\x1b[{prefix}{number};3$y") {
+            log::error!("failed to write DECRQM permanent response: {err:#}");
+        }
+        self.flush_writer_or_log();
     }
 
     fn decqrm_response(&mut self, mode: Mode, mut recognized: bool, enabled: bool) {
@@ -1412,8 +1426,10 @@ impl TerminalState {
         };
 
         log::trace!("{:?} -> recognized={} status={}", mode, recognized, status);
-        write!(self.writer, "\x1b[{}{};{}$y", prefix, number, status).ok();
-        self.writer.flush().ok();
+        if let Err(err) = write!(self.writer, "\x1b[{prefix}{number};{status}$y") {
+            log::error!("failed to write DECRQM response: {err:#}");
+        }
+        self.flush_writer_or_log();
     }
 
     fn perform_csi_mode(&mut self, mode: Mode) {
@@ -1803,7 +1819,7 @@ impl TerminalState {
             }
 
             Mode::SetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::SGRMouse)) => {
-                self.mouse_encoding = MouseEncoding::SGR;
+                self.mouse_encoding = MouseEncoding::Sgr;
                 self.last_mouse_move.take();
             }
             Mode::ResetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::SGRMouse)) => {
@@ -1811,14 +1827,8 @@ impl TerminalState {
                 self.last_mouse_move.take();
             }
             Mode::QueryDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::SGRMouse)) => {
-                self.decqrm_response(
-                    mode,
-                    true,
-                    match self.mouse_encoding {
-                        MouseEncoding::SGR => true,
-                        _ => false,
-                    },
-                );
+                let enabled = matches!(self.mouse_encoding, MouseEncoding::Sgr);
+                self.decqrm_response(mode, true, enabled);
             }
             Mode::SetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::SGRPixelsMouse)) => {
                 self.mouse_encoding = MouseEncoding::SgrPixels;
@@ -1829,14 +1839,8 @@ impl TerminalState {
                 self.last_mouse_move.take();
             }
             Mode::QueryDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::SGRPixelsMouse)) => {
-                self.decqrm_response(
-                    mode,
-                    true,
-                    match self.mouse_encoding {
-                        MouseEncoding::SgrPixels => true,
-                        _ => false,
-                    },
-                );
+                let enabled = matches!(self.mouse_encoding, MouseEncoding::SgrPixels);
+                self.decqrm_response(mode, true, enabled);
             }
 
             Mode::SetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::Utf8Mouse)) => {
@@ -1848,14 +1852,8 @@ impl TerminalState {
                 self.last_mouse_move.take();
             }
             Mode::QueryDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::Utf8Mouse)) => {
-                self.decqrm_response(
-                    mode,
-                    true,
-                    match self.mouse_encoding {
-                        MouseEncoding::Utf8 => true,
-                        _ => false,
-                    },
-                );
+                let enabled = matches!(self.mouse_encoding, MouseEncoding::Utf8);
+                self.decqrm_response(mode, true, enabled);
             }
 
             Mode::SetDecPrivateMode(DecPrivateMode::Code(
@@ -2015,8 +2013,10 @@ impl TerminalState {
                 let width = Some(screen.physical_cols as i64);
 
                 let response = Box::new(Window::ResizeWindowCells { width, height });
-                write!(self.writer, "{}", CSI::Window(response)).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "{}", CSI::Window(response)) {
+                    log::error!("failed to write CSI window response: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
 
             Window::ReportCellSizePixels => {
@@ -2027,8 +2027,10 @@ impl TerminalState {
                     width: Some((self.pixel_width / width) as i64),
                     height: Some((self.pixel_height / height) as i64),
                 });
-                write!(self.writer, "{}", CSI::Window(response)).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "{}", CSI::Window(response)) {
+                    log::error!("failed to write CSI window response: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
 
             Window::ReportTextAreaSizePixels => {
@@ -2036,19 +2038,22 @@ impl TerminalState {
                     width: Some(self.pixel_width as i64),
                     height: Some(self.pixel_height as i64),
                 });
-                write!(self.writer, "{}", CSI::Window(response)).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "{}", CSI::Window(response)) {
+                    log::error!("failed to write CSI window response: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
 
             Window::ReportWindowTitle => {
                 if self.config.enable_title_reporting() {
-                    write!(
+                    if let Err(err) = write!(
                         self.writer,
                         "{}",
                         OperatingSystemCommand::SetWindowTitleSun(self.title.clone())
-                    )
-                    .ok();
-                    self.writer.flush().ok();
+                    ) {
+                        log::error!("failed to write window title: {err:#}");
+                    }
+                    self.flush_writer_or_log();
                 }
             }
 
@@ -2066,8 +2071,11 @@ impl TerminalState {
                     right.as_zero_based(),
                     bottom.as_zero_based(),
                 );
-                write!(self.writer, "\x1bP{}!~{:04x}\x1b\\", request_id, checksum).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "\x1bP{}!~{:04x}\x1b\\", request_id, checksum)
+                {
+                    log::error!("failed to write checksum response: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
             Window::ResizeWindowCells { .. } => {
                 // We don't allow the application to change the window size; that's
@@ -2363,7 +2371,10 @@ impl TerminalState {
             }
             Cursor::BackwardTabulation(n) => {
                 for _ in 0..n {
-                    let x = self.tabs.find_prev_tab_stop(self.cursor.x).unwrap_or_default();
+                    let x = self
+                        .tabs
+                        .find_prev_tab_stop(self.cursor.x)
+                        .unwrap_or_default();
                     self.set_cursor_pos(&Position::Absolute(x as i64), &Position::Relative(0));
                 }
             }
@@ -2545,8 +2556,10 @@ impl TerminalState {
                         })) as u32,
                 );
                 let report = CSI::Cursor(Cursor::ActivePositionReport { line, col });
-                write!(self.writer, "{}", report).ok();
-                self.writer.flush().ok();
+                if let Err(err) = write!(self.writer, "{}", report) {
+                    log::error!("failed to write cursor position report: {err:#}");
+                }
+                self.flush_writer_or_log();
             }
             Cursor::SaveCursor => {
                 // The `CSI s` SaveCursor sequence is ambiguous with DECSLRM

@@ -14,7 +14,6 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use x11::xlib;
 use xcb::x::Atom;
 use xcb::{dri2, Raw, Xid};
@@ -97,7 +96,7 @@ pub struct XConnection {
     pub atom_net_supporting_wm_check: Atom,
     pub atom_net_active_window: Atom,
     pub(crate) xrm: RefCell<HashMap<String, String>>,
-    pub(crate) windows: RefCell<HashMap<xcb::x::Window, Arc<Mutex<XWindowInner>>>>,
+    pub(crate) windows: RefCell<HashMap<xcb::x::Window, Rc<RefCell<XWindowInner>>>>,
     pub(crate) child_to_parent_id: RefCell<HashMap<xcb::x::Window, xcb::x::Window>>,
     should_terminate: RefCell<bool>,
     pub(crate) visual: xcb::x::Visualtype,
@@ -468,8 +467,8 @@ impl XConnection {
             }
         }
 
-        let xrm = crate::x11::xrm::parse_root_resource_manager(&self.conn, self.root)
-            .unwrap_or_default();
+        let xrm =
+            crate::x11::xrm::parse_root_resource_manager(&self.conn, self.root).unwrap_or_default();
         *self.xrm.borrow_mut() = xrm;
 
         let dpi = compute_default_dpi(&self.xrm.borrow(), &self.xsettings.borrow());
@@ -492,8 +491,9 @@ impl XConnection {
     }
 
     pub(crate) fn advise_of_appearance_change(&self, appearance: crate::Appearance) {
-        for win in self.windows.borrow().values() {
-            win.lock().unwrap().appearance_changed(appearance);
+        let handles: Vec<_> = self.windows.borrow().values().cloned().collect();
+        for win in handles {
+            win.borrow_mut().appearance_changed(appearance);
         }
     }
 
@@ -599,8 +599,9 @@ impl XConnection {
             //    - update keymap/state on keyboard changes
             if let Some((mods, leds)) = self.keyboard.process_xkb_event(&self.conn, event)? {
                 // route changed state to the window with focus
-                for window in self.windows.borrow().values() {
-                    let mut window = window.lock().unwrap();
+                let windows: Vec<_> = self.windows.borrow().values().cloned().collect();
+                for window in windows {
+                    let mut window = window.borrow_mut();
                     if window.has_focus == Some(true) {
                         window
                             .events
@@ -616,8 +617,8 @@ impl XConnection {
     pub(crate) fn window_by_id(
         &self,
         window_id: xcb::x::Window,
-    ) -> Option<Arc<Mutex<XWindowInner>>> {
-        self.windows.borrow().get(&window_id).map(Arc::clone)
+    ) -> Option<Rc<RefCell<XWindowInner>>> {
+        self.windows.borrow().get(&window_id).map(Rc::clone)
     }
 
     fn parent_id_by_child_id(&self, child_id: xcb::x::Window) -> Option<xcb::x::Window> {
@@ -625,9 +626,9 @@ impl XConnection {
     }
 
     fn dispatch_pending_events(&self) -> anyhow::Result<()> {
-        for window in self.windows.borrow().values() {
-            let mut inner = window.lock().unwrap();
-            inner.dispatch_pending_events()?;
+        let handles: Vec<_> = self.windows.borrow().values().cloned().collect();
+        for window in handles {
+            window.borrow_mut().dispatch_pending_events()?;
         }
 
         Ok(())
@@ -639,12 +640,10 @@ impl XConnection {
         event: &xcb::Event,
     ) -> anyhow::Result<()> {
         if let Some(window) = self.window_by_id(window_id) {
-            let mut inner = window.lock().unwrap();
-            inner.dispatch_event(event)?;
+            window.borrow_mut().dispatch_event(event)?;
         } else if let Some(parent_id) = self.parent_id_by_child_id(window_id) {
             if let Some(window) = self.window_by_id(parent_id) {
-                let mut inner = window.lock().unwrap();
-                inner.dispatch_event(event)?;
+                window.borrow_mut().dispatch_event(event)?;
             }
         }
         Ok(())
@@ -776,8 +775,7 @@ impl XConnection {
             .context("XRANDR::SelectInput")?;
         }
 
-        let xrm =
-            crate::x11::xrm::parse_root_resource_manager(&conn, root).unwrap_or_default();
+        let xrm = crate::x11::xrm::parse_root_resource_manager(&conn, root).unwrap_or_default();
 
         let xsettings = read_xsettings(&conn, atom_xsettings_selection, atom_xsettings_settings)
             .unwrap_or_else(|err| {
@@ -875,8 +873,7 @@ impl XConnection {
                 .borrow_mut()
                 .set_commit_string_cb(move |window_id, input| {
                     if let Some(window) = conn.window_by_id(window_id) {
-                        let mut inner = window.lock().unwrap();
-                        inner.dispatch_ime_text(input);
+                        window.borrow_mut().dispatch_ime_text(input);
                     }
                 });
         }
@@ -887,11 +884,9 @@ impl XConnection {
                 .borrow_mut()
                 .set_preedit_draw_cb(move |window_id, info| {
                     if let Some(window) = conn.window_by_id(window_id) {
-                        let mut inner = window.lock().unwrap();
-
                         let text = info.text();
                         let status = DeadKeyStatus::Composing(text);
-                        inner.dispatch_ime_compose_status(status);
+                        window.borrow_mut().dispatch_ime_compose_status(status);
                     }
                 });
         }
@@ -902,8 +897,9 @@ impl XConnection {
                 .borrow_mut()
                 .set_preedit_done_cb(move |window_id| {
                     if let Some(window) = conn.window_by_id(window_id) {
-                        let mut inner = window.lock().unwrap();
-                        inner.dispatch_ime_compose_status(DeadKeyStatus::None);
+                        window
+                            .borrow_mut()
+                            .dispatch_ime_compose_status(DeadKeyStatus::None);
                     }
                 });
         }
@@ -1000,7 +996,7 @@ impl XConnection {
 
         promise::spawn::spawn_into_main_thread(async move {
             if let Some(handle) = Connection::get().unwrap().x11().window_by_id(window) {
-                let mut inner = handle.lock().unwrap();
+                let mut inner = handle.borrow_mut();
                 if inner.window_id != window {
                     prom.result(Err(anyhow!("window {window:?} has been destroyed")));
                 } else {

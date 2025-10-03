@@ -6,6 +6,8 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{fmt, io};
 
+type SftpFuture<T> = Pin<Box<dyn Future<Output = io::Result<T>> + Send + Sync + 'static>>;
+
 pub(crate) type FileId = usize;
 
 /// A file handle to an SFTP connection.
@@ -17,10 +19,10 @@ pub struct File {
 
 #[derive(Default)]
 struct FileState {
-    f_read: Option<Pin<Box<dyn Future<Output = io::Result<Vec<u8>>> + Send + Sync + 'static>>>,
-    f_write: Option<Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'static>>>,
-    f_flush: Option<Pin<Box<dyn Future<Output = io::Result<()>> + Send + Sync + 'static>>>,
-    f_close: Option<Pin<Box<dyn Future<Output = io::Result<()>> + Send + Sync + 'static>>>,
+    f_read: Option<SftpFuture<Vec<u8>>>,
+    f_write: Option<SftpFuture<usize>>,
+    f_flush: Option<SftpFuture<()>>,
+    f_close: Option<SftpFuture<()>>,
 }
 
 #[derive(Debug)]
@@ -150,9 +152,7 @@ impl smol::io::AsyncRead for File {
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         async fn read(tx: SessionSender, file_id: usize, len: usize) -> io::Result<Vec<u8>> {
-            inner_read(tx, file_id, len)
-                .await
-                .map_err(|x| io::Error::other(x))
+            inner_read(tx, file_id, len).await.map_err(io::Error::other)
         }
         let tx = self.tx.as_ref().unwrap().clone();
         let file_id = self.file_id;
@@ -190,7 +190,7 @@ impl smol::io::AsyncWrite for File {
             inner_write(tx, file_id, buf)
                 .await
                 .map(|_| n)
-                .map_err(|x| io::Error::other(x))
+                .map_err(io::Error::other)
         }
 
         let tx = self.tx.as_ref().unwrap().clone();
@@ -211,9 +211,7 @@ impl smol::io::AsyncWrite for File {
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         async fn flush(tx: SessionSender, file_id: usize) -> io::Result<()> {
-            inner_flush(tx, file_id)
-                .await
-                .map_err(|x| io::Error::other(x))
+            inner_flush(tx, file_id).await.map_err(io::Error::other)
         }
 
         let tx = self.tx.as_ref().unwrap().clone();
@@ -234,9 +232,7 @@ impl smol::io::AsyncWrite for File {
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         async fn close(tx: SessionSender, file_id: usize) -> io::Result<()> {
-            inner_close(tx, file_id)
-                .await
-                .map_err(|x| io::Error::other(x))
+            inner_close(tx, file_id).await.map_err(io::Error::other)
         }
 
         let tx = self.tx.as_ref().unwrap().clone();

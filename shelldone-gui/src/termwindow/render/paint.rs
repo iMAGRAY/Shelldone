@@ -70,10 +70,10 @@ impl crate::TermWindow {
                         if let Err(err) = result {
                             self.allow_images = match self.allow_images {
                                 AllowImage::Yes => AllowImage::Scale(2),
-                                AllowImage::Scale(2) => AllowImage::Scale(4),
-                                AllowImage::Scale(4) => AllowImage::Scale(8),
-                                AllowImage::Scale(8) => AllowImage::No,
-                                AllowImage::No | _ => {
+                                AllowImage::Scale(scale) if scale < 8 => {
+                                    AllowImage::Scale(scale * 2)
+                                }
+                                AllowImage::Scale(_) | AllowImage::No => {
                                     log::error!(
                                         "Failed to {} texture: {}",
                                         if pass == 0 { "clear" } else { "resize" },

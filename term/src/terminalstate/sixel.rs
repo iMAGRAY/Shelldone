@@ -7,7 +7,7 @@ use shelldone_cell::image::ImageDataType;
 use shelldone_escape_parser::{Sixel, SixelData};
 
 impl TerminalState {
-    pub(crate) fn sixel(&mut self, sixel: Box<Sixel>) {
+    pub(crate) fn sixel(&mut self, sixel: &Sixel) {
         let (width, height) = sixel.dimensions();
 
         if let Err(err) = check_image_dimensions(width, height) {

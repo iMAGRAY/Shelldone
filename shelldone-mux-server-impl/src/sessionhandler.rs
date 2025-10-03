@@ -7,7 +7,7 @@ use mux::domain::SplitSource;
 use mux::pane::{CachePolicy, Pane, PaneId};
 use mux::renderable::{RenderableDimensions, StableCursorPosition};
 use mux::tab::TabId;
-use mux::{Mux, MuxNotification};
+use mux::{Mux, MuxNotification, SpawnRequest};
 use promise::spawn::spawn_into_main_thread;
 use shelldone_term::terminal::Alert;
 use shelldone_term::StableRowIndex;
@@ -127,7 +127,7 @@ impl PerPane {
         self.dimensions = dims;
         self.mouse_grabbed = mouse_grabbed;
 
-        let bonus_lines = bonus_lines.into();
+        let bonus_lines = Box::new(bonus_lines.into());
         Some(GetPaneRenderChangesResponse {
             pane_id: pane.pane_id(),
             mouse_grabbed,
@@ -151,7 +151,7 @@ fn maybe_push_pane_changes(
     let mut per_pane = per_pane.lock().unwrap();
     if let Some(resp) = per_pane.compute_changes(pane, None) {
         sender.send(DecodedPdu {
-            pdu: Pdu::GetPaneRenderChangesResponse(resp),
+            pdu: Pdu::GetPaneRenderChangesResponse(Box::new(resp)),
             serial: 0,
         })?;
     }
@@ -175,10 +175,10 @@ fn maybe_push_pane_changes(
         match alert {
             Alert::PaletteChanged => {
                 sender.send(DecodedPdu {
-                    pdu: Pdu::SetPalette(SetPalette {
+                    pdu: Pdu::SetPalette(Box::new(SetPalette {
                         pane_id: pane.pane_id(),
                         palette: pane.palette(),
-                    }),
+                    })),
                     serial: 0,
                 })?;
             }
@@ -678,7 +678,7 @@ impl SessionHandler {
                             if let Some(resp) = per_pane.compute_changes(&pane, Some(input_serial))
                             {
                                 sender.send(DecodedPdu {
-                                    pdu: Pdu::GetPaneRenderChangesResponse(resp),
+                                    pdu: Pdu::GetPaneRenderChangesResponse(Box::new(resp)),
                                     serial: 0,
                                 })?;
                             }
@@ -915,7 +915,8 @@ impl SessionHandler {
                 })
                 .detach();
             }
-            Pdu::SetPalette(SetPalette { pane_id, palette }) => {
+            Pdu::SetPalette(payload) => {
+                let SetPalette { pane_id, palette } = *payload;
                 spawn_into_main_thread(async move {
                     catch(
                         move || {
@@ -993,7 +994,7 @@ impl SessionHandler {
             | Pdu::SetClipboard { .. }
             | Pdu::NotifyAlert { .. }
             | Pdu::SpawnResponse { .. }
-            | Pdu::GetPaneRenderChangesResponse { .. }
+            | Pdu::GetPaneRenderChangesResponse(_)
             | Pdu::UnitResponse { .. }
             | Pdu::LivenessResponse { .. }
             | Pdu::GetPaneDirectionResponse { .. }
@@ -1073,18 +1074,18 @@ async fn domain_spawn_v2(spawn: SpawnV2, client_id: Option<Arc<ClientId>>) -> an
     let mux = Mux::get();
     let _identity = mux.with_identity(client_id);
 
-    let (tab, pane, window_id) = mux
-        .spawn_tab_or_window(
-            spawn.window_id,
-            spawn.domain,
-            spawn.command,
-            spawn.command_dir,
-            spawn.size,
-            None, // optional current pane_id
-            spawn.workspace,
-            None, // optional gui window position
-        )
-        .await?;
+    let request = SpawnRequest {
+        window_id: spawn.window_id,
+        domain: spawn.domain,
+        command: spawn.command,
+        command_dir: spawn.command_dir,
+        size: spawn.size,
+        current_pane_id: None,
+        workspace_for_new_window: spawn.workspace,
+        window_position: None,
+    };
+
+    let (tab, pane, window_id) = mux.spawn_tab_or_window(request).await?;
 
     Ok::<Pdu, anyhow::Error>(Pdu::SpawnResponse(SpawnResponse {
         pane_id: pane.pane_id(),

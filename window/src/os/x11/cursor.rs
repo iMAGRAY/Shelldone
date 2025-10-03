@@ -85,9 +85,9 @@ fn icon_path() -> Vec<PathBuf> {
     fn tilde_expand(p: PathBuf) -> PathBuf {
         match p.to_str() {
             Some(s) => {
-                if s.starts_with("~/") {
+                if let Some(stripped) = s.strip_prefix("~/") {
                     if let Some(home) = dirs_next::home_dir() {
-                        home.join(&s[2..])
+                        home.join(stripped)
                     } else {
                         p
                     }
@@ -225,16 +225,20 @@ impl CursorInfo {
     fn create_blank(&mut self, conn: &Rc<XConnection>) -> anyhow::Result<Cursor> {
         let mut pixels = [0u8; 4];
 
-        let image = XcbImage::create_native(
-            conn,
-            1,
-            1,
-            xcb::x::ImageFormat::ZPixmap as u32,
-            32,
-            std::ptr::null_mut(),
-            pixels.len() as u32,
-            pixels.as_mut_ptr(),
-        )?;
+        let image = unsafe {
+            XcbImage::create_native(
+                conn,
+                XcbImageParams {
+                    width: 1,
+                    height: 1,
+                    format: xcb::x::ImageFormat::ZPixmap as u32,
+                    depth: 32,
+                    base: std::ptr::null_mut(),
+                    bytes: pixels.len() as u32,
+                    data: pixels.as_mut_ptr(),
+                },
+            )?
+        };
 
         let pixmap = conn.generate_id();
         conn.send_request_no_reply(&xcb::x::CreatePixmap {
@@ -545,7 +549,7 @@ impl CursorInfo {
 
         let num_pixels = (width as usize) * (height as usize);
         ensure!(
-            num_pixels < u32::max_value() as usize,
+            num_pixels < u32::MAX as usize,
             "cursor image is larger than fits in u32"
         );
 
@@ -561,16 +565,20 @@ impl CursorInfo {
             chunk.copy_from_slice(&data);
         }
 
-        let image = XcbImage::create_native(
-            conn,
-            width.try_into()?,
-            height.try_into()?,
-            xcb::x::ImageFormat::ZPixmap as u32,
-            32,
-            std::ptr::null_mut(),
-            pixels.len() as u32,
-            pixels.as_mut_ptr(),
-        )?;
+        let image = unsafe {
+            XcbImage::create_native(
+                conn,
+                XcbImageParams {
+                    width: width.try_into()?,
+                    height: height.try_into()?,
+                    format: xcb::x::ImageFormat::ZPixmap as u32,
+                    depth: 32,
+                    base: std::ptr::null_mut(),
+                    bytes: pixels.len() as u32,
+                    data: pixels.as_mut_ptr(),
+                },
+            )?
+        };
 
         let pixmap = conn.generate_id();
         conn.send_request_no_reply(&xcb::x::CreatePixmap {

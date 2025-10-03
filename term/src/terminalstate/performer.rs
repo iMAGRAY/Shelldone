@@ -252,11 +252,13 @@ impl<'a> Performer<'a> {
     pub fn perform(&mut self, action: Action) {
         debug!("perform {:?}", action);
         if self.suppress_initial_title_change {
-            if let Action::OperatingSystemCommand(osc) = &action { if let OperatingSystemCommand::SetIconNameAndWindowTitle(_) = **osc {
-                debug!("suppressed {:?}", osc);
-                self.suppress_initial_title_change = false;
-                return;
-            } }
+            if let Action::OperatingSystemCommand(osc) = &action {
+                if let OperatingSystemCommand::SetIconNameAndWindowTitle(_) = **osc {
+                    debug!("suppressed {:?}", osc);
+                    self.suppress_initial_title_change = false;
+                    return;
+                }
+            }
         }
         match action {
             Action::Print(c) => self.print(c),
@@ -270,7 +272,7 @@ impl<'a> Performer<'a> {
             Action::OperatingSystemCommand(osc) => self.osc_dispatch(*osc),
             Action::Esc(esc) => self.esc_dispatch(esc),
             Action::CSI(csi) => self.csi_dispatch(csi),
-            Action::Sixel(sixel) => self.sixel(sixel),
+            Action::Sixel(sixel) => self.sixel(sixel.as_ref()),
             Action::XtGetTcap(names) => self.xt_get_tcap(names),
             Action::KittyImage(img) => {
                 self.flush_print();

@@ -70,12 +70,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     {
         let mut group = c.benchmark_group("column_width variation selector unicode 14");
-        let version = UnicodeVersion {
-            version: 14,
-            ambiguous_are_wide: false,
-        };
+        let version = UnicodeVersion::new(14);
         group.bench_function("grapheme_column_width", |b| {
-            b.iter(|| grapheme_column_width(black_box("\u{00a9}\u{FE0F}"), Some(version)))
+            b.iter(|| grapheme_column_width(black_box("\u{00a9}\u{FE0F}"), Some(&version)))
         });
         group.finish();
     }

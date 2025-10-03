@@ -254,12 +254,22 @@ impl MatchResult {
                 // Pump up the score for an exact match, otherwise
                 // the order may be undesirable if there are a lot
                 // of candidates with the same score
-                u32::max_value()
+                u32::MAX
             } else {
                 score
             },
         }
     }
+}
+
+struct ComputeRequest<'a> {
+    selection: &'a str,
+    group: CharSelectGroup,
+    aliases: &'a [Alias],
+    matches: &'a MatchResults,
+    max_rows_on_screen: usize,
+    selected_row: usize,
+    top_row: usize,
 }
 
 fn compute_matches(selection: &str, aliases: &[Alias], group: CharSelectGroup) -> Vec<usize> {
@@ -302,7 +312,7 @@ fn compute_matches(selection: &str, aliases: &[Alias], group: CharSelectGroup) -
                                 glyph,
                                 MatchResult {
                                     row_idx,
-                                    score: u32::max_value(),
+                                    score: u32::MAX,
                                 },
                             ))
                         } else {
@@ -378,14 +388,17 @@ impl CharSelector {
 
     fn compute(
         term_window: &mut TermWindow,
-        selection: &str,
-        group: CharSelectGroup,
-        aliases: &[Alias],
-        matches: &MatchResults,
-        max_rows_on_screen: usize,
-        selected_row: usize,
-        top_row: usize,
+        request: ComputeRequest<'_>,
     ) -> anyhow::Result<Vec<ComputedElement>> {
+        let ComputeRequest {
+            selection,
+            group,
+            aliases,
+            matches,
+            max_rows_on_screen,
+            selected_row,
+            top_row,
+        } = request;
         let font = term_window
             .fonts
             .char_select_font()
@@ -474,9 +487,7 @@ impl CharSelector {
 
         let element = Element::new(&font, ElementContent::Children(elements))
             .colors(ElementColors {
-                border: BorderColor::new(
-                    term_window.config.char_select_bg_color.to_linear(),
-                ),
+                border: BorderColor::new(term_window.config.char_select_bg_color.to_linear()),
                 bg: term_window.config.char_select_bg_color.to_linear().into(),
                 text: term_window.config.char_select_fg_color.to_linear().into(),
             })
@@ -731,13 +742,15 @@ impl Modal for CharSelector {
         if self.element.borrow().is_none() {
             let element = Self::compute(
                 term_window,
-                selection,
-                group,
-                &self.aliases,
-                matches,
-                max_rows_on_screen,
-                *self.selected_row.borrow(),
-                *self.top_row.borrow(),
+                ComputeRequest {
+                    selection,
+                    group,
+                    aliases: &self.aliases,
+                    matches,
+                    max_rows_on_screen,
+                    selected_row: *self.selected_row.borrow(),
+                    top_row: *self.top_row.borrow(),
+                },
             )?;
             self.element.borrow_mut().replace(element);
         }

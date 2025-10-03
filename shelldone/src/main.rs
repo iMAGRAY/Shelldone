@@ -58,7 +58,8 @@ enum Shell {
     Bash,
     Elvish,
     Fish,
-    PowerShell,
+    #[value(alias = "powershell")]
+    Pwsh,
     Zsh,
     Fig,
 }
@@ -69,7 +70,7 @@ impl CompletionGenerator for Shell {
             Shell::Bash => shells::Bash.file_name(name),
             Shell::Elvish => shells::Elvish.file_name(name),
             Shell::Fish => shells::Fish.file_name(name),
-            Shell::PowerShell => shells::PowerShell.file_name(name),
+            Shell::Pwsh => shells::PowerShell.file_name(name),
             Shell::Zsh => shells::Zsh.file_name(name),
             Shell::Fig => clap_complete_fig::Fig.file_name(name),
         }
@@ -80,7 +81,7 @@ impl CompletionGenerator for Shell {
             Shell::Bash => shells::Bash.generate(cmd, buf),
             Shell::Elvish => shells::Elvish.generate(cmd, buf),
             Shell::Fish => shells::Fish.generate(cmd, buf),
-            Shell::PowerShell => shells::PowerShell.generate(cmd, buf),
+            Shell::Pwsh => shells::PowerShell.generate(cmd, buf),
             Shell::Zsh => shells::Zsh.generate(cmd, buf),
             Shell::Fig => clap_complete_fig::Fig.generate(cmd, buf),
         }
@@ -590,15 +591,16 @@ impl ImgCatCommand {
             term.set_raw_mode()?;
             while let Ok(Some(event)) = term.poll_input(None) {
                 if let InputEvent::Key(
-                        KeyEvent {
-                            key: KeyCode::Enter | KeyCode::Escape,
-                            modifiers: _,
-                        }
-                        | KeyEvent {
-                            key: KeyCode::Char('c') | KeyCode::Char('d'),
-                            modifiers: Modifiers::CTRL,
-                        },
-                    ) = event {
+                    KeyEvent {
+                        key: KeyCode::Enter | KeyCode::Escape,
+                        modifiers: _,
+                    }
+                    | KeyEvent {
+                        key: KeyCode::Char('c') | KeyCode::Char('d'),
+                        modifiers: Modifiers::CTRL,
+                    },
+                ) = event
+                {
                     break;
                 }
             }

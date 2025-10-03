@@ -133,8 +133,7 @@ impl BackgroundLayer {
 }
 
 /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-size>
-#[derive(Debug, Copy, Clone)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub enum BackgroundSize {
     /// Scales image as large as possible without cropping or stretching.
     /// If the container is larger than the image, tiles the image unless
@@ -155,11 +154,13 @@ impl FromDynamic for BackgroundSize {
         value: &Value,
         options: FromDynamicOptions,
     ) -> Result<Self, shelldone_dynamic::Error> {
-        if let Value::String(label) = value { match label.as_str() {
-            "Contain" => return Ok(Self::Contain),
-            "Cover" => return Ok(Self::Cover),
-            _ => {}
-        } }
+        if let Value::String(label) = value {
+            match label.as_str() {
+                "Contain" => return Ok(Self::Contain),
+                "Cover" => return Ok(Self::Cover),
+                _ => {}
+            }
+        }
         match PixelUnit::from_dynamic(value, options) {
             Ok(pix) => Ok(Self::Dimension(pix.into())),
             Err(_) => Err(shelldone_dynamic::Error::Message(format!(
@@ -185,9 +186,7 @@ impl ToDynamic for BackgroundSize {
     }
 }
 
-
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, Default)]
 pub enum BackgroundHorizontalAlignment {
     #[default]
     Left,
@@ -195,9 +194,7 @@ pub enum BackgroundHorizontalAlignment {
     Right,
 }
 
-
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, Default)]
 pub enum BackgroundVerticalAlignment {
     #[default]
     Top,
@@ -205,9 +202,7 @@ pub enum BackgroundVerticalAlignment {
     Bottom,
 }
 
-
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq, Eq, Default)]
 pub enum BackgroundRepeat {
     /// Repeat as much as possible to cover the area.
     /// The last image will be clipped if it doesn't fit.
@@ -240,9 +235,7 @@ pub enum BackgroundRepeat {
     NoRepeat,
 }
 
-
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, Default)]
 pub enum BackgroundAttachment {
     #[default]
     Fixed,
@@ -260,15 +253,12 @@ impl BackgroundAttachment {
     }
 }
 
-
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, Default)]
 pub enum BackgroundOrigin {
     #[default]
     BorderBox,
     PaddingBox,
 }
-
 
 #[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq, Default)]
 pub enum SystemBackdrop {
@@ -301,8 +291,7 @@ pub enum BlendMode {
     Oklab,
 }
 
-#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq, Default)]
 pub enum GradientOrientation {
     #[default]
     Horizontal,
@@ -316,7 +305,6 @@ pub enum GradientOrientation {
         cy: Option<f64>,
     },
 }
-
 
 #[derive(Debug, Copy, Clone, FromDynamic, ToDynamic, PartialEq)]
 pub enum GradientPreset {

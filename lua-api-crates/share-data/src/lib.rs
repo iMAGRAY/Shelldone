@@ -311,7 +311,7 @@ impl UserData for Value {
                     |lua, (this, key): (UserDataRef<Value>, Option<String>)| match &*this {
                         Value::Object(obj) => {
                             let obj = obj.inner.lock().unwrap();
-                            let mut iter = obj.iter();
+                            let iter = obj.iter();
 
                             let mut this_is_key = false;
 

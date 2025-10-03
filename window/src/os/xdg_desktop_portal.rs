@@ -101,26 +101,29 @@ fn value_to_appearance(value: OwnedValue) -> anyhow::Result<Appearance> {
 }
 
 pub async fn get_appearance() -> anyhow::Result<Option<Appearance>> {
-    let mut state = STATE.lock().unwrap();
+    {
+        let state = STATE.lock().unwrap();
 
-    match &state.appearance {
-        CachedAppearance::Some(_)
-            if (state.subscribe_running || state.last_update.elapsed().as_secs() < 1) =>
-        {
-            // Known values are considered good while our subscription is running,
-            // or for 1 second since we last queried
-            return state.appearance.to_result();
-        }
-        CachedAppearance::None => {
-            // Permanently cache the error state
-            return Ok(None);
-        }
-        CachedAppearance::Some(_) | CachedAppearance::Unknown => {
-            // We'll need to query for these
+        match &state.appearance {
+            CachedAppearance::Some(_)
+                if state.subscribe_running || state.last_update.elapsed().as_secs() < 1 =>
+            {
+                return state.appearance.to_result();
+            }
+            CachedAppearance::None => {
+                return Ok(None);
+            }
+            CachedAppearance::Some(_) | CachedAppearance::Unknown => {
+                // We'll need to query for these
+            }
         }
     }
 
-    match read_setting("org.freedesktop.appearance", "color-scheme").await {
+    let setting = read_setting("org.freedesktop.appearance", "color-scheme").await;
+
+    let mut state = STATE.lock().unwrap();
+
+    match setting {
         Ok(value) => {
             let appearance = value_to_appearance(value).context("value_to_appearance")?;
             state.appearance = CachedAppearance::Some(appearance);

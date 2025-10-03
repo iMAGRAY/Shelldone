@@ -942,16 +942,18 @@ impl Config {
         #[cfg(unix)]
         {
             use nix::sys::resource::{getrlimit, rlim_t, setrlimit, Resource};
-            use std::convert::TryInto;
+
+            let to_rlim = |value: u64, name: &str| -> anyhow::Result<rlim_t> {
+                let max = rlim_t::MAX as u128;
+                if u128::from(value) > max {
+                    anyhow::bail!("{name} value {value} is out of range for this system");
+                }
+                Ok(value as rlim_t)
+            };
 
             let (no_file_soft, no_file_hard) = getrlimit(Resource::RLIMIT_NOFILE)?;
 
-            let ulimit_nofile: rlim_t = self.ulimit_nofile.try_into().with_context(|| {
-                format!(
-                    "ulimit_nofile value {} is out of range for this system",
-                    self.ulimit_nofile
-                )
-            })?;
+            let ulimit_nofile = to_rlim(self.ulimit_nofile, "ulimit_nofile")?;
 
             if no_file_soft < ulimit_nofile {
                 setrlimit(
@@ -971,16 +973,18 @@ impl Config {
         #[cfg(all(unix, not(target_os = "macos")))]
         {
             use nix::sys::resource::{getrlimit, rlim_t, setrlimit, Resource};
-            use std::convert::TryInto;
+
+            let to_rlim = |value: u64, name: &str| -> anyhow::Result<rlim_t> {
+                let max = rlim_t::MAX as u128;
+                if u128::from(value) > max {
+                    anyhow::bail!("{name} value {value} is out of range for this system");
+                }
+                Ok(value as rlim_t)
+            };
 
             let (nproc_soft, nproc_hard) = getrlimit(Resource::RLIMIT_NPROC)?;
 
-            let ulimit_nproc: rlim_t = self.ulimit_nproc.try_into().with_context(|| {
-                format!(
-                    "ulimit_nproc value {} is out of range for this system",
-                    self.ulimit_nproc
-                )
-            })?;
+            let ulimit_nproc = to_rlim(self.ulimit_nproc, "ulimit_nproc")?;
 
             if nproc_soft < ulimit_nproc {
                 setrlimit(
@@ -1440,36 +1444,34 @@ impl Config {
 
         for colors_dir in paths {
             if let Ok(dir) = std::fs::read_dir(colors_dir) {
-                for entry in dir {
-                    if let Ok(entry) = entry {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if let Some(scheme_name) = extract_scheme_name(name) {
-                                if self.color_schemes.contains_key(scheme_name) {
-                                    // This scheme has already been defined
-                                    continue;
-                                }
+                for entry in dir.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if let Some(scheme_name) = extract_scheme_name(name) {
+                            if self.color_schemes.contains_key(scheme_name) {
+                                // This scheme has already been defined
+                                continue;
+                            }
 
-                                let path = entry.path();
-                                match load_scheme(&path) {
-                                    Ok(scheme) => {
-                                        let name = scheme
-                                            .metadata
-                                            .name
-                                            .unwrap_or_else(|| scheme_name.to_string());
-                                        log::trace!(
-                                            "Loaded color scheme `{}` from {}",
-                                            name,
-                                            path.display()
-                                        );
-                                        self.color_schemes.insert(name, scheme.colors);
-                                    }
-                                    Err(err) => {
-                                        log::error!(
-                                            "Color scheme in `{}` failed to load: {:#}",
-                                            path.display(),
-                                            err
-                                        );
-                                    }
+                            let path = entry.path();
+                            match load_scheme(&path) {
+                                Ok(scheme) => {
+                                    let name = scheme
+                                        .metadata
+                                        .name
+                                        .unwrap_or_else(|| scheme_name.to_string());
+                                    log::trace!(
+                                        "Loaded color scheme `{}` from {}",
+                                        name,
+                                        path.display()
+                                    );
+                                    self.color_schemes.insert(name, scheme.colors);
+                                }
+                                Err(err) => {
+                                    log::error!(
+                                        "Color scheme in `{}` failed to load: {:#}",
+                                        path.display(),
+                                        err
+                                    );
                                 }
                             }
                         }

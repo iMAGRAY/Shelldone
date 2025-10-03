@@ -1,5 +1,8 @@
 use super::OneBased;
+use crate::ParseError;
 use crate::color::{AnsiColor, ColorSpec, RgbColor, SrgbaTuple};
+
+type ParseResult<T> = core::result::Result<T, ParseError>;
 use bitflags::bitflags;
 use core::convert::TryInto;
 use core::fmt::{Display, Error as FmtError, Formatter};
@@ -48,7 +51,6 @@ pub enum Intensity {
     Half = 2,
 }
 
-
 /// Specify just how underlined you want your `Cell` to be
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromDynamic, ToDynamic)]
@@ -69,7 +71,6 @@ pub enum Underline {
     /// Dashed underline
     Dashed = 5,
 }
-
 
 /// Allow converting to boolean; true means some kind of
 /// underline, false means none.  This is used in some
@@ -245,8 +246,7 @@ impl Display for CSI {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, Default)]
 pub enum CursorStyle {
     #[default]
     Default = 0,
@@ -257,7 +257,6 @@ pub enum CursorStyle {
     BlinkingBar = 5,
     SteadyBar = 6,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum DeviceAttributeCodes {
@@ -414,19 +413,19 @@ impl XtSmGraphics {
         }
     }
 
-    pub fn parse(params: &[CsiParam]) -> Result<CSI, ()> {
+    pub fn parse(params: &[CsiParam]) -> ParseResult<CSI> {
         let params = Cracked::parse(&params[1..])?;
         Ok(CSI::Device(Box::new(Device::XtSmGraphics(XtSmGraphics {
-            item: match params.get(0).ok_or(())? {
+            item: match params.get(0).ok_or(ParseError::MissingParameter)? {
                 CsiParam::Integer(1) => XtSmGraphicsItem::NumberOfColorRegisters,
                 CsiParam::Integer(2) => XtSmGraphicsItem::SixelGraphicsGeometry,
                 CsiParam::Integer(3) => XtSmGraphicsItem::RegisGraphicsGeometry,
                 CsiParam::Integer(n) => XtSmGraphicsItem::Unspecified(*n),
-                _ => return Err(()),
+                _ => return Err(ParseError::InvalidParameter),
             },
-            action_or_status: match params.get(1).ok_or(())? {
+            action_or_status: match params.get(1).ok_or(ParseError::MissingParameter)? {
                 CsiParam::Integer(n) => *n,
-                _ => return Err(()),
+                _ => return Err(ParseError::InvalidParameter),
             },
             value: params.params[2..]
                 .iter()
@@ -1300,14 +1299,14 @@ impl Display for Cursor {
             Cursor::LinePositionBackward(n) => n.write_csi(f, "k")?,
             Cursor::LinePositionForward(n) => n.write_csi(f, "e")?,
             Cursor::SetTopAndBottomMargins { top, bottom } => {
-                if top.as_one_based() == 1 && bottom.as_one_based() == u32::max_value() {
+                if top.as_one_based() == 1 && bottom.as_one_based() == u32::MAX {
                     write!(f, "r")?;
                 } else {
                     write!(f, "{};{}r", top, bottom)?;
                 }
             }
             Cursor::SetLeftAndRightMargins { left, right } => {
-                if left.as_one_based() == 1 && right.as_one_based() == u32::max_value() {
+                if left.as_one_based() == 1 && right.as_one_based() == u32::MAX {
                     write!(f, "s")?;
                 } else {
                     write!(f, "{};{}s", left, right)?;
@@ -1327,27 +1326,27 @@ impl Display for Cursor {
 /// but in some we build out an enum.  The trait helps to generalize
 /// the parser code while keeping it relatively terse.
 trait ParseParams: Sized {
-    fn parse_params(params: &[CsiParam]) -> Result<Self, ()>;
+    fn parse_params(params: &[CsiParam]) -> ParseResult<Self>;
 }
 
 /// Parse an input parameter into a 1-based unsigned value
 impl ParseParams for u32 {
-    fn parse_params(params: &[CsiParam]) -> Result<u32, ()> {
+    fn parse_params(params: &[CsiParam]) -> ParseResult<u32> {
         match params {
             [] => Ok(1),
             [p] => to_1b_u32(p),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 }
 
 /// Parse an input parameter into a 1-based unsigned value
 impl ParseParams for OneBased {
-    fn parse_params(params: &[CsiParam]) -> Result<OneBased, ()> {
+    fn parse_params(params: &[CsiParam]) -> ParseResult<OneBased> {
         match params {
             [] => Ok(OneBased::new(1)),
             [p] => OneBased::from_esc_param(p),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 }
@@ -1356,7 +1355,7 @@ impl ParseParams for OneBased {
 /// This is typically used to build a struct comprised of
 /// the pair of values.
 impl ParseParams for (OneBased, OneBased) {
-    fn parse_params(params: &[CsiParam]) -> Result<(OneBased, OneBased), ()> {
+    fn parse_params(params: &[CsiParam]) -> ParseResult<(OneBased, OneBased)> {
         match params {
             [] | [CsiParam::P(b';')] => Ok((OneBased::new(1), OneBased::new(1))),
             [a] | [a, CsiParam::P(b';')] => Ok((OneBased::from_esc_param(a)?, OneBased::new(1))),
@@ -1364,7 +1363,7 @@ impl ParseParams for (OneBased, OneBased) {
                 Ok((OneBased::from_esc_param(a)?, OneBased::from_esc_param(b)?))
             }
             [CsiParam::P(b';'), b] => Ok((OneBased::new(1), OneBased::from_esc_param(b)?)),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 }
@@ -1379,11 +1378,13 @@ trait ParamEnum: FromPrimitive {
 
 /// implement ParseParams for the enums that also implement ParamEnum.
 impl<T: ParamEnum> ParseParams for T {
-    fn parse_params(params: &[CsiParam]) -> Result<Self, ()> {
+    fn parse_params(params: &[CsiParam]) -> ParseResult<Self> {
         match params {
             [] => Ok(ParamEnum::default()),
-            [CsiParam::Integer(i)] => FromPrimitive::from_i64(*i).ok_or(()),
-            _ => Err(()),
+            [CsiParam::Integer(i)] => {
+                FromPrimitive::from_i64(*i).ok_or(ParseError::InvalidParameter)
+            }
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 }
@@ -1718,14 +1719,14 @@ impl CSI {
 }
 
 /// A little helper to convert i64 -> u8 if safe
-fn to_u8(v: &CsiParam) -> Result<u8, ()> {
+fn to_u8(v: &CsiParam) -> ParseResult<u8> {
     match v {
-        CsiParam::P(_) => Err(()),
+        CsiParam::P(_) => Err(ParseError::InvalidParameter),
         CsiParam::Integer(v) => {
-            if *v <= i64::from(u8::max_value()) {
+            if *v <= i64::from(u8::MAX) {
                 Ok(*v as u8)
             } else {
-                Err(())
+                Err(ParseError::InvalidParameter)
             }
         }
     }
@@ -1742,11 +1743,11 @@ fn to_u8(v: &CsiParam) -> Result<u8, ()> {
 /// otherwise outside that range, an error is propagated and
 /// that will typically case the sequence to be reported via
 /// the Unspecified placeholder.
-fn to_1b_u32(v: &CsiParam) -> Result<u32, ()> {
+fn to_1b_u32(v: &CsiParam) -> ParseResult<u32> {
     match v {
         CsiParam::Integer(v) if *v == 0 => Ok(1),
-        CsiParam::Integer(v) if *v > 0 && *v <= i64::from(u32::max_value()) => Ok(*v as u32),
-        _ => Err(()),
+        CsiParam::Integer(v) if *v > 0 && *v <= i64::from(u32::MAX) => Ok(*v as u32),
+        _ => Err(ParseError::InvalidParameter),
     }
 }
 
@@ -1755,7 +1756,7 @@ struct Cracked {
 }
 
 impl Cracked {
-    pub fn parse(params: &[CsiParam]) -> Result<Self, ()> {
+    pub fn parse(params: &[CsiParam]) -> ParseResult<Self> {
         let mut res = vec![];
         let mut iter = params.iter().peekable();
         while let Some(p) = iter.next() {
@@ -1769,7 +1770,7 @@ impl Cracked {
                         iter.next();
                     }
                 }
-                _ => return Err(()),
+                _ => return Err(ParseError::InvalidParameter),
             }
         }
         Ok(Self { params: res })
@@ -1783,8 +1784,10 @@ impl Cracked {
         self.get(idx).and_then(CsiParam::as_integer)
     }
 
-    pub fn int(&self, idx: usize) -> Result<i64, ()> {
-        self.get(idx).and_then(CsiParam::as_integer).ok_or(())
+    pub fn int(&self, idx: usize) -> ParseResult<i64> {
+        self.get(idx)
+            .and_then(CsiParam::as_integer)
+            .ok_or(ParseError::MissingParameter)
     }
 
     pub fn len(&self) -> usize {
@@ -1795,7 +1798,7 @@ impl Cracked {
 macro_rules! noparams {
     ($ns:ident, $variant:ident, $params:expr) => {{
         if $params.len() != 0 {
-            Err(())
+            Err(ParseError::InvalidParameter)
         } else {
             Ok(CSI::$ns($ns::$variant))
         }
@@ -1818,7 +1821,7 @@ macro_rules! parse {
 }
 
 impl<'a> CSIParser<'a> {
-    fn parse_next(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn parse_next(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match (self.control, self.orig_params) {
             ('k', [.., CsiParam::P(b' ')]) => self.select_character_path(params),
             ('q', [.., CsiParam::P(b' ')]) => self.cursor_style(params),
@@ -1865,7 +1868,9 @@ impl<'a> CSIParser<'a> {
             ('u', [CsiParam::P(b'='), CsiParam::Integer(flags)]) => {
                 Ok(CSI::Keyboard(Keyboard::SetKittyState {
                     flags: KittyKeyboardFlags::from_bits_truncate(
-                        (*flags).try_into().map_err(|_| ())?,
+                        (*flags)
+                            .try_into()
+                            .map_err(|_| ParseError::InvalidParameter)?,
                     ),
                     mode: KittyKeyboardMode::AssignAll,
                 }))
@@ -1879,12 +1884,16 @@ impl<'a> CSIParser<'a> {
                     CsiParam::Integer(mode),
                 ],
             ) => Ok(CSI::Keyboard(Keyboard::SetKittyState {
-                flags: KittyKeyboardFlags::from_bits_truncate((*flags).try_into().map_err(|_| ())?),
+                flags: KittyKeyboardFlags::from_bits_truncate(
+                    (*flags)
+                        .try_into()
+                        .map_err(|_| ParseError::InvalidParameter)?,
+                ),
                 mode: match *mode {
                     1 => KittyKeyboardMode::AssignAll,
                     2 => KittyKeyboardMode::SetSpecified,
                     3 => KittyKeyboardMode::ClearSpecified,
-                    _ => return Err(()),
+                    _ => return Err(ParseError::InvalidParameter),
                 },
             })),
             ('u', [CsiParam::P(b'>')]) => Ok(CSI::Keyboard(Keyboard::PushKittyState {
@@ -1894,7 +1903,9 @@ impl<'a> CSIParser<'a> {
             ('u', [CsiParam::P(b'>'), CsiParam::Integer(flags)]) => {
                 Ok(CSI::Keyboard(Keyboard::PushKittyState {
                     flags: KittyKeyboardFlags::from_bits_truncate(
-                        (*flags).try_into().map_err(|_| ())?,
+                        (*flags)
+                            .try_into()
+                            .map_err(|_| ParseError::InvalidParameter)?,
                     ),
                     mode: KittyKeyboardMode::AssignAll,
                 }))
@@ -1908,23 +1919,33 @@ impl<'a> CSIParser<'a> {
                     CsiParam::Integer(mode),
                 ],
             ) => Ok(CSI::Keyboard(Keyboard::PushKittyState {
-                flags: KittyKeyboardFlags::from_bits_truncate((*flags).try_into().map_err(|_| ())?),
+                flags: KittyKeyboardFlags::from_bits_truncate(
+                    (*flags)
+                        .try_into()
+                        .map_err(|_| ParseError::InvalidParameter)?,
+                ),
                 mode: match *mode {
                     1 => KittyKeyboardMode::AssignAll,
                     2 => KittyKeyboardMode::SetSpecified,
                     3 => KittyKeyboardMode::ClearSpecified,
-                    _ => return Err(()),
+                    _ => return Err(ParseError::InvalidParameter),
                 },
             })),
             ('u', [CsiParam::P(b'?')]) => Ok(CSI::Keyboard(Keyboard::QueryKittySupport)),
-            ('u', [CsiParam::P(b'?'), CsiParam::Integer(flags)]) => {
-                Ok(CSI::Keyboard(Keyboard::ReportKittyState(
-                    KittyKeyboardFlags::from_bits_truncate((*flags).try_into().map_err(|_| ())?),
+            ('u', [CsiParam::P(b'?'), CsiParam::Integer(flags)]) => Ok(CSI::Keyboard(
+                Keyboard::ReportKittyState(KittyKeyboardFlags::from_bits_truncate(
+                    (*flags)
+                        .try_into()
+                        .map_err(|_| ParseError::InvalidParameter)?,
+                )),
+            )),
+            ('u', [CsiParam::P(b'<'), CsiParam::Integer(how_many)]) => {
+                Ok(CSI::Keyboard(Keyboard::PopKittyState(
+                    (*how_many)
+                        .try_into()
+                        .map_err(|_| ParseError::InvalidParameter)?,
                 )))
             }
-            ('u', [CsiParam::P(b'<'), CsiParam::Integer(how_many)]) => Ok(CSI::Keyboard(
-                Keyboard::PopKittyState((*how_many).try_into().map_err(|_| ())?),
-            )),
             ('u', [CsiParam::P(b'<')]) => Ok(CSI::Keyboard(Keyboard::PopKittyState(1))),
 
             _ => match self.control {
@@ -1981,7 +2002,7 @@ impl<'a> CSIParser<'a> {
                     .req_terminal_parameters(params)
                     .map(|dev| CSI::Device(Box::new(dev))),
 
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
         }
     }
@@ -2013,14 +2034,14 @@ impl<'a> CSIParser<'a> {
         }
     }
 
-    fn select_character_path(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
-        fn path(n: i64) -> Result<CharacterPath, ()> {
-            Ok(match n {
-                0 => CharacterPath::ImplementationDefault,
-                1 => CharacterPath::LeftToRightOrTopToBottom,
-                2 => CharacterPath::RightToLeftOrBottomToTop,
-                _ => return Err(()),
-            })
+    fn select_character_path(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
+        fn path(n: i64) -> ParseResult<CharacterPath> {
+            match n {
+                0 => Ok(CharacterPath::ImplementationDefault),
+                1 => Ok(CharacterPath::LeftToRightOrTopToBottom),
+                2 => Ok(CharacterPath::RightToLeftOrBottomToTop),
+                _ => Err(ParseError::InvalidParameter),
+            }
         }
 
         match params {
@@ -2038,23 +2059,23 @@ impl<'a> CSIParser<'a> {
                 CsiParam::Integer(b),
                 CsiParam::P(b' '),
             ] => Ok(self.advance_by(4, params, CSI::SelectCharacterPath(path(*a)?, *b))),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn cursor_style(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn cursor_style(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match params {
             [CsiParam::Integer(p), CsiParam::P(b' ')] => match FromPrimitive::from_i64(*p) {
-                None => Err(()),
+                None => Err(ParseError::InvalidParameter),
                 Some(style) => {
                     Ok(self.advance_by(2, params, CSI::Cursor(Cursor::CursorStyle(style))))
                 }
             },
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn checksum_area(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn checksum_area(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         let params = Cracked::parse(&params[..params.len() - 1])?;
 
         let request_id = params.int(0)?;
@@ -2073,7 +2094,7 @@ impl<'a> CSIParser<'a> {
         })))
     }
 
-    fn dsr(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn dsr(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match params {
             [CsiParam::Integer(5)] => {
                 Ok(self.advance_by(1, params, CSI::Device(Box::new(Device::StatusReport))))
@@ -2082,22 +2103,22 @@ impl<'a> CSIParser<'a> {
             [CsiParam::Integer(6)] => {
                 Ok(self.advance_by(1, params, CSI::Cursor(Cursor::RequestActivePositionReport)))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn decstbm(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn decstbm(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match params {
             [] => Ok(CSI::Cursor(Cursor::SetTopAndBottomMargins {
                 top: OneBased::new(1),
-                bottom: OneBased::new(u32::max_value()),
+                bottom: OneBased::new(u32::MAX),
             })),
             [p] => Ok(self.advance_by(
                 1,
                 params,
                 CSI::Cursor(Cursor::SetTopAndBottomMargins {
                     top: OneBased::from_esc_param(p)?,
-                    bottom: OneBased::new(u32::max_value()),
+                    bottom: OneBased::new(u32::MAX),
                 }),
             )),
             [a, CsiParam::P(b';'), b] => Ok(self.advance_by(
@@ -2116,27 +2137,31 @@ impl<'a> CSIParser<'a> {
                     bottom: OneBased::from_esc_param_with_big_default(b)?,
                 }),
             )),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn xterm_key_modifier(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn xterm_key_modifier(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match params {
             [CsiParam::P(b'>'), a, CsiParam::P(b';'), b] => {
-                let resource = XtermKeyModifierResource::parse(a.as_integer().ok_or(())?)
-                    .ok_or(())?;
+                let resource = XtermKeyModifierResource::parse(
+                    a.as_integer().ok_or(ParseError::MissingParameter)?,
+                )
+                .ok_or(ParseError::MissingParameter)?;
                 Ok(self.advance_by(
                     4,
                     params,
                     CSI::Mode(Mode::XtermKeyMode {
                         resource,
-                        value: Some(b.as_integer().ok_or(())?),
+                        value: Some(b.as_integer().ok_or(ParseError::MissingParameter)?),
                     }),
                 ))
             }
             [CsiParam::P(b'>'), a, CsiParam::P(b';')] => {
-                let resource = XtermKeyModifierResource::parse(a.as_integer().ok_or(())?)
-                    .ok_or(())?;
+                let resource = XtermKeyModifierResource::parse(
+                    a.as_integer().ok_or(ParseError::MissingParameter)?,
+                )
+                .ok_or(ParseError::MissingParameter)?;
                 Ok(self.advance_by(
                     3,
                     params,
@@ -2147,8 +2172,10 @@ impl<'a> CSIParser<'a> {
                 ))
             }
             [CsiParam::P(b'>'), p] => {
-                let resource = XtermKeyModifierResource::parse(p.as_integer().ok_or(())?)
-                    .ok_or(())?;
+                let resource = XtermKeyModifierResource::parse(
+                    p.as_integer().ok_or(ParseError::MissingParameter)?,
+                )
+                .ok_or(ParseError::MissingParameter)?;
                 Ok(self.advance_by(
                     2,
                     params,
@@ -2158,11 +2185,11 @@ impl<'a> CSIParser<'a> {
                     }),
                 ))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn decslrm(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn decslrm(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         match params {
             [] => {
                 // with no params this is a request to save the cursor
@@ -2177,7 +2204,7 @@ impl<'a> CSIParser<'a> {
                 params,
                 CSI::Cursor(Cursor::SetLeftAndRightMargins {
                     left: OneBased::from_esc_param(p)?,
-                    right: OneBased::new(u32::max_value()),
+                    right: OneBased::new(u32::MAX),
                 }),
             )),
             [a, CsiParam::P(b';'), b] => Ok(self.advance_by(
@@ -2196,52 +2223,52 @@ impl<'a> CSIParser<'a> {
                     right: OneBased::from_esc_param(b)?,
                 }),
             )),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn req_primary_device_attributes(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn req_primary_device_attributes(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [] => Ok(Device::RequestPrimaryDeviceAttributes),
             [CsiParam::Integer(0)] => {
                 Ok(self.advance_by(1, params, Device::RequestPrimaryDeviceAttributes))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn req_terminal_name_and_version(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn req_terminal_name_and_version(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [_] => Ok(Device::RequestTerminalNameAndVersion),
 
             [_, CsiParam::Integer(0)] => {
                 Ok(self.advance_by(2, params, Device::RequestTerminalNameAndVersion))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn req_secondary_device_attributes(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn req_secondary_device_attributes(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [CsiParam::P(b'>')] => Ok(Device::RequestSecondaryDeviceAttributes),
             [CsiParam::P(b'>'), CsiParam::Integer(0)] => {
                 Ok(self.advance_by(2, params, Device::RequestSecondaryDeviceAttributes))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn req_tertiary_device_attributes(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn req_tertiary_device_attributes(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [CsiParam::P(b'=')] => Ok(Device::RequestTertiaryDeviceAttributes),
             [CsiParam::P(b'='), CsiParam::Integer(0)] => {
                 Ok(self.advance_by(2, params, Device::RequestTertiaryDeviceAttributes))
             }
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn secondary_device_attributes(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn secondary_device_attributes(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [
                 _,
@@ -2287,20 +2314,20 @@ impl<'a> CSIParser<'a> {
                     DeviceAttributeFlags::from_params(&params[2..]),
                 )),
             )),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn req_terminal_parameters(&mut self, params: &'a [CsiParam]) -> Result<Device, ()> {
+    fn req_terminal_parameters(&mut self, params: &'a [CsiParam]) -> ParseResult<Device> {
         match params {
             [] | [CsiParam::Integer(0)] => Ok(Device::RequestTerminalParameters(0)),
             [CsiParam::Integer(1)] => Ok(Device::RequestTerminalParameters(1)),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
     /// Parse extended mouse reports known as SGR 1006 mode
-    fn mouse_sgr1006(&mut self, params: &'a [CsiParam]) -> Result<MouseReport, ()> {
+    fn mouse_sgr1006(&mut self, params: &'a [CsiParam]) -> ParseResult<MouseReport> {
         let (p0, p1, p2) = match params {
             [
                 CsiParam::P(b'<'),
@@ -2310,7 +2337,7 @@ impl<'a> CSIParser<'a> {
                 CsiParam::P(b';'),
                 CsiParam::Integer(p2),
             ] => (*p0, *p1, *p2),
-            _ => return Err(()),
+            _ => return Err(ParseError::InvalidParameter),
         };
 
         // 'M' encodes a press, 'm' a release.
@@ -2343,7 +2370,7 @@ impl<'a> CSIParser<'a> {
             ('M', 3) => MouseButton::None,  // legacy notification about button release
             ('m', 3) => MouseButton::None,  // release+press doesn't make sense
             _ => {
-                return Err(());
+                return Err(ParseError::InvalidParameter);
             }
         };
 
@@ -2370,51 +2397,58 @@ impl<'a> CSIParser<'a> {
         ))
     }
 
-    fn decrqm(&mut self, params: &'a [CsiParam]) -> Result<CSI, ()> {
+    fn decrqm(&mut self, params: &'a [CsiParam]) -> ParseResult<CSI> {
         Ok(CSI::Mode(match params {
             [CsiParam::Integer(p), CsiParam::P(b'$')] => {
                 Mode::QueryMode(match FromPrimitive::from_i64(*p) {
-                    None => TerminalMode::Unspecified(p.to_u16().ok_or(())?),
+                    None => {
+                        TerminalMode::Unspecified(p.to_u16().ok_or(ParseError::MissingParameter)?)
+                    }
                     Some(mode) => TerminalMode::Code(mode),
                 })
             }
             [CsiParam::P(b'?'), CsiParam::Integer(p), CsiParam::P(b'$')] => {
                 Mode::QueryDecPrivateMode(match FromPrimitive::from_i64(*p) {
-                    None => DecPrivateMode::Unspecified(p.to_u16().ok_or(())?),
+                    None => {
+                        DecPrivateMode::Unspecified(p.to_u16().ok_or(ParseError::MissingParameter)?)
+                    }
                     Some(mode) => DecPrivateMode::Code(mode),
                 })
             }
-            _ => return Err(()),
+            _ => return Err(ParseError::InvalidParameter),
         }))
     }
 
-    fn dec(&mut self, params: &'a [CsiParam]) -> Result<DecPrivateMode, ()> {
+    fn dec(&mut self, params: &'a [CsiParam]) -> ParseResult<DecPrivateMode> {
         match params {
             [CsiParam::Integer(p0), ..] => match FromPrimitive::from_i64(*p0) {
                 None => Ok(self.advance_by(
                     1,
                     params,
-                    DecPrivateMode::Unspecified(p0.to_u16().ok_or(())?),
+                    DecPrivateMode::Unspecified(p0.to_u16().ok_or(ParseError::MissingParameter)?),
                 )),
                 Some(mode) => Ok(self.advance_by(1, params, DecPrivateMode::Code(mode))),
             },
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn terminal_mode(&mut self, params: &'a [CsiParam]) -> Result<TerminalMode, ()> {
-        let p0 = params.first()
+    fn terminal_mode(&mut self, params: &'a [CsiParam]) -> ParseResult<TerminalMode> {
+        let p0 = params
+            .first()
             .and_then(CsiParam::as_integer)
-            .ok_or(())?;
+            .ok_or(ParseError::MissingParameter)?;
         match FromPrimitive::from_i64(p0) {
-            None => {
-                Ok(self.advance_by(1, params, TerminalMode::Unspecified(p0.to_u16().ok_or(())?)))
-            }
+            None => Ok(self.advance_by(
+                1,
+                params,
+                TerminalMode::Unspecified(p0.to_u16().ok_or(ParseError::MissingParameter)?),
+            )),
             Some(mode) => Ok(self.advance_by(1, params, TerminalMode::Code(mode))),
         }
     }
 
-    fn parse_sgr_color(&mut self, params: &'a [CsiParam]) -> Result<ColorSpec, ()> {
+    fn parse_sgr_color(&mut self, params: &'a [CsiParam]) -> ParseResult<ColorSpec> {
         match params {
             // shelldone extension to support an optional alpha channel in the `:` form only
             [
@@ -2555,11 +2589,11 @@ impl<'a> CSIParser<'a> {
                 idx,
                 ..,
             ] => Ok(self.advance_by(5, params, ColorSpec::PaletteIndex(to_u8(idx)?))),
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn window(&mut self, params: &'a [CsiParam]) -> Result<Window, ()> {
+    fn window(&mut self, params: &'a [CsiParam]) -> ParseResult<Window> {
         let params = Cracked::parse(params)?;
 
         let p = params.int(0)?;
@@ -2595,24 +2629,24 @@ impl<'a> CSIParser<'a> {
                 Some(1) => Ok(Window::MaximizeWindow),
                 Some(2) => Ok(Window::MaximizeWindowVertically),
                 Some(3) => Ok(Window::MaximizeWindowHorizontally),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
             10 => match arg1 {
                 Some(0) => Ok(Window::UndoFullScreenMode),
                 Some(1) => Ok(Window::ChangeToFullScreenMode),
                 Some(2) => Ok(Window::ToggleFullScreen),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
             11 => Ok(Window::ReportWindowState),
             13 => match arg1 {
                 None => Ok(Window::ReportWindowPosition),
                 Some(2) => Ok(Window::ReportTextAreaPosition),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
             14 => match arg1 {
                 None => Ok(Window::ReportTextAreaSizePixels),
                 Some(2) => Ok(Window::ReportWindowSizePixels),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
             15 => Ok(Window::ReportScreenSizePixels),
             16 => Ok(Window::ReportCellSizePixels),
@@ -2624,19 +2658,19 @@ impl<'a> CSIParser<'a> {
                 Some(0) => Ok(Window::PushIconAndWindowTitle),
                 Some(1) => Ok(Window::PushIconTitle),
                 Some(2) => Ok(Window::PushWindowTitle),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
             23 => match arg1 {
                 Some(0) => Ok(Window::PopIconAndWindowTitle),
                 Some(1) => Ok(Window::PopIconTitle),
                 Some(2) => Ok(Window::PopWindowTitle),
-                _ => Err(()),
+                _ => Err(ParseError::InvalidParameter),
             },
-            _ => Err(()),
+            _ => Err(ParseError::InvalidParameter),
         }
     }
 
-    fn underline(&mut self, params: &'a [CsiParam]) -> Result<Sgr, ()> {
+    fn underline(&mut self, params: &'a [CsiParam]) -> ParseResult<Sgr> {
         let (sgr, n) = match params {
             [_, CsiParam::P(b':'), CsiParam::Integer(0), ..] => {
                 (Sgr::Underline(Underline::None), 3)
@@ -2662,7 +2696,7 @@ impl<'a> CSIParser<'a> {
         Ok(self.advance_by(n, params, sgr))
     }
 
-    fn sgr(&mut self, params: &'a [CsiParam]) -> Result<Sgr, ()> {
+    fn sgr(&mut self, params: &'a [CsiParam]) -> ParseResult<Sgr> {
         if params.is_empty() {
             // With no parameters, treat as equivalent to Reset.
             Ok(Sgr::Reset)
@@ -2673,7 +2707,7 @@ impl<'a> CSIParser<'a> {
                     | CsiParam::P(b':')
                     | CsiParam::P(b'?')
                     | CsiParam::Integer(_) => {}
-                    _ => return Err(()),
+                    _ => return Err(ParseError::InvalidParameter),
                 }
             }
 
@@ -2712,7 +2746,7 @@ impl<'a> CSIParser<'a> {
                         };
                     }
                     CsiParam::Integer(i) => match FromPrimitive::from_i64(*i) {
-                        None => Err(()),
+                        None => Err(ParseError::InvalidParameter),
                         Some(code) => match code {
                             0 => two!(Sgr::Reset),
                             4 => two!(Sgr::VerticalAlign(VerticalAlign::SuperScript)),
@@ -2720,15 +2754,15 @@ impl<'a> CSIParser<'a> {
                             6 => two!(Sgr::Overline(true)),
                             24 => two!(Sgr::VerticalAlign(VerticalAlign::BaseLine)),
                             26 => two!(Sgr::Overline(false)),
-                            _ => Err(()),
+                            _ => Err(ParseError::InvalidParameter),
                         },
                     },
-                    _ => Err(()),
+                    _ => Err(ParseError::InvalidParameter),
                 },
                 */
-                CsiParam::P(_) => Err(()),
+                CsiParam::P(_) => Err(ParseError::InvalidParameter),
                 CsiParam::Integer(i) => match FromPrimitive::from_i64(*i) {
-                    None => Err(()),
+                    None => Err(ParseError::InvalidParameter),
                     Some(sgr) => match sgr {
                         SgrCode::Reset => one!(Sgr::Reset),
                         SgrCode::IntensityBold => one!(Sgr::Intensity(Intensity::Bold)),
@@ -2955,7 +2989,7 @@ impl<'a> Iterator for CSIParser<'a> {
 
         match self.parse_next(params) {
             Ok(csi) => Some(csi),
-            Err(()) => Some(CSI::Unspecified(Box::new(Unspecified {
+            Err(_) => Some(CSI::Unspecified(Box::new(Unspecified {
                 params: params.to_vec(),
                 parameters_truncated: self.parameters_truncated,
                 control: self.control,

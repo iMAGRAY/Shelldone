@@ -10,7 +10,7 @@ pub fn register(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn read_dir<'lua>(_: &'lua Lua, path: String) -> mlua::Result<Vec<String>> {
+async fn read_dir(_: &Lua, path: String) -> mlua::Result<Vec<String>> {
     let mut dir = smol::fs::read_dir(path)
         .await
         .map_err(mlua::Error::external)?;
@@ -29,10 +29,7 @@ async fn read_dir<'lua>(_: &'lua Lua, path: String) -> mlua::Result<Vec<String>>
     Ok(entries)
 }
 
-async fn glob<'lua>(
-    _: &'lua Lua,
-    (pattern, path): (String, Option<String>),
-) -> mlua::Result<Vec<String>> {
+async fn glob(_: &Lua, (pattern, path): (String, Option<String>)) -> mlua::Result<Vec<String>> {
     let entries = smol::unblock(move || {
         let mut entries = vec![];
         let glob = filenamegen::Glob::new(&pattern)?;

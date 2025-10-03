@@ -13,7 +13,7 @@ kpis:
   tti_ms: 20
   render_switch_ms: 80
   error_rate_pct: 0.2
-progress_pct: 18
+progress_pct: 21
 health: yellow
 milestones:
   - { id: m1, title: "QA Hardening", due: 2025-10-31T00:00:00Z, status: in_progress }
@@ -55,7 +55,7 @@ big_tasks_planned:
   - task-state-persistence
   - task-security-hardening
   - task-observability-pipeline
-progress_pct: 53
+progress_pct: 67
 health: yellow
 tests_required:
   - make verify-prepush
@@ -423,7 +423,7 @@ risks:
   - Large vendor code drops can disturb the baseline
 dependencies:
   - task-qa-orchestrator
-progress_pct: 80
+progress_pct: 100
 health: green
 tests_required:
   - make verify-prepush
@@ -435,8 +435,8 @@ artifacts:
 audit:
   created_at: 2025-09-22T00:00:00Z
   created_by: imagray
-  updated_at: 2025-09-26T00:00:00Z
-updated_by: gpt-5-codex
+  updated_at: 2025-09-27T00:00:00Z
+  updated_by: gpt-5-codex
 ```
 ```yaml
 id: task-plugin-sdk

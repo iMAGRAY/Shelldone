@@ -631,7 +631,9 @@ name = "cairo-sys-rs"
 version = "0.18.0"
 dependencies = [
  "cc",
+ "glib-sys",
  "libc",
+ "x11",
 ]
 
 [[package]]
@@ -2076,6 +2078,16 @@ dependencies = [
  "khronos_api",
  "log",
  "xml-rs",
+]
+
+[[package]]
+name = "glib-sys"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063ce2eb6a8d0ea93d2bf8ba1957e78dbab6be1c2220dd3daca57d5a9d869898"
+dependencies = [
+ "libc",
+ "system-deps",
 ]
 
 [[package]]
@@ -5265,9 +5277,11 @@ dependencies = [
 name = "shelldone-char-props"
 version = "0.1.3"
 dependencies = [
+ "criterion",
  "k9",
  "phf",
  "serde",
+ "termwiz",
  "ucd-trie",
 ]
 

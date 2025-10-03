@@ -39,15 +39,15 @@ impl Direction {
 }
 
 pub enum DirectionIter<I: DoubleEndedIterator<Item = T>, T> {
-    LTR(I),
-    RTL(core::iter::Rev<I>),
+    Ltr(I),
+    Rtl(core::iter::Rev<I>),
 }
 
 impl<I: DoubleEndedIterator<Item = T>, T> DirectionIter<I, T> {
     pub fn wrap(iter: I, direction: Direction) -> Self {
         match direction {
-            Direction::LeftToRight => Self::LTR(iter),
-            Direction::RightToLeft => Self::RTL(iter.rev()),
+            Direction::LeftToRight => Self::Ltr(iter),
+            Direction::RightToLeft => Self::Rtl(iter.rev()),
         }
     }
 }
@@ -57,8 +57,8 @@ impl<I: DoubleEndedIterator<Item = T>, T> Iterator for DirectionIter<I, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::LTR(i) => i.next(),
-            Self::RTL(i) => i.next(),
+            Self::Ltr(i) => i.next(),
+            Self::Rtl(i) => i.next(),
         }
     }
 }

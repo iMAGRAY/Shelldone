@@ -3,6 +3,7 @@ use mux::pane::{Pane, PaneId};
 use mux::tab::{Tab, TabId};
 use mux::termwiztermtab::{allocate, TermWizTerminal};
 use shelldone_term::{TerminalConfiguration, TerminalSize};
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -20,17 +21,13 @@ pub use confirm_close_pane::{
 };
 pub use copy::{CopyModeParams, CopyOverlay};
 pub use debug::show_debug_overlay;
-pub use launcher::{launcher, LauncherArgs, LauncherFlags};
+pub use launcher::{launcher, LauncherArgs, LauncherFlags, LauncherRequest};
 pub use quickselect::QuickSelectOverlay;
 
-pub fn start_overlay<T, F>(
-    term_window: &TermWindow,
-    tab: &Arc<Tab>,
-    func: F,
-) -> (
-    Arc<dyn Pane>,
-    Pin<Box<dyn std::future::Future<Output = anyhow::Result<T>>>>,
-)
+type OverlayFuture<T> = Pin<Box<dyn Future<Output = anyhow::Result<T>>>>;
+type OverlayResult<T> = (Arc<dyn Pane>, OverlayFuture<T>);
+
+pub fn start_overlay<T, F>(term_window: &TermWindow, tab: &Arc<Tab>, func: F) -> OverlayResult<T>
 where
     T: Send + 'static,
     F: Send + 'static + FnOnce(TabId, TermWizTerminal) -> anyhow::Result<T>,
@@ -58,10 +55,7 @@ pub fn start_overlay_pane<T, F>(
     term_window: &TermWindow,
     pane: &Arc<dyn Pane>,
     func: F,
-) -> (
-    Arc<dyn Pane>,
-    Pin<Box<dyn std::future::Future<Output = anyhow::Result<T>>>>,
-)
+) -> OverlayResult<T>
 where
     T: Send + 'static,
     F: Send + 'static + FnOnce(PaneId, TermWizTerminal) -> anyhow::Result<T>,

@@ -4,6 +4,7 @@ use crate::hbwrap::{
 };
 use crate::rasterizer::colr::{
     apply_draw_ops_to_context, paint_linear_gradient, paint_radial_gradient, paint_sweep_gradient,
+    LinearGradientParams, RadialGradientParams,
 };
 use crate::rasterizer::FAKE_ITALIC_SKEW;
 use crate::units::PixelLength;
@@ -187,12 +188,11 @@ fn record_to_cairo_surface(paint_ops: Vec<PaintOp>) -> anyhow::Result<(Recording
                 has_color = true;
                 paint_linear_gradient(
                     &context,
-                    x0.into(),
-                    y0.into(),
-                    x1.into(),
-                    y1.into(),
-                    x2.into(),
-                    y2.into(),
+                    LinearGradientParams {
+                        start: (x0.into(), y0.into()),
+                        control: (x1.into(), y1.into()),
+                        end: (x2.into(), y2.into()),
+                    },
                     color_line,
                 )?;
             }
@@ -208,12 +208,10 @@ fn record_to_cairo_surface(paint_ops: Vec<PaintOp>) -> anyhow::Result<(Recording
                 has_color = true;
                 paint_radial_gradient(
                     &context,
-                    x0.into(),
-                    y0.into(),
-                    r0.into(),
-                    x1.into(),
-                    y1.into(),
-                    r1.into(),
+                    RadialGradientParams {
+                        start: (x0.into(), y0.into(), r0.into()),
+                        end: (x1.into(), y1.into(), r1.into()),
+                    },
                     color_line,
                 )?;
             }

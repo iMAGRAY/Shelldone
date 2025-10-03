@@ -8,7 +8,7 @@ use config::keyassignment::{KeyAssignment, SpawnCommand};
 use config::{ConfigSubscription, NotificationHandling};
 use mux::client::ClientId;
 use mux::window::WindowId as MuxWindowId;
-use mux::{Mux, MuxNotification};
+use mux::{Mux, MuxNotification, SpawnRequest};
 use promise::{Future, Promise};
 use shelldone_term::{Alert, ClipboardSelection};
 use shelldone_toast_notification::*;
@@ -220,7 +220,7 @@ impl GuiFrontEnd {
         match event {
             ApplicationEvent::OpenCommandScript(file_name) => {
                 let quoted_file_name = match shlex::try_quote(&file_name) {
-                    Ok(name) => name.to_owned().to_string(),
+                    Ok(name) => name.into_owned(),
                     Err(_) => {
                         log::error!(
                             "OpenCommandScript: {file_name} has embedded NUL bytes and
@@ -246,19 +246,18 @@ impl GuiFrontEnd {
                     let cwd = None;
                     let workspace = mux.active_workspace();
 
-                    match mux
-                        .spawn_tab_or_window(
-                            window_id,
-                            SpawnTabDomain::DomainName("local".to_string()),
-                            cmd,
-                            cwd,
-                            TerminalSize::default(),
-                            pane_id,
-                            workspace,
-                            None, // optional position
-                        )
-                        .await
-                    {
+                    let request = SpawnRequest {
+                        window_id,
+                        domain: SpawnTabDomain::DomainName("local".to_string()),
+                        command: cmd,
+                        command_dir: cwd,
+                        size: TerminalSize::default(),
+                        current_pane_id: pane_id,
+                        workspace_for_new_window: workspace,
+                        window_position: None,
+                    };
+
+                    match mux.spawn_tab_or_window(request).await {
                         Ok((_tab, pane, _window_id)) => {
                             log::trace!("Spawned {file_name} as pane_id {}", pane.pane_id());
                             let mut writer = pane.writer();

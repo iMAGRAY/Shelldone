@@ -99,7 +99,7 @@ pub struct BorrowedGlyphKey<'a> {
 }
 
 impl<'a> BorrowedGlyphKey<'a> {
-    fn to_owned(&self) -> GlyphKey {
+    fn to_owned(self) -> GlyphKey {
         GlyphKey {
             font_idx: self.font_idx,
             glyph_pos: self.glyph_pos,
@@ -142,15 +142,15 @@ impl<'a> std::borrow::Borrow<dyn GlyphKeyTrait + 'a> for GlyphKey {
     }
 }
 
-impl<'a> PartialEq for dyn GlyphKeyTrait + 'a  {
+impl<'a> PartialEq for dyn GlyphKeyTrait + 'a {
     fn eq(&self, other: &Self) -> bool {
         self.key().eq(&other.key())
     }
 }
 
-impl<'a> Eq for dyn GlyphKeyTrait + 'a  {}
+impl<'a> Eq for dyn GlyphKeyTrait + 'a {}
 
-impl<'a> std::hash::Hash for dyn GlyphKeyTrait + 'a  {
+impl<'a> std::hash::Hash for dyn GlyphKeyTrait + 'a {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key().hash(state)
     }
@@ -833,12 +833,8 @@ impl GlyphCache {
                 scale,
             }
         } else {
-            let raw_im = Image::with_rgba32(
-                glyph.width,
-                glyph.height,
-                4 * glyph.width,
-                &glyph.data,
-            );
+            let raw_im =
+                Image::with_rgba32(glyph.width, glyph.height, 4 * glyph.width, &glyph.data);
 
             let bearing_x = glyph.bearing_x * scale * metrics_only_scale;
             // No metrics_only_scale adjustment to bearing_y is needed because

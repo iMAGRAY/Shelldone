@@ -3,6 +3,7 @@
 //! pipes involved and it is easy to get blocked/deadlocked if care and attention
 //! is not paid to those pipes!
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use std::io::{Read, Write};
 use std::sync::mpsc::channel;
 
 fn main() {
@@ -44,7 +45,7 @@ fn main() {
         // It is important to take the writer even if you don't
         // send anything to its stdin so that EOF can be
         // generated, otherwise you risk deadlocking yourself.
-        let mut writer = pair.master.take_writer().unwrap();
+        let writer = pair.master.take_writer().unwrap();
 
         if cfg!(target_os = "macos") {
             // macOS quirk: the child and reader must be started and
@@ -59,16 +60,23 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
 
-        // This example doesn't need to write anything, but if you
-        // want to send data to the child, you'd set `to_write` to
-        // that data and do it like this:
-        let to_write = "";
-        if !to_write.is_empty() {
-            // To avoid deadlock, wrt. reading and waiting, we send
-            // data to the stdin of the child in a different thread.
-            std::thread::spawn(move || {
-                writer.write_all(to_write.as_bytes()).unwrap();
-            });
+        // This example doesn't need to write anything by default, but you can
+        // provide content through an environment variable without introducing a
+        // constant branch that confuses the linter about dead code paths.
+        let payload = std::env::var("PORTABLE_PTY_WHOAMI_WRITE")
+            .ok()
+            .filter(|value| !value.is_empty());
+
+        match payload {
+            Some(data) => {
+                std::thread::spawn({
+                    let mut writer = writer;
+                    move || {
+                        writer.write_all(data.as_bytes()).unwrap();
+                    }
+                });
+            }
+            None => drop(writer),
         }
     }
 

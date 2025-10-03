@@ -69,6 +69,13 @@ pub struct LoadedFont {
     tried_glyphs: RefCell<HashSet<char>>,
 }
 
+pub struct ShapeOptions<'a> {
+    pub presentation: Option<Presentation>,
+    pub direction: Direction,
+    pub range: Option<Range<usize>>,
+    pub presentation_width: Option<&'a PresentationWidth<'a>>,
+}
+
 impl std::fmt::Debug for LoadedFont {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt.debug_struct("LoadedFont")
@@ -129,16 +136,19 @@ impl LoadedFont {
         loop {
             let (tx, rx) = channel();
 
+            let options = ShapeOptions {
+                presentation,
+                direction,
+                range: range.clone(),
+                presentation_width,
+            };
             let (async_resolve, res) = match self.shape_impl(
                 text,
                 move || {
                     let _ = tx.send(());
                 },
                 |_| {},
-                presentation,
-                direction,
-                range.clone(),
-                presentation_width,
+                options,
             ) {
                 Ok(tuple) => tuple,
                 Err(err) if err.downcast_ref::<ClearShapeCache>().is_some() => {
@@ -161,20 +171,10 @@ impl LoadedFont {
         text: &str,
         completion: F,
         filter_out_synthetic: FS,
-        presentation: Option<Presentation>,
-        direction: Direction,
-        range: Option<Range<usize>>,
-        presentation_width: Option<&PresentationWidth>,
+        options: ShapeOptions<'_>,
     ) -> anyhow::Result<Vec<GlyphInfo>> {
-        let (_async_resolve, res) = self.shape_impl(
-            text,
-            completion,
-            filter_out_synthetic,
-            presentation,
-            direction,
-            range,
-            presentation_width,
-        )?;
+        let (_async_resolve, res) =
+            self.shape_impl(text, completion, filter_out_synthetic, options)?;
         Ok(res)
     }
 
@@ -183,11 +183,14 @@ impl LoadedFont {
         text: &str,
         completion: F,
         filter_out_synthetic: FS,
-        presentation: Option<Presentation>,
-        direction: Direction,
-        range: Option<Range<usize>>,
-        presentation_width: Option<&PresentationWidth>,
+        options: ShapeOptions<'_>,
     ) -> anyhow::Result<(bool, Vec<GlyphInfo>)> {
+        let ShapeOptions {
+            presentation,
+            direction,
+            range,
+            presentation_width,
+        } = options;
         let mut no_glyphs = vec![];
 
         {
@@ -203,16 +206,16 @@ impl LoadedFont {
             }
         }
 
-        let result = self.shaper.borrow().shape(
-            text,
-            self.font_size,
-            self.dpi,
-            &mut no_glyphs,
+        let options = ShapeOptions {
             presentation,
             direction,
             range,
             presentation_width,
-        );
+        };
+        let result =
+            self.shaper
+                .borrow()
+                .shape(text, self.font_size, self.dpi, &mut no_glyphs, options);
 
         no_glyphs.retain(|&c| c != '\u{FE0F}' && c != '\u{FE0E}');
         filter_out_synthetic(&mut no_glyphs);
@@ -765,10 +768,10 @@ impl FontConfigInner {
                 if let Some(idx) =
                     ParsedFont::best_matching_index(attr, &named_candidates, pixel_size)
                 {
-                    named_candidates.get(idx).map(|&p| {
+                    if let Some(&p) = named_candidates.get(idx) {
                         loaded.insert(attr.clone());
-                        handles.push(p.clone().synthesize(attr))
-                    });
+                        handles.push(p.clone().synthesize(attr));
+                    }
                 }
             }
 
@@ -785,10 +788,10 @@ impl FontConfigInner {
                     if let Some(idx) =
                         ParsedFont::best_matching_index(attr, &located_candidates, pixel_size)
                     {
-                        located_candidates.get(idx).map(|&p| {
+                        if let Some(&p) = located_candidates.get(idx) {
                             loaded.insert(attr.clone());
-                            handles.push(p.clone().synthesize(attr))
-                        });
+                            handles.push(p.clone().synthesize(attr));
+                        }
                     }
                 }
             }

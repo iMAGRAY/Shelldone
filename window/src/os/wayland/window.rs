@@ -240,10 +240,7 @@ impl WaylandWindow {
             FallbackFrame::new(&window, shm, subcompositor, qh.clone())
                 .expect("failed to create csd frame")
         };
-        let hidden = match decor_mode {
-            Some(DecorationMode::Client) => false,
-            _ => true,
-        };
+        let hidden = !matches!(decor_mode, Some(DecorationMode::Client));
         window_frame.set_hidden(hidden);
         if !hidden {
             window_frame.resize(
@@ -269,7 +266,7 @@ impl WaylandWindow {
 
         {
             let surface_to_pending = &mut conn.wayland_state.borrow_mut().surface_to_pending;
-            surface_to_pending.insert(surface.id(), Arc::clone(&pending_mouse));
+            surface_to_pending.insert(surface.id().protocol_id(), Arc::clone(&pending_mouse));
         }
 
         let appearance = conn.get_appearance();
@@ -531,7 +528,7 @@ pub(crate) fn read_pipe_with_timeout(mut file: ReadPipe) -> anyhow::Result<Strin
     loop {
         if unsafe { libc::poll(&mut pfd, 1, 3000) == 1 } {
             match file.read(&mut buf) {
-                Ok(size) if size == 0 => {
+                Ok(0) => {
                     break;
                 }
                 Ok(size) => {
@@ -813,15 +810,14 @@ impl WaylandWindowInner {
             self.window_state = window_state;
         }
 
-        if pending.configure.is_none()
-            && pending.dpi.is_some() {
-                // Synthesize a pending configure event for the dpi change
-                pending.configure.replace((
-                    self.pixels_to_surface(self.dimensions.pixel_width as i32) as u32,
-                    self.pixels_to_surface(self.dimensions.pixel_height as i32) as u32,
-                ));
-                log::debug!("synthesize configure with {:?}", pending.configure);
-            }
+        if pending.configure.is_none() && pending.dpi.is_some() {
+            // Synthesize a pending configure event for the dpi change
+            pending.configure.replace((
+                self.pixels_to_surface(self.dimensions.pixel_width as i32) as u32,
+                self.pixels_to_surface(self.dimensions.pixel_height as i32) as u32,
+            ));
+            log::debug!("synthesize configure with {:?}", pending.configure);
+        }
 
         if let Some(ref window_config) = pending.window_configure {
             self.window_frame.update_state(window_config.state);
@@ -995,28 +991,29 @@ impl WaylandWindowInner {
         let state = conn.wayland_state.borrow();
         let surface = self.surface().clone();
         let active_surface_id = state.active_surface_id.borrow();
-        let surface_id = surface.id();
+        let surface_id = surface.id().protocol_id();
 
         if let Some(active_surface_id) = active_surface_id.as_ref() {
-            if surface_id == active_surface_id.clone()
-                && self.text_cursor.map(|prior| prior != rect).unwrap_or(true) {
-                    self.text_cursor.replace(rect);
+            if surface_id == *active_surface_id
+                && self.text_cursor.map(|prior| prior != rect).unwrap_or(true)
+            {
+                self.text_cursor.replace(rect);
 
-                    let surface_udata = SurfaceUserData::from_wl(&surface);
-                    let factor = surface_udata.surface_data().scale_factor();
+                let surface_udata = SurfaceUserData::from_wl(&surface);
+                let factor = surface_udata.surface_data().scale_factor();
 
-                    if let Some(text_input) = &state.text_input {
-                        if let Some(input) = text_input.get_text_input_for_surface(&surface) {
-                            input.set_cursor_rectangle(
-                                rect.min_x() as i32 / factor,
-                                rect.min_y() as i32 / factor,
-                                rect.width() as i32 / factor,
-                                rect.height() as i32 / factor,
-                            );
-                            input.commit();
-                        }
+                if let Some(text_input) = &state.text_input {
+                    if let Some(input) = text_input.get_text_input_for_surface(&surface) {
+                        input.set_cursor_rectangle(
+                            rect.min_x() as i32 / factor,
+                            rect.min_y() as i32 / factor,
+                            rect.width() as i32 / factor,
+                            rect.height() as i32 / factor,
+                        );
+                        input.commit();
                     }
                 }
+            }
         }
     }
 

@@ -94,7 +94,7 @@ impl LocalProcessInfo {
             let data = data.strip_suffix(&[0]).unwrap_or(&data);
 
             for arg in data.split(|&c| c == 0) {
-                args.push(String::from_utf8_lossy(arg).to_owned().to_string());
+                args.push(String::from_utf8_lossy(arg).into_owned());
             }
 
             args
@@ -128,6 +128,9 @@ impl LocalProcessInfo {
             }
         }
 
-        procs.iter().find(|info| info.pid == pid).map(|info| build_proc(info, &procs))
+        procs
+            .iter()
+            .find(|info| info.pid == pid)
+            .map(|info| build_proc(info, &procs))
     }
 }

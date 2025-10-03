@@ -183,7 +183,7 @@ impl MatchResult {
                 // Pump up the score for an exact match, otherwise
                 // the order may be undesirable if there are a lot
                 // of candidates with the same score
-                u32::max_value()
+                u32::MAX
             } else {
                 score
             },
@@ -352,9 +352,12 @@ impl CommandPalette {
                         let mut score: usize = mods.bits() as usize;
                         // Prefer keys with CMD on macOS, but not on other systems,
                         // where CMD tends to be reserved by the desktop environment
-                        if cfg!(target_os = "macos") && mods.contains(Modifiers::SUPER) {
-                            score += 1000;
-                        } else if !cfg!(target_os = "macos") && !mods.contains(Modifiers::SUPER) {
+                        let prefers_super = if cfg!(target_os = "macos") {
+                            mods.contains(Modifiers::SUPER)
+                        } else {
+                            !mods.contains(Modifiers::SUPER)
+                        };
+                        if prefers_super {
                             score += 1000;
                         }
                         score
@@ -454,12 +457,7 @@ impl CommandPalette {
 
         let element = Element::new(&font, ElementContent::Children(elements))
             .colors(ElementColors {
-                border: BorderColor::new(
-                    term_window
-                        .config
-                        .command_palette_bg_color
-                        .to_linear(),
-                ),
+                border: BorderColor::new(term_window.config.command_palette_bg_color.to_linear()),
                 bg: term_window
                     .config
                     .command_palette_bg_color

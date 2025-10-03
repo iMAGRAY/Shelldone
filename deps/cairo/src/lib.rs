@@ -11,6 +11,9 @@ extern crate libc;
 #[cfg(feature = "xlib")]
 extern crate x11;
 
+#[cfg(feature = "use_glib")]
+extern crate glib_sys as glib;
+
 #[cfg(all(windows, feature = "win32-surface"))]
 extern crate winapi as winapi_orig;
 

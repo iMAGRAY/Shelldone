@@ -9,7 +9,7 @@ use thiserror::*;
 /// usecase for this!
 #[derive(Error, Debug)]
 #[error(transparent)]
-pub struct Error(pub(crate) InternalError);
+pub struct Error(pub(crate) Box<InternalError>);
 
 /// A Result whose error type is a termwiz Error
 pub type Result<T> = std::result::Result<T, Error>;
@@ -19,7 +19,7 @@ where
     E: Into<InternalError>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self(Box::new(err.into()))
     }
 }
 
@@ -40,7 +40,7 @@ pub enum InternalError {
     Io(#[from] std::io::Error),
 
     #[error(transparent)]
-    Regex(#[from] fancy_regex::Error),
+    Regex(#[from] Box<fancy_regex::Error>),
 
     #[error(transparent)]
     FromUtf8(#[from] std::string::FromUtf8Error),
@@ -87,6 +87,12 @@ pub enum InternalError {
 impl From<String> for InternalError {
     fn from(s: String) -> Self {
         InternalError::StringErr(StringWrap(s))
+    }
+}
+
+impl From<fancy_regex::Error> for InternalError {
+    fn from(err: fancy_regex::Error) -> Self {
+        InternalError::Regex(Box::new(err))
     }
 }
 
@@ -166,10 +172,10 @@ where
         C: Display + Send + Sync + 'static,
     {
         self.map_err(|error| {
-            Error(InternalError::Context {
+            Error(Box::new(InternalError::Context {
                 context: context.to_string(),
                 source: Box::new(error),
-            })
+            }))
         })
     }
 
@@ -179,10 +185,10 @@ where
         F: FnOnce() -> C,
     {
         self.map_err(|error| {
-            Error(InternalError::Context {
+            Error(Box::new(InternalError::Context {
                 context: context().to_string(),
                 source: Box::new(error),
-            })
+            }))
         })
     }
 }

@@ -635,7 +635,7 @@ pub fn human_key(key: &KeyCode) -> String {
         KeyCode::Char(c) => c.to_string(),
         KeyCode::Function(n) => format!("F{n}"),
         KeyCode::Numpad(n) => format!("Numpad{n}"),
-        KeyCode::Physical(phys) => format!("{} (Physical)", phys.to_string()),
+        KeyCode::Physical(phys) => format!("{} (Physical)", phys),
         _ => format!("{key:?}"),
     }
 }
@@ -652,7 +652,7 @@ fn lua_key_code(key: &KeyCode) -> String {
         KeyCode::Char(c) => c.to_string(),
         KeyCode::Function(n) => format!("F{n}"),
         KeyCode::Numpad(n) => format!("Numpad{n}"),
-        KeyCode::Physical(phys) => format!("phys:{}", phys.to_string()),
+        KeyCode::Physical(phys) => format!("phys:{}", phys),
         _ => format!("{key:?}"),
     }
 }

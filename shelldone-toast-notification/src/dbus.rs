@@ -5,7 +5,8 @@ use crate::ToastNotification;
 use futures_util::stream::{abortable, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use zbus::proxy;
+use zbus::proxy::SignalStream;
+use zbus::Proxy;
 use zvariant::{Type, Value};
 
 #[derive(Debug, Type, Serialize, Deserialize)]
@@ -23,41 +24,79 @@ pub struct ServerInformation {
     pub spec_version: String,
 }
 
-#[allow(clippy::too_many_arguments)]
-#[proxy(
-    interface = "org.freedesktop.Notifications",
-    default_service = "org.freedesktop.Notifications",
-    default_path = "/org/freedesktop/Notifications"
-)]
-trait Notifications {
-    /// Get server information.
-    ///
-    /// This message returns the information on the server.
-    fn get_server_information(&self) -> zbus::Result<ServerInformation>;
+type NotificationBody<'a, 'h> = (
+    &'a str,
+    u32,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a [&'a str],
+    &'h HashMap<&'h str, Value<'h>>,
+    i32,
+);
 
-    /// GetCapabilities method
-    fn get_capabilities(&self) -> zbus::Result<Vec<String>>;
+struct NotificationPayload<'a, 'h> {
+    app_name: &'a str,
+    replaces_id: u32,
+    app_icon: &'a str,
+    summary: &'a str,
+    body: &'a str,
+    actions: &'a [&'a str],
+    hints: &'h HashMap<&'h str, Value<'h>>,
+    expire_timeout: i32,
+}
 
-    /// CloseNotification method
-    fn close_notification(&self, nid: u32) -> zbus::Result<()>;
+impl<'a, 'h> NotificationPayload<'a, 'h> {
+    fn as_tuple(&'a self) -> NotificationBody<'a, 'h> {
+        (
+            self.app_name,
+            self.replaces_id,
+            self.app_icon,
+            self.summary,
+            self.body,
+            self.actions,
+            self.hints,
+            self.expire_timeout,
+        )
+    }
+}
 
-    fn notify(
-        &self,
-        app_name: &str,
-        replaces_id: u32,
-        app_icon: &str,
-        summary: &str,
-        body: &str,
-        actions: &[&str],
-        hints: &HashMap<&str, Value<'_>>,
-        expire_timeout: i32,
-    ) -> zbus::Result<u32>;
+struct NotificationsProxy<'a> {
+    inner: Proxy<'a>,
+}
 
-    #[zbus(signal)]
-    fn action_invoked(&self, nid: u32, action_key: String) -> zbus::Result<()>;
+impl<'a> NotificationsProxy<'a> {
+    async fn new(connection: &'a zbus::Connection) -> zbus::Result<Self> {
+        let inner = Proxy::new(
+            connection,
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+        )
+        .await?;
+        Ok(Self { inner })
+    }
 
-    #[zbus(signal)]
-    fn notification_closed(&self, nid: u32, reason: u32) -> zbus::Result<()>;
+    async fn get_server_information(&self) -> zbus::Result<ServerInformation> {
+        self.inner.call("GetServerInformation", &()).await
+    }
+
+    async fn get_capabilities(&self) -> zbus::Result<Vec<String>> {
+        self.inner.call("GetCapabilities", &()).await
+    }
+
+    async fn notify(&self, payload: &NotificationPayload<'_, '_>) -> zbus::Result<u32> {
+        let body = payload.as_tuple();
+        self.inner.call("Notify", &body).await
+    }
+
+    async fn receive_action_invoked(&self) -> zbus::Result<SignalStream<'_>> {
+        self.inner.receive_signal("ActionInvoked").await
+    }
+
+    async fn receive_notification_closed(&self) -> zbus::Result<SignalStream<'_>> {
+        self.inner.receive_signal("NotificationClosed").await
+    }
 }
 
 /// Timeout/expiration was reached
@@ -109,23 +148,24 @@ async fn show_notif_impl(notif: ToastNotification) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    let mut hints = HashMap::new();
+    let mut hints: HashMap<&str, Value<'_>> = HashMap::new();
     hints.insert("urgency", Value::U8(2 /* Critical */));
+    let actions: &[&str] = if notif.url.is_some() {
+        &["show", "Show"]
+    } else {
+        &[]
+    };
     let notification = proxy
-        .notify(
-            "shelldone",
-            0,
-            "net.shelldone.terminal",
-            &notif.title,
-            &notif.message,
-            if notif.url.is_some() {
-                &["show", "Show"]
-            } else {
-                &[]
-            },
-            &hints,
-            notif.timeout.map(|d| d.as_millis() as _).unwrap_or(0),
-        )
+        .notify(&NotificationPayload {
+            app_name: "shelldone",
+            replaces_id: 0,
+            app_icon: "net.shelldone.terminal",
+            summary: &notif.title,
+            body: &notif.message,
+            actions,
+            hints: &hints,
+            expire_timeout: notif.timeout.map(|d| d.as_millis() as _).unwrap_or(0),
+        })
         .await?;
 
     let (mut invoked_stream, abort_invoked) = abortable(proxy.receive_action_invoked().await?);
@@ -133,9 +173,9 @@ async fn show_notif_impl(notif: ToastNotification) -> Result<(), Box<dyn std::er
 
     futures_util::try_join!(
         async {
-            while let Some(signal) = invoked_stream.next().await {
-                let args = signal.args()?;
-                if args.nid == notification {
+            while let Some(message) = invoked_stream.next().await {
+                let (nid, _action_key): (u32, String) = message.body().deserialize()?;
+                if nid == notification {
                     if let Some(url) = notif.url.as_ref() {
                         shelldone_open_url::open_url(url);
                         abort_closed.abort();
@@ -146,15 +186,15 @@ async fn show_notif_impl(notif: ToastNotification) -> Result<(), Box<dyn std::er
             Ok::<(), zbus::Error>(())
         },
         async {
-            while let Some(signal) = closed_stream.next().await {
-                let args = signal.args()?;
-                let _reason = Reason::new(args.reason);
-                if args.nid == notification {
+            while let Some(message) = closed_stream.next().await {
+                let (nid, reason): (u32, u32) = message.body().deserialize()?;
+                let _reason = Reason::new(reason);
+                if nid == notification {
                     abort_invoked.abort();
                     break;
                 }
             }
-            Ok(())
+            Ok::<(), zbus::Error>(())
         }
     )?;
 

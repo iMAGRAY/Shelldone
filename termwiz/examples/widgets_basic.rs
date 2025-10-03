@@ -40,7 +40,7 @@ impl<'a> Widget for MainScreen<'a> {
                 self.text.push_str("\r\n");
             }
             WidgetEvent::Input(InputEvent::Paste(s)) => {
-                self.text.push_str(&s);
+                self.text.push_str(s);
             }
             _ => {}
         }
@@ -131,7 +131,7 @@ fn main() -> Result<(), Error> {
                         // Quit the app when escape is pressed
                         break;
                     }
-                    input @ _ => {
+                    input => {
                         // Feed input into the Ui
                         ui.queue_event(WidgetEvent::Input(input));
                     }

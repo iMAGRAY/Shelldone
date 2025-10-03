@@ -65,7 +65,7 @@ pub struct BorrowedShapeCacheKey<'a> {
 }
 
 impl<'a> BorrowedShapeCacheKey<'a> {
-    pub fn to_owned(&self) -> ShapeCacheKey {
+    pub fn to_owned(self) -> ShapeCacheKey {
         ShapeCacheKey {
             style: self.style.clone(),
             text: self.text.to_owned(),
@@ -98,15 +98,15 @@ impl<'a> std::borrow::Borrow<dyn ShapeCacheKeyTrait + 'a> for ShapeCacheKey {
     }
 }
 
-impl<'a> PartialEq for dyn ShapeCacheKeyTrait + 'a  {
+impl<'a> PartialEq for dyn ShapeCacheKeyTrait + 'a {
     fn eq(&self, other: &Self) -> bool {
         self.key().eq(&other.key())
     }
 }
 
-impl<'a> Eq for dyn ShapeCacheKeyTrait + 'a  {}
+impl<'a> Eq for dyn ShapeCacheKeyTrait + 'a {}
 
-impl<'a> std::hash::Hash for dyn ShapeCacheKeyTrait + 'a  {
+impl<'a> std::hash::Hash for dyn ShapeCacheKeyTrait + 'a {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key().hash(state)
     }
@@ -120,7 +120,7 @@ mod test {
     use config::{FontAttributes, TextStyle};
     use shelldone_bidi::Direction;
     use shelldone_font::shaper::PresentationWidth;
-    use shelldone_font::{FontConfiguration, LoadedFont};
+    use shelldone_font::{FontConfiguration, LoadedFont, ShapeOptions};
     use std::rc::Rc;
     use termwiz::cell::CellAttributes;
     use termwiz::surface::{Line, SEQ_ZERO};
@@ -144,10 +144,12 @@ mod test {
                     &cluster.text,
                     || {},
                     |_| {},
-                    None,
-                    Direction::LeftToRight,
-                    None,
-                    Some(&presentation_width),
+                    ShapeOptions {
+                        presentation: None,
+                        direction: Direction::LeftToRight,
+                        range: None,
+                        presentation_width: Some(&presentation_width),
+                    },
                 )
                 .unwrap();
             let mut glyphs = infos
@@ -164,7 +166,7 @@ mod test {
                     glyph_cache
                         .cached_glyph(
                             info,
-                            &style,
+                            style,
                             followed_by_space,
                             font,
                             render_metrics,
@@ -208,7 +210,7 @@ mod test {
         let fonts = Rc::new(
             FontConfiguration::new(
                 None,
-                config.dpi.unwrap_or_else(|| ::window::default_dpi()) as usize,
+                config.dpi.unwrap_or_else(::window::default_dpi) as usize,
             )
             .unwrap(),
         );
@@ -273,8 +275,7 @@ mod test {
                         None,
                         config::configuration()
                             .dpi
-                            .unwrap_or_else(|| ::window::default_dpi())
-                            as usize,
+                            .unwrap_or_else(::window::default_dpi) as usize,
                     )
                     .unwrap(),
                 );
@@ -283,7 +284,7 @@ mod test {
                 let line = Line::from_text(&text, &CellAttributes::default(), SEQ_ZERO, None);
                 let cell_clusters = line.cluster(None);
                 let cluster = &cell_clusters[0];
-                let presentation_width = PresentationWidth::with_cluster(&cluster);
+                let presentation_width = PresentationWidth::with_cluster(cluster);
 
                 measurer.measure(|| {
                     let _x = font
@@ -291,10 +292,12 @@ mod test {
                             &cluster.text,
                             || {},
                             |_| {},
-                            None,
-                            Direction::LeftToRight,
-                            None,
-                            Some(&presentation_width),
+                            ShapeOptions {
+                                presentation: None,
+                                direction: Direction::LeftToRight,
+                                range: None,
+                                presentation_width: Some(&presentation_width),
+                            },
                         )
                         .unwrap();
                     // println!("{:?}", &x[0..2]);
@@ -317,7 +320,7 @@ mod test {
         let fonts = Rc::new(
             FontConfiguration::new(
                 None,
-                config.dpi.unwrap_or_else(|| ::window::default_dpi()) as usize,
+                config.dpi.unwrap_or_else(::window::default_dpi) as usize,
             )
             .unwrap(),
         );

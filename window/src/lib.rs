@@ -4,6 +4,7 @@ use config::window::WindowLevel;
 use config::{ConfigHandle, Dimension, GeometryOrigin};
 use promise::Future;
 use std::any::Any;
+use std::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
 use thiserror::Error;
@@ -38,14 +39,12 @@ pub use glium;
 pub use os::*;
 pub use shelldone_input_types::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Clipboard {
     #[default]
     Clipboard,
     PrimarySelection,
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dimensions {
@@ -86,15 +85,15 @@ pub enum Appearance {
     DarkHighContrast,
 }
 
-impl std::string::ToString for Appearance {
-    fn to_string(&self) -> String {
-        match self {
+impl fmt::Display for Appearance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
             Self::Light => "Light",
             Self::Dark => "Dark",
             Self::LightHighContrast => "LightHighContrast",
             Self::DarkHighContrast => "DarkHighContrast",
-        }
-        .to_string()
+        };
+        f.write_str(label)
     }
 }
 
@@ -215,8 +214,10 @@ pub enum WindowEvent {
     AdviseModifiersLedStatus(Modifiers, KeyboardLedStatus),
 }
 
+type WindowEventCallback = dyn FnMut(WindowEvent, &Window);
+
 pub struct WindowEventSender {
-    handler: Box<dyn FnMut(WindowEvent, &Window)>,
+    handler: Box<WindowEventCallback>,
     window: Option<Window>,
 }
 

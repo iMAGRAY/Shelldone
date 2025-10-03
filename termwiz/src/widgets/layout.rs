@@ -49,48 +49,33 @@ pub struct Dimension {
 /// Specifies whether the children of a widget are laid out
 /// vertically (top to bottom) or horizontally (left to right).
 /// The default is horizontal.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ChildOrientation {
     Vertical,
+    #[default]
     Horizontal,
-}
-
-impl Default for ChildOrientation {
-    fn default() -> Self {
-        ChildOrientation::Horizontal
-    }
 }
 
 /// Specifies whether the widget should be aligned to the top,
 /// middle or bottom of the vertical space in its parent.
 /// The default is Top.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum VerticalAlignment {
+    #[default]
     Top,
     Middle,
     Bottom,
 }
 
-impl Default for VerticalAlignment {
-    fn default() -> Self {
-        VerticalAlignment::Top
-    }
-}
-
 /// Specifies whether the widget should be aligned to the left,
 /// center or right of the horizontal space in its parent.
 /// The default is Left.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HorizontalAlignment {
+    #[default]
     Left,
     Center,
     Right,
-}
-
-impl Default for HorizontalAlignment {
-    fn default() -> Self {
-        HorizontalAlignment::Left
-    }
 }
 
 /// Specifies the size constraints for a widget

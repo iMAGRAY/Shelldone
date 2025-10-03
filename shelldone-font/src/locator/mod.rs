@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::hash::{Hash as StdHash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -31,7 +32,7 @@ impl Display for FontOrigin {
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub enum FontDataSource {
     OnDisk(PathBuf),
     BuiltIn {
@@ -90,6 +91,25 @@ impl PartialEq for FontDataSource {
     }
 }
 
+impl std::hash::Hash for FontDataSource {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::OnDisk(path) => {
+                state.write_u8(0);
+                StdHash::hash(path, state);
+            }
+            Self::BuiltIn { name, .. } => {
+                state.write_u8(1);
+                StdHash::hash(name, state);
+            }
+            Self::Memory { name, .. } => {
+                state.write_u8(2);
+                StdHash::hash(name, state);
+            }
+        }
+    }
+}
+
 impl Ord for FontDataSource {
     fn cmp(&self, other: &Self) -> Ordering {
         let a = self.name_or_path_str();
@@ -144,12 +164,7 @@ impl std::hash::Hash for FontDataHandle {
 
 impl PartialOrd for FontDataHandle {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        (&self.source, self.index, self.variation, &self.origin).partial_cmp(&(
-            &other.source,
-            other.index,
-            other.variation,
-            &other.origin,
-        ))
+        Some(self.cmp(other))
     }
 }
 

@@ -25,14 +25,12 @@ pub mod color;
 pub mod image;
 
 #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 enum SmallColor {
     #[default]
     Default,
     PaletteIndex(PaletteIndex),
 }
-
 
 impl From<SmallColor> for ColorAttribute {
     fn from(val: SmallColor) -> Self {
@@ -90,7 +88,8 @@ struct FatAttributes {
     hyperlink: Option<Arc<Hyperlink>>,
     /// The image data, if any
     #[cfg(feature = "use_image")]
-    image: Vec<Box<ImageCell>>,
+    #[cfg_attr(feature = "use_serde", serde(skip))]
+    image: Vec<ImageCell>,
     /// The color of the underline.  If None, then
     /// the foreground color is to be used
     underline_color: ColorAttribute,
@@ -183,7 +182,6 @@ pub enum SemanticType {
     Prompt = 2,
 }
 
-
 pub use shelldone_escape_parser::csi::{Blink, Intensity, Underline, VerticalAlign};
 
 impl Default for CellAttributes {
@@ -260,9 +258,10 @@ impl CellAttributes {
 
     pub fn foreground(&self) -> ColorAttribute {
         if let Some(fat) = self.fat.as_ref()
-            && fat.foreground != ColorAttribute::Default {
-                return fat.foreground;
-            }
+            && fat.foreground != ColorAttribute::Default
+        {
+            return fat.foreground;
+        }
         self.foreground.into()
     }
 
@@ -295,9 +294,10 @@ impl CellAttributes {
 
     pub fn background(&self) -> ColorAttribute {
         if let Some(fat) = self.fat.as_ref()
-            && fat.background != ColorAttribute::Default {
-                return fat.background;
-            }
+            && fat.background != ColorAttribute::Default
+        {
+            return fat.background;
+        }
         self.background.into()
     }
 
@@ -356,7 +356,7 @@ impl CellAttributes {
 #[cfg(feature = "use_image")]
 impl CellAttributes {
     /// Assign a single image to a cell.
-    pub fn set_image(&mut self, image: Box<ImageCell>) -> &mut Self {
+    pub fn set_image(&mut self, image: ImageCell) -> &mut Self {
         self.allocate_fat_attributes();
         self.fat.as_mut().unwrap().image = vec![image];
         self
@@ -381,7 +381,7 @@ impl CellAttributes {
 
     /// Add an image attachement, preserving any existing attachments.
     /// The list of images is maintained in z-index order
-    pub fn attach_image(&mut self, image: Box<ImageCell>) -> &mut Self {
+    pub fn attach_image(&mut self, image: ImageCell) -> &mut Self {
         self.allocate_fat_attributes();
         let fat = self.fat.as_mut().unwrap();
         let z_index = image.z_index();
@@ -423,12 +423,12 @@ impl CellAttributes {
         if let Some(fat) = self.fat.as_ref()
             && (fat.background != ColorAttribute::Default
                 || fat.foreground != ColorAttribute::Default)
-            {
-                res.allocate_fat_attributes();
-                let new_fat = res.fat.as_mut().unwrap();
-                new_fat.foreground = fat.foreground;
-                new_fat.background = fat.background;
-            }
+        {
+            res.allocate_fat_attributes();
+            let new_fat = res.fat.as_mut().unwrap();
+            new_fat.foreground = fat.foreground;
+            new_fat.background = fat.background;
+        }
         // Reset the semantic type; clone_sgr_only is used primarily
         // to create a "blank" cell when clearing and we want that to
         // be deterministically tagged as Output so that we have an
@@ -465,7 +465,7 @@ impl CellAttributes {
         if fat.image.is_empty() {
             return None;
         }
-        Some(fat.image.iter().map(|im| im.as_ref().clone()).collect())
+        Some(fat.image.clone())
     }
 
     pub fn underline_color(&self) -> ColorAttribute {
@@ -853,9 +853,10 @@ impl UnicodeVersion {
     fn wcwidth(&self, c: char) -> usize {
         #[cfg(feature = "std")]
         if let Some(ref cell_widths) = self.cell_widths
-            && let Some(width) = cell_widths.get(&(c as u32)) {
-                return (*width).into();
-            }
+            && let Some(width) = cell_widths.get(&(c as u32))
+        {
+            return (*width).into();
+        }
         self.width(WCWIDTH_TABLE.classify(c))
     }
 

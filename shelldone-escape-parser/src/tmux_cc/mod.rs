@@ -529,7 +529,7 @@ fn unvis_bytes(s: &[u8]) -> Result<Vec<u8>> {
 
     let mut state = State::Ground;
     let mut result: Vec<u8> = vec![];
-    let mut bytes = s.iter();
+    let bytes = s.iter();
 
     fn is_octal(b: u8) -> bool {
         (b'0'..=b'7').contains(&b)
@@ -728,7 +728,7 @@ fn parse_layout_pane(pair: Pair<Rule>) -> Result<PaneLayout> {
 }
 
 fn parse_layout_inner(
-    mut pairs: Pairs<Rule>,
+    pairs: Pairs<Rule>,
     result: &mut Vec<WindowLayout>,
 ) -> Result<Vec<PaneLayout>> {
     let mut stack = Vec::new();

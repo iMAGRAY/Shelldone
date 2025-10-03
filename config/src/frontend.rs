@@ -1,5 +1,6 @@
 use luahelper::impl_lua_conversion_dynamic;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum FrontEndSelection {
@@ -22,33 +23,32 @@ pub struct GpuInfo {
 }
 impl_lua_conversion_dynamic!(GpuInfo);
 
-impl ToString for GpuInfo {
-    fn to_string(&self) -> String {
-        let mut result = format!(
+impl fmt::Display for GpuInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "name={}, device_type={}, backend={}",
             self.name, self.device_type, self.backend
-        );
+        )?;
         if let Some(driver) = &self.driver {
-            result.push_str(&format!(", driver={driver}"));
+            write!(f, ", driver={driver}")?;
         }
         if let Some(driver_info) = &self.driver_info {
-            result.push_str(&format!(", driver_info={driver_info}"));
+            write!(f, ", driver_info={driver_info}")?;
         }
         if let Some(vendor) = &self.vendor {
-            result.push_str(&format!(", vendor={vendor}"));
+            write!(f, ", vendor={vendor}")?;
         }
         if let Some(device) = &self.device {
-            result.push_str(&format!(", device={device}"));
+            write!(f, ", device={device}")?;
         }
-        result
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum WebGpuPowerPreference {
     #[default]
     LowPower,
     HighPerformance,
 }
-

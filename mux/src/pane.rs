@@ -671,7 +671,7 @@ mod test {
                 .chars()
                 .collect::<Vec<char>>()
                 .chunks(width)
-                .map(|c| c.into_iter().collect::<String>())
+                .map(|c| c.iter().collect::<String>())
                 .collect::<Vec<String>>();
             let n_chunks = chunks.len();
             for (idx, chunk) in chunks.into_iter().enumerate() {

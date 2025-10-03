@@ -33,11 +33,11 @@ pub enum RenderFrame<'a> {
 impl RenderContext {
     pub fn allocate_index_buffer(&self, indices: &[u32]) -> anyhow::Result<IndexBuffer> {
         match self {
-            Self::Glium(context) => Ok(IndexBuffer::Glium(GliumIndexBuffer::new(
+            Self::Glium(context) => Ok(IndexBuffer::Glium(Box::new(GliumIndexBuffer::new(
                 context,
                 glium::index::PrimitiveType::TrianglesList,
                 indices,
-            )?)),
+            )?))),
             Self::WebGpu(state) => Ok(IndexBuffer::WebGpu(WebGpuIndexBuffer::new(indices, state))),
         }
     }
@@ -57,10 +57,10 @@ impl RenderContext {
         initializer: &[Vertex],
     ) -> anyhow::Result<VertexBuffer> {
         match self {
-            Self::Glium(context) => Ok(VertexBuffer::Glium(GliumVertexBuffer::dynamic(
+            Self::Glium(context) => Ok(VertexBuffer::Glium(Box::new(GliumVertexBuffer::dynamic(
                 context,
                 initializer,
-            )?)),
+            )?))),
             Self::WebGpu(state) => Ok(VertexBuffer::WebGpu(WebGpuVertexBuffer::new(
                 num_quads * VERTICES_PER_CELL,
                 state,
@@ -115,21 +115,21 @@ impl RenderContext {
             ),
             Self::WebGpu(state) => {
                 let info = adapter_info_to_gpu_info(state.adapter_info.clone());
-                format!("WebGPU: {}", info.to_string())
+                format!("WebGPU: {}", info)
             }
         }
     }
 }
 
 pub enum IndexBuffer {
-    Glium(GliumIndexBuffer<u32>),
+    Glium(Box<GliumIndexBuffer<u32>>),
     WebGpu(WebGpuIndexBuffer),
 }
 
 impl IndexBuffer {
     pub fn glium(&self) -> &GliumIndexBuffer<u32> {
         match self {
-            Self::Glium(g) => g,
+            Self::Glium(g) => g.as_ref(),
             _ => unreachable!(),
         }
     }
@@ -142,14 +142,14 @@ impl IndexBuffer {
 }
 
 pub enum VertexBuffer {
-    Glium(GliumVertexBuffer<Vertex>),
+    Glium(Box<GliumVertexBuffer<Vertex>>),
     WebGpu(WebGpuVertexBuffer),
 }
 
 impl VertexBuffer {
     pub fn glium(&self) -> &GliumVertexBuffer<Vertex> {
         match self {
-            Self::Glium(g) => g,
+            Self::Glium(g) => g.as_ref(),
             _ => unreachable!(),
         }
     }
@@ -336,6 +336,9 @@ pub struct TripleVertexBuffer {
 /// the underlying type.
 /// These ExtendStatic trait impls constrain the transmutes in that way,
 /// so that the type checker can still catch issues.
+/// # Safety
+/// Implementors must guarantee that the returned value does not outlive the
+/// original borrow and remains valid for the duration of the extended lifetime.
 unsafe trait ExtendStatic {
     type T;
     unsafe fn extend_lifetime(self) -> Self::T;
@@ -413,7 +416,8 @@ impl TripleVertexBuffer {
         let mapping = match &mut *bufs {
             VertexBuffer::Glium(vb) => {
                 let buf_slice = unsafe {
-                    vb.slice_mut(..)
+                    vb.as_mut()
+                        .slice_mut(..)
                         .expect("to map vertex buffer")
                         .extend_lifetime()
                 };
@@ -486,10 +490,10 @@ impl RenderLayer {
             let layer0 = vbs[0].map().extend_lifetime();
             let layer1 = vbs[1].map().extend_lifetime();
             let layer2 = vbs[2].map().extend_lifetime();
-            TripleLayerQuadAllocator::Gpu(BorrowedLayers {
+            TripleLayerQuadAllocator::Gpu(Box::new(BorrowedLayers {
                 layers: [layer0, layer1, layer2],
                 _owner: vbs,
-            })
+            }))
         }
     }
 
@@ -519,8 +523,7 @@ impl RenderLayer {
             num_quads,
             verts.len() * std::mem::size_of::<Vertex>()
         );
-        let mut indices = vec![];
-        indices.reserve(num_quads * INDICES_PER_CELL);
+        let mut indices = Vec::with_capacity(num_quads * INDICES_PER_CELL);
 
         for q in 0..num_quads {
             let idx = (q * VERTICES_PER_CELL) as u32;

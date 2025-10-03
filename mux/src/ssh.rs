@@ -57,6 +57,31 @@ impl LineEditorHost for PasswordPromptHost {
     }
 }
 
+fn parse_confirmation(input: &str) -> Option<bool> {
+    match input.trim() {
+        value if value.eq_ignore_ascii_case("y") || value.eq_ignore_ascii_case("yes") => Some(true),
+        value if value.eq_ignore_ascii_case("n") || value.eq_ignore_ascii_case("no") => Some(false),
+        _ => None,
+    }
+}
+
+struct ConnectSessionChannels {
+    stdin_tx: Sender<BoxedWriter>,
+    stdout_tx: Sender<BoxedReader>,
+    child_tx: Sender<SshChildProcess>,
+    pty_tx: Sender<SshPty>,
+}
+
+struct ConnectSessionIo<'a> {
+    stdin: FileDescriptor,
+    stdout: &'a mut BufWriter<FileDescriptor>,
+}
+
+struct SpawnParameters {
+    command_line: Option<String>,
+    env: HashMap<String, String>,
+}
+
 pub fn ssh_connect_with_ui(
     ssh_config: shelldone_ssh::ConfigMap,
     ui: &mut ConnectionUI,
@@ -78,14 +103,11 @@ pub fn ssh_connect_with_ui(
                 }
                 SessionEvent::HostVerify(verify) => {
                     ui.output_str(&format!("{}\n", verify.message));
-                    let ok = if let Ok(line) = ui.input("Enter [y/n]> ") {
-                        match line.as_ref() {
-                            "y" | "Y" | "yes" | "YES" => true,
-                            "n" | "N" | "no" | "NO" | _ => false,
-                        }
-                    } else {
-                        false
-                    };
+                    let ok = ui
+                        .input("Enter [y/n]> ")
+                        .ok()
+                        .and_then(|line| parse_confirmation(&line))
+                        .unwrap_or(false);
                     smol::block_on(verify.answer(ok)).context("send verify response")?;
                 }
                 SessionEvent::Authenticate(auth) => {
@@ -388,19 +410,21 @@ impl RemoteSshDomain {
         // UI to carry out any authentication.
         let mut stdout_write = BufWriter::new(stdout_write);
         std::thread::spawn(move || {
-            if let Err(err) = connect_ssh_session(
-                session,
-                events,
-                stdin_read,
-                writer_tx,
-                &mut stdout_write,
-                reader_tx,
+            let mut io = ConnectSessionIo {
+                stdin: stdin_read,
+                stdout: &mut stdout_write,
+            };
+            let channels = ConnectSessionChannels {
+                stdin_tx: writer_tx,
+                stdout_tx: reader_tx,
                 child_tx,
                 pty_tx,
-                size,
-                command_line,
-                env,
-            ) {
+            };
+            let spawn_params = SpawnParameters { command_line, env };
+            let result =
+                connect_ssh_session(session, events, &mut io, channels, size, spawn_params);
+            drop(io);
+            if let Err(err) = result {
                 let _ = write!(stdout_write, "{:#}", err);
                 log::error!("Failed to connect ssh: {:#}", err);
             }
@@ -421,16 +445,19 @@ struct StartNewSessionResult {
 fn connect_ssh_session(
     session: Session,
     events: smol::channel::Receiver<SessionEvent>,
-    mut stdin_read: FileDescriptor,
-    stdin_tx: Sender<BoxedWriter>,
-    stdout_write: &mut BufWriter<FileDescriptor>,
-    stdout_tx: Sender<BoxedReader>,
-    child_tx: Sender<SshChildProcess>,
-    pty_tx: Sender<SshPty>,
+    io: &mut ConnectSessionIo<'_>,
+    channels: ConnectSessionChannels,
     size: Arc<Mutex<TerminalSize>>,
-    command_line: Option<String>,
-    env: HashMap<String, String>,
+    spawn: SpawnParameters,
 ) -> anyhow::Result<()> {
+    let ConnectSessionChannels {
+        stdin_tx,
+        stdout_tx,
+        child_tx,
+        pty_tx,
+    } = channels;
+    let SpawnParameters { command_line, env } = spawn;
+
     struct StdoutShim<'a> {
         size: Arc<Mutex<TerminalSize>>,
         stdout: &'a mut BufWriter<FileDescriptor>,
@@ -571,12 +598,12 @@ fn connect_ssh_session(
     let renderer = termwiz_funcs::new_shelldone_terminfo_renderer();
     let mut shim = TerminalShim {
         stdout: &mut StdoutShim {
-            stdout: stdout_write,
+            stdout: io.stdout,
             size: Arc::clone(&size),
         },
         size: Arc::clone(&size),
         renderer,
-        stdin: &mut stdin_read,
+        stdin: &mut io.stdin,
         parser: InputParser::new(),
         input_queue: VecDeque::new(),
     };
@@ -600,17 +627,15 @@ fn connect_ssh_session(
             SessionEvent::HostVerify(verify) => {
                 shim.output_line(&verify.message)?;
                 let mut editor = LineEditor::new(&mut shim);
-                let mut host = PasswordPromptHost::default();
-                host.echo = true;
-                editor.set_prompt("Enter [y/n]> ");
-                let ok = if let Some(line) = editor.read_line(&mut host)? {
-                    match line.as_ref() {
-                        "y" | "Y" | "yes" | "YES" => true,
-                        "n" | "N" | "no" | "NO" | _ => false,
-                    }
-                } else {
-                    false
+                let mut host = PasswordPromptHost {
+                    echo: true,
+                    ..PasswordPromptHost::default()
                 };
+                editor.set_prompt("Enter [y/n]> ");
+                let ok = editor
+                    .read_line(&mut host)?
+                    .and_then(|line| parse_confirmation(&line))
+                    .unwrap_or(false);
                 smol::block_on(verify.answer(ok)).context("send verify response")?;
             }
             SessionEvent::Authenticate(auth) => {
@@ -628,9 +653,11 @@ fn connect_ssh_session(
                         shim.output_line(line)?;
                     }
                     let mut editor = LineEditor::new(&mut shim);
-                    let mut host = PasswordPromptHost::default();
+                    let mut host = PasswordPromptHost {
+                        echo: prompt.echo,
+                        ..PasswordPromptHost::default()
+                    };
                     editor.set_prompt(editor_prompt);
-                    host.echo = prompt.echo;
                     if let Some(line) = editor.read_line(&mut host)? {
                         answers.push(line);
                     } else {
@@ -679,8 +706,8 @@ fn connect_ssh_session(
                         pty_tx.send(pty)?;
                         child_tx.send(child)?;
 
-                        // Now when we return, our stdin_read and
-                        // stdout_write will close and that will cause
+                        // Now when we return, the temporary stdin and stdout handles
+                        // will close and that will cause
                         // the PtyReader and PtyWriter to recv the
                         // the new reader/writer above and continue.
                         //
@@ -973,8 +1000,8 @@ impl ChildKiller for WrappedSshChildKiller {
     }
 }
 
-type BoxedReader = Box<dyn Read + Send + 'static >;
-type BoxedWriter = Box<dyn Write + Send + 'static >;
+type BoxedReader = Box<dyn Read + Send + 'static>;
+type BoxedWriter = Box<dyn Write + Send + 'static>;
 
 pub(crate) struct WrappedSshPty {
     inner: RefCell<WrappedSshPtyInner>,
@@ -1071,7 +1098,7 @@ impl portable_pty::MasterPty for WrappedSshPty {
         }
     }
 
-    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn Read + Send + 'static >> {
+    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn Read + Send + 'static>> {
         let mut inner = self.inner.borrow_mut();
         inner.check_connected()?;
         match &mut *inner {
@@ -1083,7 +1110,7 @@ impl portable_pty::MasterPty for WrappedSshPty {
         }
     }
 
-    fn take_writer(&self) -> anyhow::Result<Box<dyn Write + Send + 'static >> {
+    fn take_writer(&self) -> anyhow::Result<Box<dyn Write + Send + 'static>> {
         anyhow::bail!("writer must be created during bootstrap");
     }
 

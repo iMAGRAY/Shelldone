@@ -99,6 +99,9 @@ pub enum MuxNotification {
 
 static SUB_ID: AtomicUsize = AtomicUsize::new(0);
 
+type SubscriberCallback = Box<dyn Fn(MuxNotification) -> bool + Send + Sync>;
+type SubscriberMap = HashMap<usize, SubscriberCallback>;
+
 pub struct Mux {
     tabs: RwLock<HashMap<TabId, Arc<Tab>>>,
     panes: RwLock<HashMap<PaneId, Arc<dyn Pane>>>,
@@ -106,7 +109,7 @@ pub struct Mux {
     default_domain: RwLock<Option<Arc<dyn Domain>>>,
     domains: RwLock<HashMap<DomainId, Arc<dyn Domain>>>,
     domains_by_name: RwLock<HashMap<String, Arc<dyn Domain>>>,
-    subscribers: RwLock<HashMap<usize, Box<dyn Fn(MuxNotification) -> bool + Send + Sync>>>,
+    subscribers: RwLock<SubscriberMap>,
     banner: RwLock<Option<String>>,
     clients: RwLock<HashMap<ClientId, ClientInfo>>,
     identity: RwLock<Option<Arc<ClientId>>>,
@@ -148,7 +151,7 @@ fn parse_buffered_data(pane: Weak<dyn Pane>, dead: &Arc<AtomicBool>, mut rx: Fil
 
     loop {
         match rx.read(&mut buf) {
-            Ok(size) if size == 0 => {
+            Ok(0) => {
                 dead.store(true, Ordering::Relaxed);
                 break;
             }
@@ -318,7 +321,7 @@ fn read_from_pane_pty(
 
     while !dead.load(Ordering::Relaxed) {
         match reader.read(&mut buf) {
-            Ok(size) if size == 0 => {
+            Ok(0) => {
                 log::trace!("read_pty EOF: pane_id {}", pane_id);
                 break;
             }
@@ -413,6 +416,17 @@ impl std::ops::Deref for MuxWindowBuilder {
     fn deref(&self) -> &WindowId {
         &self.window_id
     }
+}
+
+pub struct SpawnRequest {
+    pub window_id: Option<WindowId>,
+    pub domain: SpawnTabDomain,
+    pub command: Option<CommandBuilder>,
+    pub command_dir: Option<String>,
+    pub size: TerminalSize,
+    pub current_pane_id: Option<PaneId>,
+    pub workspace_for_new_window: String,
+    pub window_position: Option<GuiPosition>,
 }
 
 impl Mux {
@@ -571,10 +585,7 @@ impl Mux {
     }
 
     pub fn iter_clients(&self) -> Vec<ClientInfo> {
-        self.clients
-            .read()
-            .values().cloned()
-            .collect()
+        self.clients.read().values().cloned().collect()
     }
 
     /// Returns a list of the unique workspace names known to the mux.
@@ -1034,9 +1045,7 @@ impl Mux {
     }
 
     pub fn iter_panes(&self) -> Vec<Arc<dyn Pane>> {
-        self.panes
-            .read().values().map(|v| Arc::clone(v))
-            .collect()
+        self.panes.read().values().map(Arc::clone).collect()
     }
 
     pub fn iter_windows_in_workspace(&self, workspace: &str) -> Vec<WindowId> {
@@ -1130,20 +1139,18 @@ impl Mux {
             SpawnTabDomain::DomainId(domain_id) => self
                 .get_domain(*domain_id)
                 .ok_or_else(|| anyhow!("domain id {} is invalid", domain_id))?,
-            SpawnTabDomain::DomainName(name) => {
-                self.get_domain_by_name(name).ok_or_else(|| {
-                    let names: Vec<String> = self
-                        .domains_by_name
-                        .read()
-                        .keys()
-                        .map(|name| format!("\"{name}\""))
-                        .collect();
-                    anyhow!(
-                        "domain name \"{name}\" is invalid. Possible names are {}.",
-                        names.join(", ")
-                    )
-                })?
-            }
+            SpawnTabDomain::DomainName(name) => self.get_domain_by_name(name).ok_or_else(|| {
+                let names: Vec<String> = self
+                    .domains_by_name
+                    .read()
+                    .keys()
+                    .map(|name| format!("\"{name}\""))
+                    .collect();
+                anyhow!(
+                    "domain name \"{name}\" is invalid. Possible names are {}.",
+                    names.join(", ")
+                )
+            })?,
         };
         Ok(domain)
     }
@@ -1303,15 +1310,19 @@ impl Mux {
 
     pub async fn spawn_tab_or_window(
         &self,
-        window_id: Option<WindowId>,
-        domain: SpawnTabDomain,
-        command: Option<CommandBuilder>,
-        command_dir: Option<String>,
-        size: TerminalSize,
-        current_pane_id: Option<PaneId>,
-        workspace_for_new_window: String,
-        window_position: Option<GuiPosition>,
+        request: SpawnRequest,
     ) -> anyhow::Result<(Arc<Tab>, Arc<dyn Pane>, WindowId)> {
+        let SpawnRequest {
+            window_id,
+            domain,
+            command,
+            command_dir,
+            size,
+            current_pane_id,
+            workspace_for_new_window,
+            window_position,
+        } = request;
+
         let domain = self
             .resolve_spawn_tab_domain(current_pane_id, &domain)
             .context("resolve_spawn_tab_domain")?;

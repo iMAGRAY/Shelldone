@@ -23,13 +23,15 @@ svg = []
 ps = []
 script = []
 win32-surface = []
-xlib = []
+xlib = ["dep:x11"]
 xcb = []
 freetype = []
-use_glib = []
+use_glib = ["dep:glib-sys"]
 
 [dependencies]
+glib-sys = { workspace = true, optional = true }
 libc.workspace = true
+x11 = { workspace = true, optional = true, features = ["xlib"] }
 
 [build-dependencies]
 cc.workspace = true

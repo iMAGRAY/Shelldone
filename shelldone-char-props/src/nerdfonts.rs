@@ -11,6 +11,7 @@ pub use crate::nerdfonts_data::NERD_FONT_GLYPHS;
 #[cfg(feature = "std")]
 fn build_map() -> HashMap<&'static str, char> {
     crate::nerdfonts_data::NERD_FONT_GLYPHS
-        .iter().copied()
+        .iter()
+        .copied()
         .collect()
 }

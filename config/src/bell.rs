@@ -1,8 +1,7 @@
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 
 /// <https://developer.mozilla.org/en-US/docs/Web/CSS/easing-function>
-#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic, PartialEq, Default)]
 pub enum EasingFunction {
     Linear,
     CubicBezier(f32, f32, f32, f32),
@@ -40,7 +39,6 @@ impl EasingFunction {
     }
 }
 
-
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic)]
 pub struct VisualBell {
     #[dynamic(default)]
@@ -55,20 +53,16 @@ pub struct VisualBell {
     pub target: VisualBellTarget,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum VisualBellTarget {
     #[default]
     BackgroundColor,
     CursorColor,
 }
 
-
-#[derive(Debug, Clone, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, FromDynamic, ToDynamic, Default)]
 pub enum AudibleBell {
     #[default]
     SystemBeep,
     Disabled,
 }
-

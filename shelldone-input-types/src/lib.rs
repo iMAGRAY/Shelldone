@@ -5,7 +5,7 @@ use ::serde::*;
 use alloc::sync::Arc;
 use bitflags::*;
 use core::convert::TryFrom;
-use core::fmt::Write;
+use core::fmt::{self, Write};
 use core::sync::atomic::AtomicBool;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 #[cfg(feature = "std")]
@@ -124,24 +124,24 @@ pub enum KeyCode {
 impl KeyCode {
     /// Return true if the key represents a modifier key.
     pub fn is_modifier(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Hyper
-            | Self::CapsLock
-            | Self::Super
-            | Self::Meta
-            | Self::Shift
-            | Self::LeftShift
-            | Self::RightShift
-            | Self::Control
-            | Self::LeftControl
-            | Self::RightControl
-            | Self::Alt
-            | Self::LeftAlt
-            | Self::RightAlt
-            | Self::LeftWindows
-            | Self::RightWindows => true,
-            _ => false,
-        }
+                | Self::CapsLock
+                | Self::Super
+                | Self::Meta
+                | Self::Shift
+                | Self::LeftShift
+                | Self::RightShift
+                | Self::Control
+                | Self::LeftControl
+                | Self::RightControl
+                | Self::Alt
+                | Self::LeftAlt
+                | Self::RightAlt
+                | Self::LeftWindows
+                | Self::RightWindows
+        )
     }
 
     pub fn normalize_shift(&self, modifiers: Modifiers) -> (KeyCode, Modifiers) {
@@ -450,16 +450,16 @@ impl TryFrom<&str> for KeyCode {
     }
 }
 
-impl ToString for KeyCode {
-    fn to_string(&self) -> String {
+impl fmt::Display for KeyCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RawCode(n) => format!("raw:{}", n),
-            Self::Char(c) => format!("mapped:{}", c),
-            Self::Physical(phys) => phys.to_string(),
-            Self::Composed(s) => s.to_string(),
-            Self::Numpad(n) => format!("Numpad{}", n),
-            Self::Function(n) => format!("F{}", n),
-            other => format!("{:?}", other),
+            Self::RawCode(n) => write!(f, "raw:{n}"),
+            Self::Char(c) => write!(f, "mapped:{c}"),
+            Self::Physical(phys) => phys.fmt(f),
+            Self::Composed(s) => f.write_str(s),
+            Self::Numpad(n) => write!(f, "Numpad{n}"),
+            Self::Function(n) => write!(f, "F{n}"),
+            other => write!(f, "{other:?}"),
         }
     }
 }
@@ -472,19 +472,25 @@ bitflags! {
     }
 }
 
-impl ToString for KeyboardLedStatus {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
+impl fmt::Display for KeyboardLedStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut wrote = false;
         if self.contains(Self::CAPS_LOCK) {
-            s.push_str("CAPS_LOCK");
+            f.write_str("CAPS_LOCK")?;
+            wrote = true;
         }
         if self.contains(Self::NUM_LOCK) {
-            if !s.is_empty() {
-                s.push('|');
+            if wrote {
+                f.write_str("|")?;
             }
-            s.push_str("NUM_LOCK");
+            f.write_str("NUM_LOCK")?;
+            wrote = true;
         }
-        s
+        if !wrote {
+            f.write_str("")
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -716,13 +722,13 @@ impl Modifiers {
     }
 }
 
-impl ToString for Modifiers {
-    fn to_string(&self) -> String {
-        self.to_string_with_separator(ModifierToStringArgs {
+impl fmt::Display for Modifiers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_string_with_separator(ModifierToStringArgs {
             separator: "|",
             want_none: true,
             ui_key_cap_rendering: None,
-        })
+        }))
     }
 }
 
@@ -871,17 +877,17 @@ pub enum PhysKeyCode {
 
 impl PhysKeyCode {
     pub fn is_modifier(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::LeftShift
-            | Self::LeftControl
-            | Self::LeftWindows
-            | Self::LeftAlt
-            | Self::RightShift
-            | Self::RightControl
-            | Self::RightWindows
-            | Self::RightAlt => true,
-            _ => false,
-        }
+                | Self::LeftControl
+                | Self::LeftWindows
+                | Self::LeftAlt
+                | Self::RightShift
+                | Self::RightControl
+                | Self::RightWindows
+                | Self::RightAlt
+        )
     }
 
     pub fn to_key_code(self) -> KeyCode {
@@ -1191,16 +1197,16 @@ impl PhysKeyCode {
         }
     }
 
-    fn to_name(&self) -> Option<String> {
+    fn to_name(self) -> Option<String> {
         #[cfg(feature = "std")]
         {
-            INV_PHYSKEYCODE_MAP.get(self).cloned()
+            INV_PHYSKEYCODE_MAP.get(&self).cloned()
         }
         #[cfg(not(feature = "std"))]
         {
             let mut result = None;
             Self::for_each_code(|label, code| {
-                if code == *self {
+                if code == self {
                     result.replace(label.to_string());
                     true
                 } else {
@@ -1230,12 +1236,12 @@ impl TryFrom<&str> for PhysKeyCode {
     }
 }
 
-impl ToString for PhysKeyCode {
-    fn to_string(&self) -> String {
-        if let Some(s) = self.to_name() {
-            s.to_string()
+impl fmt::Display for PhysKeyCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(name) = self.to_name() {
+            f.write_str(&name)
         } else {
-            format!("{:?}", self)
+            write!(f, "{self:?}")
         }
     }
 }

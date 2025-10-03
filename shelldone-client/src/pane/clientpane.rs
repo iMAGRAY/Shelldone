@@ -136,12 +136,13 @@ impl ClientPane {
 
     pub async fn process_unilateral(&self, pdu: Pdu) -> anyhow::Result<()> {
         match pdu {
-            Pdu::GetPaneRenderChangesResponse(mut delta) => {
+            Pdu::GetPaneRenderChangesResponse(payload) => {
+                let mut delta = *payload;
                 *self.mouse_grabbed.lock() = delta.mouse_grabbed;
 
                 let bonus_lines = std::mem::take(&mut delta.bonus_lines);
                 let client = { Arc::clone(&self.renderable.lock().inner.borrow().client) };
-                let bonus_lines = hydrate_lines(client, delta.pane_id, bonus_lines).await;
+                let bonus_lines = hydrate_lines(client, delta.pane_id, *bonus_lines).await;
 
                 self.renderable
                     .lock()
@@ -168,8 +169,13 @@ impl ClientPane {
                     log::error!("ClientPane: Ignoring SetClipboard request {:?}", clipboard);
                 }
             },
-            Pdu::SetPalette(SetPalette { palette, .. }) => {
-                *self.application_palette.lock() = palette != *self.configured_palette.lock();
+            Pdu::SetPalette(payload) => {
+                let SetPalette { palette, .. } = *payload;
+                let differs = {
+                    let configured = self.configured_palette.lock();
+                    palette != *configured
+                };
+                *self.application_palette.lock() = differs;
 
                 *self.palette.lock() = palette;
                 let mux = Mux::get();

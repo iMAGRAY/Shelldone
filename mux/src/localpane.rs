@@ -720,24 +720,22 @@ impl Pane for LocalPane {
                 }
                 CompiledPattern::Regex(re) => {
                     // Allow for the regex to contain captures
-                    for capture_res in re.captures_iter(&haystack) {
-                        if let Ok(c) = capture_res {
-                            // Look for the captures in reverse order, as index==0 is
-                            // the whole matched string.  We can't just call
-                            // `c.iter().rev()` as the capture iterator isn't double-ended.
-                            for idx in (0..c.len()).rev() {
-                                if let Some(m) = c.get(idx) {
-                                    found_match(
-                                        m.as_str(),
-                                        m.start(),
-                                        lines,
-                                        stable_idx,
-                                        &mut uniq_matches,
-                                        &mut coords,
-                                        &mut results,
-                                    );
-                                    break;
-                                }
+                    for c in re.captures_iter(&haystack).flatten() {
+                        // Look for the captures in reverse order, as index==0 is
+                        // the whole matched string.  We can't just call
+                        // `c.iter().rev()` as the capture iterator isn't double-ended.
+                        for idx in (0..c.len()).rev() {
+                            if let Some(m) = c.get(idx) {
+                                found_match(
+                                    m.as_str(),
+                                    m.start(),
+                                    lines,
+                                    stable_idx,
+                                    &mut uniq_matches,
+                                    &mut coords,
+                                    &mut results,
+                                );
+                                break;
                             }
                         }
                     }
@@ -903,9 +901,10 @@ impl shelldone_term::DeviceControlHandler for LocalPaneDCSHandler {
                 }
             }
             DeviceControlMode::TmuxEvents(events) => {
+                let events = *events;
                 if let Some(tmux) = self.tmux_domain.as_ref() {
                     tmux.advance(events);
-                } else {
+                } else if configuration().log_unknown_escape_sequences {
                     log::warn!("unhandled DeviceControlMode::TmuxEvents {:?}", &events);
                 }
             }
@@ -1126,7 +1125,8 @@ impl LocalPane {
 
     #[allow(dead_code)]
     fn divine_foreground_process(&self, policy: CachePolicy) -> Option<LocalProcessInfo> {
-        self.divine_process_list(policy).map(|info| info.foreground.clone())
+        self.divine_process_list(policy)
+            .map(|info| info.foreground.clone())
     }
 }
 

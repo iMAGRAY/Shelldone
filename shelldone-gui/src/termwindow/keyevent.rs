@@ -10,6 +10,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use termwiz::input::KeyboardEncoding;
 
+struct KeyDispatch<'a> {
+    keycode: &'a KeyCode,
+    raw_modifiers: Modifiers,
+    leader_active: bool,
+    leader_mod: Modifiers,
+    only_key_bindings: OnlyKeyBindings,
+    is_down: bool,
+    key_event: Option<&'a KeyEvent>,
+}
+
 #[derive(Debug, Clone)]
 pub struct KeyTableStateEntry {
     name: String,
@@ -240,14 +250,17 @@ impl super::TermWindow {
         &mut self,
         pane: &Arc<dyn Pane>,
         context: &dyn WindowOps,
-        keycode: &KeyCode,
-        raw_modifiers: Modifiers,
-        leader_active: bool,
-        leader_mod: Modifiers,
-        only_key_bindings: OnlyKeyBindings,
-        is_down: bool,
-        key_event: Option<&KeyEvent>,
+        dispatch: KeyDispatch<'_>,
     ) -> bool {
+        let KeyDispatch {
+            keycode,
+            raw_modifiers,
+            leader_active,
+            leader_mod,
+            only_key_bindings,
+            is_down,
+            key_event,
+        } = dispatch;
         if is_down && !leader_active {
             // Check to see if this key-press is the leader activating
             if let Some(duration) = self.input_map.is_leader(keycode, raw_modifiers) {
@@ -285,12 +298,9 @@ impl super::TermWindow {
                 }
             }
 
-            if let Some((entry, table_name)) = self.lookup_key(
-                pane,
-                keycode,
-                raw_modifiers | leader_mod,
-                only_key_bindings,
-            ) {
+            if let Some((entry, table_name)) =
+                self.lookup_key(pane, keycode, raw_modifiers | leader_mod, only_key_bindings)
+            {
                 if self.config.debug_key_events {
                     log::info!(
                         "{}{:?} {:?} -> perform {:?}",
@@ -342,19 +352,16 @@ impl super::TermWindow {
             // right settings for the compose behavior.
             // Otherwise, if the event didn't include left vs. right then we want to
             // respect the generic compose behavior.
-            let bypass_compose =
-                    // Left ALT and they disabled compose
-                    (raw_modifiers.contains(Modifiers::LEFT_ALT)
-                    && !config.send_composed_key_when_left_alt_is_pressed)
-                    // Right ALT and they disabled compose
-                    || (raw_modifiers.contains(Modifiers::RIGHT_ALT)
-                        && !config.send_composed_key_when_right_alt_is_pressed)
-                    // Generic ALT and they disabled generic compose
-                    || (!raw_modifiers.contains(Modifiers::RIGHT_ALT)
-                        && !raw_modifiers.contains(Modifiers::LEFT_ALT)
-                        && raw_modifiers.contains(Modifiers::ALT)
-                        && !(config.send_composed_key_when_left_alt_is_pressed
-                             || config.send_composed_key_when_right_alt_is_pressed));
+            let compose_left = config.send_composed_key_when_left_alt_is_pressed;
+            let compose_right = config.send_composed_key_when_right_alt_is_pressed;
+            let left_alt = raw_modifiers.contains(Modifiers::LEFT_ALT);
+            let right_alt = raw_modifiers.contains(Modifiers::RIGHT_ALT);
+            let alt_unspecified = raw_modifiers.contains(Modifiers::ALT) && !left_alt && !right_alt;
+            let disable_generic = !compose_left && !compose_right;
+
+            let bypass_compose = (left_alt && !compose_left)
+                || (right_alt && !compose_right)
+                || (alt_unspecified && disable_generic);
 
             if bypass_compose {
                 if let Key::Code(term_key) = self.win_key_code_to_termwiz_key_code(keycode) {
@@ -473,13 +480,15 @@ impl super::TermWindow {
             if self.process_key(
                 &pane,
                 context,
-                phys_key,
-                key.modifiers,
-                leader_active,
-                leader_mod,
-                OnlyKeyBindings::Yes,
-                key.key_is_down,
-                None,
+                KeyDispatch {
+                    keycode: phys_key,
+                    raw_modifiers: key.modifiers,
+                    leader_active,
+                    leader_mod,
+                    only_key_bindings: OnlyKeyBindings::Yes,
+                    is_down: key.key_is_down,
+                    key_event: None,
+                },
             ) {
                 key.set_handled();
                 return;
@@ -494,13 +503,15 @@ impl super::TermWindow {
         if self.process_key(
             &pane,
             context,
-            &raw_key,
-            key.modifiers,
-            leader_active,
-            leader_mod,
-            OnlyKeyBindings::Yes,
-            key.key_is_down,
-            None,
+            KeyDispatch {
+                keycode: &raw_key,
+                raw_modifiers: key.modifiers,
+                leader_active,
+                leader_mod,
+                only_key_bindings: OnlyKeyBindings::Yes,
+                is_down: key.key_is_down,
+                key_event: None,
+            },
         ) {
             key.set_handled();
             return;
@@ -515,13 +526,15 @@ impl super::TermWindow {
         if self.process_key(
             &pane,
             context,
-            &key.key,
-            key.modifiers,
-            leader_active,
-            leader_mod,
-            OnlyKeyBindings::Yes,
-            key.key_is_down,
-            None,
+            KeyDispatch {
+                keycode: &key.key,
+                raw_modifiers: key.modifiers,
+                leader_active,
+                leader_mod,
+                only_key_bindings: OnlyKeyBindings::Yes,
+                is_down: key.key_is_down,
+                key_event: None,
+            },
         ) {
             key.set_handled();
         }
@@ -631,13 +644,15 @@ impl super::TermWindow {
         if self.process_key(
             &pane,
             context,
-            &window_key.key,
-            window_key.modifiers,
-            leader_active,
-            leader_mod,
-            OnlyKeyBindings::No,
-            window_key.key_is_down,
-            Some(&window_key),
+            KeyDispatch {
+                keycode: &window_key.key,
+                raw_modifiers: window_key.modifiers,
+                leader_active,
+                leader_mod,
+                only_key_bindings: OnlyKeyBindings::No,
+                is_down: window_key.key_is_down,
+                key_event: Some(&window_key),
+            },
         ) {
             return;
         }

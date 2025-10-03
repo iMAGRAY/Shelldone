@@ -7,7 +7,7 @@ use mux::domain::{DomainId, SplitSource};
 use mux::pane::{Pane, PaneId};
 use mux::tab::{SplitDirection, SplitRequest, SplitSize, Tab, TabId};
 use mux::window::{Window, WindowId};
-use mux::Mux;
+use mux::{Mux, SpawnRequest};
 use portable_pty::CommandBuilder;
 use shelldone_dynamic::{FromDynamic, ToDynamic};
 use shelldone_term::TerminalSize;
@@ -197,8 +197,7 @@ impl CommandBuilderFrag {
     }
 }
 
-#[derive(Debug, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, FromDynamic, ToDynamic, Default)]
 enum HandySplitDirection {
     Left,
     #[default]
@@ -207,7 +206,6 @@ enum HandySplitDirection {
     Bottom,
 }
 impl_lua_conversion_dynamic!(HandySplitDirection);
-
 
 #[derive(Debug, FromDynamic, ToDynamic)]
 struct SpawnWindow {
@@ -240,17 +238,19 @@ impl SpawnWindow {
         };
 
         let (cmd_builder, cwd) = self.cmd_builder.to_command_builder();
+        let request = SpawnRequest {
+            window_id: None,
+            domain: self.domain,
+            command: cmd_builder,
+            command_dir: cwd,
+            size,
+            current_pane_id: None,
+            workspace_for_new_window: self.workspace.unwrap_or_else(|| mux.active_workspace()),
+            window_position: self.position,
+        };
+
         let (tab, pane, window_id) = mux
-            .spawn_tab_or_window(
-                None,
-                self.domain,
-                cmd_builder,
-                cwd,
-                size,
-                None,
-                self.workspace.unwrap_or_else(|| mux.active_workspace()),
-                self.position,
-            )
+            .spawn_tab_or_window(request)
             .await
             .map_err(|e| mlua::Error::external(format!("{:#?}", e)))?;
 
@@ -291,17 +291,19 @@ impl SpawnTab {
 
         let (cmd_builder, cwd) = self.cmd_builder.to_command_builder();
 
+        let request = SpawnRequest {
+            window_id: Some(window.0),
+            domain: self.domain,
+            command: cmd_builder,
+            command_dir: cwd,
+            size,
+            current_pane_id: pane,
+            workspace_for_new_window: String::new(),
+            window_position: None,
+        };
+
         let (tab, pane, window_id) = mux
-            .spawn_tab_or_window(
-                Some(window.0),
-                self.domain,
-                cmd_builder,
-                cwd,
-                size,
-                pane,
-                String::new(),
-                None, // optional gui window position
-            )
+            .spawn_tab_or_window(request)
             .await
             .map_err(|e| mlua::Error::external(format!("{:#?}", e)))?;
 

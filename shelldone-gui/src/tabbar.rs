@@ -218,6 +218,15 @@ fn is_tab_hover(mouse_x: Option<usize>, x: usize, tab_title_len: usize) -> bool 
         .unwrap_or(false)
 }
 
+pub struct TabBarParams<'a> {
+    pub tab_info: &'a [TabInformation],
+    pub pane_info: &'a [PaneInformation],
+    pub colors: Option<&'a TabBarColors>,
+    pub config: &'a ConfigHandle,
+    pub left_status: &'a str,
+    pub right_status: &'a str,
+}
+
 impl TabBarState {
     pub fn default() -> Self {
         Self {
@@ -330,16 +339,16 @@ impl TabBarState {
     /// mouse_x is some if the mouse is on the same row as the tab bar.
     /// title_width is the total number of cell columns in the window.
     /// window allows access to the tabs associated with the window.
-    pub fn new(
-        title_width: usize,
-        mouse_x: Option<usize>,
-        tab_info: &[TabInformation],
-        pane_info: &[PaneInformation],
-        colors: Option<&TabBarColors>,
-        config: &ConfigHandle,
-        left_status: &str,
-        right_status: &str,
-    ) -> Self {
+    pub fn new(title_width: usize, mouse_x: Option<usize>, params: TabBarParams<'_>) -> Self {
+        let TabBarParams {
+            tab_info,
+            pane_info,
+            colors,
+            config,
+            left_status,
+            right_status,
+        } = params;
+
         let colors = colors.cloned().unwrap_or_else(TabBarColors::default);
 
         let active_cell_attrs = colors.active_tab().as_cell_attributes();
@@ -404,7 +413,7 @@ impl TabBarState {
             title_width.saturating_sub(number_of_tabs.saturating_sub(1) + new_tab.len());
         let tab_width_max = if config.use_fancy_tab_bar || available_cells >= titles_len {
             // We can render each title with its full width
-            usize::max_value()
+            usize::MAX
         } else {
             // We need to clamp the length to balance them out
             available_cells / number_of_tabs
@@ -441,7 +450,7 @@ impl TabBarState {
         }
 
         let left_status_line = parse_status_text(left_status, black_cell.attrs().clone());
-        if left_status_line.len() > 0 {
+        if !left_status_line.is_empty() {
             items.push(TabEntry {
                 item: TabBarItem::LeftStatus,
                 title: left_status_line.clone(),
@@ -662,54 +671,56 @@ pub fn parse_status_text(text: &str, default_cell: CellAttributes) -> Line {
             }
             Action::CSI(csi) => {
                 flush_print(&mut print_buffer, &mut cells, &pen);
-                if let CSI::Sgr(sgr) = csi { match sgr {
-                    Sgr::Reset => pen = default_cell.clone(),
-                    Sgr::Intensity(i) => {
-                        pen.set_intensity(i);
-                    }
-                    Sgr::Underline(u) => {
-                        pen.set_underline(u);
-                    }
-                    Sgr::Overline(o) => {
-                        pen.set_overline(o);
-                    }
-                    Sgr::VerticalAlign(o) => {
-                        pen.set_vertical_align(o);
-                    }
-                    Sgr::Blink(b) => {
-                        pen.set_blink(b);
-                    }
-                    Sgr::Italic(i) => {
-                        pen.set_italic(i);
-                    }
-                    Sgr::Inverse(inverse) => {
-                        pen.set_reverse(inverse);
-                    }
-                    Sgr::Invisible(invis) => {
-                        pen.set_invisible(invis);
-                    }
-                    Sgr::StrikeThrough(strike) => {
-                        pen.set_strikethrough(strike);
-                    }
-                    Sgr::Foreground(col) => {
-                        if let ColorSpec::Default = col {
-                            pen.set_foreground(default_cell.foreground());
-                        } else {
-                            pen.set_foreground(col);
+                if let CSI::Sgr(sgr) = csi {
+                    match sgr {
+                        Sgr::Reset => pen = default_cell.clone(),
+                        Sgr::Intensity(i) => {
+                            pen.set_intensity(i);
                         }
-                    }
-                    Sgr::Background(col) => {
-                        if let ColorSpec::Default = col {
-                            pen.set_background(default_cell.background());
-                        } else {
-                            pen.set_background(col);
+                        Sgr::Underline(u) => {
+                            pen.set_underline(u);
                         }
+                        Sgr::Overline(o) => {
+                            pen.set_overline(o);
+                        }
+                        Sgr::VerticalAlign(o) => {
+                            pen.set_vertical_align(o);
+                        }
+                        Sgr::Blink(b) => {
+                            pen.set_blink(b);
+                        }
+                        Sgr::Italic(i) => {
+                            pen.set_italic(i);
+                        }
+                        Sgr::Inverse(inverse) => {
+                            pen.set_reverse(inverse);
+                        }
+                        Sgr::Invisible(invis) => {
+                            pen.set_invisible(invis);
+                        }
+                        Sgr::StrikeThrough(strike) => {
+                            pen.set_strikethrough(strike);
+                        }
+                        Sgr::Foreground(col) => {
+                            if let ColorSpec::Default = col {
+                                pen.set_foreground(default_cell.foreground());
+                            } else {
+                                pen.set_foreground(col);
+                            }
+                        }
+                        Sgr::Background(col) => {
+                            if let ColorSpec::Default = col {
+                                pen.set_background(default_cell.background());
+                            } else {
+                                pen.set_background(col);
+                            }
+                        }
+                        Sgr::UnderlineColor(col) => {
+                            pen.set_underline_color(col);
+                        }
+                        Sgr::Font(_) => {}
                     }
-                    Sgr::UnderlineColor(col) => {
-                        pen.set_underline_color(col);
-                    }
-                    Sgr::Font(_) => {}
-                } }
+                }
             }
             Action::OperatingSystemCommand(_)
             | Action::DeviceControl(_)

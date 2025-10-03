@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use termwiz::cell::{Cell, CellAttributes, Underline};
 use termwiz::color::AnsiColor;
-use termwiz::image::{ImageCell, ImageData};
+use termwiz::image::{ImageCell, ImageCellIdentity, ImageCellPadding, ImageData};
 use termwiz::surface::{SequenceNo, SEQ_ZERO};
 use url::Url;
 
@@ -147,12 +147,12 @@ impl RenderableInner {
     /// The prediction is basically just local echo.
     /// Open questions:
     /// how do we tell if the intent is to suppress local echo during eg:
-    ///  * password prompt?  One option is to look back and see if the line
-    ///                      looks like a password prompt.
-    ///  * normal mode in vim: letter presses are typically movement or
-    ///                        other editor commands
-    /// There are bound to be a number of other edge cases that we should
-    /// handle.
+    ///   * password prompt? One option is to look back and see if the line
+    ///     looks like a password prompt.
+    ///   * normal mode in vim: letter presses are typically movement or
+    ///     other editor commands
+    ///     There are bound to be a number of other edge cases that we should
+    ///     handle.
     fn apply_prediction(&mut self, c: KeyCode, line: &mut Line) {
         let text = line.as_str();
         if text.contains("sword") {
@@ -698,19 +698,22 @@ pub(crate) async fn hydrate_lines(
         if let Some(data) = data_by_hash.get(&im.data_hash) {
             if let Some(line) = line_by_idx.get_mut(&im.line_idx) {
                 if let Some(cell) = line.cells_mut_for_attr_changes_only().get_mut(im.cell_idx) {
-                    cell.attrs_mut()
-                        .attach_image(Box::new(ImageCell::with_z_index(
-                            im.top_left,
-                            im.bottom_right,
-                            Arc::clone(data),
-                            im.z_index,
+                    cell.attrs_mut().attach_image(ImageCell::with_z_index(
+                        im.top_left,
+                        im.bottom_right,
+                        Arc::clone(data),
+                        im.z_index,
+                        ImageCellPadding::new(
                             im.padding_left,
                             im.padding_top,
                             im.padding_right,
                             im.padding_bottom,
-                            im.image_id,
-                            im.placement_id,
-                        )));
+                        ),
+                        ImageCellIdentity {
+                            image_id: im.image_id,
+                            placement_id: im.placement_id,
+                        },
+                    ));
                 }
             }
         }
@@ -761,27 +764,29 @@ impl RenderableState {
                 }
             };
 
-            if inner.client.overlay_lag_indicator && idx == inner.dimensions.physical_top
-                && inner.is_tardy() {
-                    let status = format!(
-                        "shelldone: {:.0?}⏳since last response",
-                        inner.last_recv_time.elapsed()
-                    );
-                    // Right align it in the tab
-                    let col = inner
-                        .dimensions
-                        .cols
-                        .saturating_sub(shelldone_term::unicode_column_width(&status, None));
+            if inner.client.overlay_lag_indicator
+                && idx == inner.dimensions.physical_top
+                && inner.is_tardy()
+            {
+                let status = format!(
+                    "shelldone: {:.0?}⏳since last response",
+                    inner.last_recv_time.elapsed()
+                );
+                // Right align it in the tab
+                let col = inner
+                    .dimensions
+                    .cols
+                    .saturating_sub(shelldone_term::unicode_column_width(&status, None));
 
-                    let mut attr = CellAttributes::default();
-                    attr.set_foreground(AnsiColor::White);
-                    attr.set_background(AnsiColor::Blue);
+                let mut attr = CellAttributes::default();
+                attr.set_foreground(AnsiColor::White);
+                attr.set_background(AnsiColor::Blue);
 
-                    result
-                        .last_mut()
-                        .unwrap()
-                        .overlay_text_with_attribute(col, &status, attr, SEQ_ZERO);
-                }
+                result
+                    .last_mut()
+                    .unwrap()
+                    .overlay_text_with_attribute(col, &status, attr, SEQ_ZERO);
+            }
 
             inner.lines.put(idx, entry);
         }

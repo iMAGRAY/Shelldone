@@ -1673,15 +1673,19 @@ impl Default for WcLookupTable {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn basics() {
-        assert_eq!(WcWidth::from_char('w'), WcWidth::One);
-        assert_eq!(WcWidth::from_char('\x1f'), WcWidth::NonPrint);
-        assert_eq!(WcWidth::from_char('\u{e001}'), WcWidth::PrivateUse);
-        assert_eq!(WcWidth::from_char('\u{2716}'), WcWidth::One);
-        assert_eq!(WcWidth::from_char('\u{270a}'), WcWidth::WidenedIn9);
-        assert_eq!(WcWidth::from_char('\u{3fffd}'), WcWidth::Two);
+        assert_eq!(super::WcWidth::from_char('w'), super::WcWidth::One);
+        assert_eq!(super::WcWidth::from_char('\x1f'), super::WcWidth::NonPrint);
+        assert_eq!(
+            super::WcWidth::from_char('\u{e001}'),
+            super::WcWidth::PrivateUse
+        );
+        assert_eq!(super::WcWidth::from_char('\u{2716}'), super::WcWidth::One);
+        assert_eq!(
+            super::WcWidth::from_char('\u{270a}'),
+            super::WcWidth::WidenedIn9
+        );
+        assert_eq!(super::WcWidth::from_char('\u{3fffd}'), super::WcWidth::Two);
     }
 }

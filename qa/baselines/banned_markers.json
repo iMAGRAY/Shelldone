@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2025-09-26T02:05:52Z",
+  "generated_at": "2025-10-02T13:56:33Z",
   "files": [
     {
       "path": "assets/shell-integration/shelldone.sh",
@@ -213,6 +213,36 @@
       ]
     },
     {
+      "path": "scripts/roadmap_status.py",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "TODO_PATH = ROOT / \"todo.machine.md\"",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "if not TODO_PATH.exists():",
+          "count": 1
+        },
+        {
+          "token": "TODO",
+          "text": "text = TODO_PATH.read_text(encoding=\"utf-8\")",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify.py",
+      "markers": [
+        {
+          "token": "TODO",
+          "text": "MARKER_REGEX = re.compile(r\"(TODO|FIXME|XXX|\\?\\?\\?)\")",
+          "count": 1
+        }
+      ]
+    },
+    {
       "path": "shelldone-client/src/client.rs",
       "markers": [
         {
@@ -398,16 +428,6 @@
         {
           "token": "FIXME",
           "text": "left: Dimension::Cells(4.0), // FIXME: determine exact width of macos ... buttons",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "shelldone-gui/src/termwindow/render/mod.rs",
-      "markers": [
-        {
-          "token": "FIXME",
-          "text": "None, // FIXME: need more paragraph context",
           "count": 1
         }
       ]
@@ -668,7 +688,7 @@
       ]
     },
     {
-      "path": "shelldone-surface/src/line/line.rs",
+      "path": "shelldone-surface/src/line/line_impl.rs",
       "markers": [
         {
           "token": "FIXME",

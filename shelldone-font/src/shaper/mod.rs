@@ -1,5 +1,6 @@
 use crate::parser::ParsedFont;
 use crate::units::PixelLength;
+use crate::ShapeOptions;
 use std::ops::Range;
 use termwiz::cell::Presentation;
 use termwiz::cellcluster::CellCluster;
@@ -121,10 +122,7 @@ pub trait FontShaper {
         size: f64,
         dpi: u32,
         no_glyphs: &mut Vec<char>,
-        presentation: Option<termwiz::cell::Presentation>,
-        direction: Direction,
-        range: Option<Range<usize>>,
-        presentation_width: Option<&PresentationWidth>,
+        options: ShapeOptions<'_>,
     ) -> anyhow::Result<Vec<GlyphInfo>>;
 
     /// Compute the font metrics for the preferred font

@@ -83,7 +83,7 @@ pub struct TmuxDomain {
 }
 
 impl TmuxDomainState {
-    pub fn advance(&self, events: Box<Vec<Event>>) {
+    pub fn advance(&self, events: Vec<Event>) {
         for event in events.iter() {
             let state = *self.state.lock();
             log::debug!("tmux: {:?} in state {:?}", event, state);

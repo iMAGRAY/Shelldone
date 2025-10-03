@@ -5,7 +5,7 @@ use mux::activity::Activity;
 use mux::domain::SplitSource;
 use mux::tab::SplitRequest;
 use mux::window::WindowId as MuxWindowId;
-use mux::Mux;
+use mux::{Mux, SpawnRequest};
 use portable_pty::CommandBuilder;
 use shelldone_term::TerminalSize;
 use std::sync::Arc;
@@ -123,20 +123,22 @@ pub async fn spawn_command_internal(
             }
         }
         _ => {
+            let request = SpawnRequest {
+                window_id: match spawn_where {
+                    SpawnWhere::NewWindow => None,
+                    _ => src_window_id,
+                },
+                domain: spawn.domain,
+                command: cmd_builder,
+                command_dir: cwd,
+                size,
+                current_pane_id,
+                workspace_for_new_window: workspace,
+                window_position: spawn.position,
+            };
+
             let (_tab, pane, window_id) = mux
-                .spawn_tab_or_window(
-                    match spawn_where {
-                        SpawnWhere::NewWindow => None,
-                        _ => src_window_id,
-                    },
-                    spawn.domain,
-                    cmd_builder,
-                    cwd,
-                    size,
-                    current_pane_id,
-                    workspace,
-                    spawn.position,
-                )
+                .spawn_tab_or_window(request)
                 .await
                 .context("spawn_tab_or_window")?;
 

@@ -127,8 +127,7 @@ impl Write for TtyWriteHandle {
 
     fn flush(&mut self) -> std::result::Result<(), IoError> {
         self.flush_local_buffer()?;
-        self.drain()
-            .map_err(|e| IoError::other(format!("{}", e)))?;
+        self.drain().map_err(|e| IoError::other(format!("{}", e)))?;
         Ok(())
     }
 }
@@ -299,12 +298,12 @@ pub struct UnixTerminalWaker {
 impl UnixTerminalWaker {
     pub fn wake(&self) -> std::result::Result<(), IoError> {
         let mut pipe = self.pipe.lock().unwrap();
-        match pipe.write(b"W") {
+        match pipe.write_all(b"W") {
             Err(e) => match e.kind() {
                 ErrorKind::WouldBlock => Ok(()),
                 _ => Err(e),
             },
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
         }
     }
 }

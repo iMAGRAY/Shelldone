@@ -6,7 +6,7 @@ use crate::ftwrap::{
 use crate::parser::ParsedFont;
 use crate::rasterizer::colr::{
     apply_draw_ops_to_context, paint_linear_gradient, paint_radial_gradient, paint_sweep_gradient,
-    ColorLine, ColorStop, PaintOp,
+    ColorLine, ColorStop, LinearGradientParams, PaintOp, RadialGradientParams,
 };
 use crate::rasterizer::harfbuzz::{argb_to_rgba, HarfbuzzRasterizer};
 use crate::rasterizer::{FontRasterizer, FAKE_ITALIC_SKEW};
@@ -132,7 +132,7 @@ impl FreeTypeRasterizer {
     ) -> RasterizedGlyph {
         let width = ft_glyph.bitmap.width as usize;
         let height = ft_glyph.bitmap.rows as usize;
-        let size = (width * height * 4);
+        let size = width * height * 4;
         let mut rgba = vec![0u8; size];
         for y in 0..height {
             let src_offset = y * pitch;
@@ -177,7 +177,7 @@ impl FreeTypeRasterizer {
     ) -> RasterizedGlyph {
         let width = ft_glyph.bitmap.width as usize;
         let height = ft_glyph.bitmap.rows as usize;
-        let size = (width * height * 4);
+        let size = width * height * 4;
         let mut rgba = vec![0u8; size];
         for y in 0..height {
             let src_offset = y * pitch;
@@ -217,7 +217,7 @@ impl FreeTypeRasterizer {
     ) -> RasterizedGlyph {
         let width = ft_glyph.bitmap.width as usize / 3;
         let height = ft_glyph.bitmap.rows as usize;
-        let size = (width * height * 4);
+        let size = width * height * 4;
         let mut rgba = vec![0u8; size];
         for y in 0..height {
             let src_offset = y * pitch;
@@ -384,9 +384,8 @@ impl FreeTypeRasterizer {
         log::trace!("Rasterizier wants {:?}", parsed);
         let lib = ftwrap::Library::new()?;
         let mut face = lib.face_from_locator(&parsed.handle)?;
-        let has_color = unsafe {
-            (((*face.face).face_flags as u32) & ftwrap::FT_FACE_FLAG_COLOR) != 0
-        };
+        let has_color =
+            unsafe { (((*face.face).face_flags as u32) & ftwrap::FT_FACE_FLAG_COLOR) != 0 };
 
         if parsed.synthesize_italic {
             face.set_transform(Some(FT_Matrix {
@@ -856,12 +855,11 @@ fn record_to_cairo_surface(
                 has_color = true;
                 paint_linear_gradient(
                     &context,
-                    x0.into(),
-                    y0.into(),
-                    x1.into(),
-                    y1.into(),
-                    x2.into(),
-                    y2.into(),
+                    LinearGradientParams {
+                        start: (x0.into(), y0.into()),
+                        control: (x1.into(), y1.into()),
+                        end: (x2.into(), y2.into()),
+                    },
                     color_line,
                 )?;
             }
@@ -877,12 +875,10 @@ fn record_to_cairo_surface(
                 has_color = true;
                 paint_radial_gradient(
                     &context,
-                    x0.into(),
-                    y0.into(),
-                    r0.into(),
-                    x1.into(),
-                    y1.into(),
-                    r1.into(),
+                    RadialGradientParams {
+                        start: (x0.into(), y0.into(), r0.into()),
+                        end: (x1.into(), y1.into(), r1.into()),
+                    },
                     color_line,
                 )?;
             }

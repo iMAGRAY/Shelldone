@@ -25,7 +25,6 @@ use smithay_client_toolkit::subcompositor::SubcompositorState;
 use smithay_client_toolkit::{
     delegate_compositor, delegate_data_device, delegate_output, delegate_pointer, delegate_primary_selection, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window, registry_handlers
 };
-use wayland_client::backend::ObjectId;
 use wayland_client::globals::GlobalList;
 use wayland_client::protocol::wl_keyboard::WlKeyboard;
 use wayland_client::protocol::wl_output::WlOutput;
@@ -53,7 +52,7 @@ pub(super) struct WaylandState {
     pub(super) xdg: XdgShell,
     pub(super) windows: RefCell<HashMap<usize, Rc<RefCell<WaylandWindowInner>>>>,
 
-    pub(super) active_surface_id: RefCell<Option<ObjectId>>,
+    pub(super) active_surface_id: RefCell<Option<u32>>,
     pub(super) last_serial: RefCell<u32>,
     pub(super) keyboard: Option<WlKeyboard>,
     pub(super) keyboard_mapper: Option<KeyboardWithFallback>,
@@ -62,7 +61,7 @@ pub(super) struct WaylandState {
     pub(super) keyboard_window_id: Option<usize>,
 
     pub(super) pointer: Option<ThemedPointer<PointerUserData>>,
-    pub(super) surface_to_pending: HashMap<ObjectId, Arc<Mutex<PendingMouse>>>,
+    pub(super) surface_to_pending: HashMap<u32, Arc<Mutex<PendingMouse>>>,
 
     pub(super) data_device_manager_state: DataDeviceManagerState,
     pub(super) data_device: Option<DataDevice>,

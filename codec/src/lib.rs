@@ -301,7 +301,6 @@ fn serialize<T: serde::Serialize>(t: &T) -> Result<(Vec<u8>, bool), Error> {
     let mut compress = zstd::Encoder::new(&mut compressed, zstd::DEFAULT_COMPRESSION_LEVEL)?;
     let mut encode = varbincode::Serializer::new(&mut compress);
     t.serialize(&mut encode)?;
-    drop(encode);
     compress.finish()?;
 
     log::debug!(
@@ -331,13 +330,36 @@ fn deserialize<T: serde::de::DeserializeOwned, R: std::io::Read>(
     }
 }
 
+macro_rules! pdu_wrapper_ty {
+    ($name:ident) => { $name };
+    ($name:ident Box) => { Box<$name> };
+}
+
+macro_rules! pdu_wrapper_ref {
+    ($payload:expr, $name:ident) => {
+        &$payload
+    };
+    ($payload:expr, $name:ident Box) => {
+        $payload.as_ref()
+    };
+}
+
+macro_rules! pdu_wrap_value {
+    ($value:expr, $name:ident) => {
+        $value
+    };
+    ($value:expr, $name:ident Box) => {
+        Box::new($value)
+    };
+}
+
 macro_rules! pdu {
-    ($( $name:ident:$vers:expr),* $(,)?) => {
+    ($( $name:ident : $vers:expr $(=> $wrapper:ident)? ),* $(,)?) => {
         #[derive(PartialEq, Debug)]
         pub enum Pdu {
             Invalid{ident: u64},
             $(
-                $name($name)
+                $name(pdu_wrapper_ty!($name $( $wrapper )?))
             ,)*
         }
 
@@ -346,8 +368,9 @@ macro_rules! pdu {
                 match self {
                     Pdu::Invalid{..} => bail!("attempted to serialize Pdu::Invalid"),
                     $(
-                        Pdu::$name(s) => {
-                            let (data, is_compressed) = serialize(s)?;
+                        Pdu::$name(payload) => {
+                            let payload_ref = pdu_wrapper_ref!(payload, $name $( $wrapper )?);
+                            let (data, is_compressed) = serialize(payload_ref)?;
                             let encoded_size = encode_raw($vers, serial, &data, is_compressed, w)?;
                             log::debug!("encode {} size={encoded_size}", stringify!($name));
                             metrics::histogram!("pdu.size", "pdu" => stringify!($name)).record(encoded_size as f64);
@@ -362,8 +385,9 @@ macro_rules! pdu {
                 match self {
                     Pdu::Invalid{..} => bail!("attempted to serialize Pdu::Invalid"),
                     $(
-                        Pdu::$name(s) => {
-                            let (data, is_compressed) = serialize(s)?;
+                        Pdu::$name(payload) => {
+                            let payload_ref = pdu_wrapper_ref!(payload, $name $( $wrapper )?);
+                            let (data, is_compressed) = serialize(payload_ref)?;
                             let encoded_size = encode_raw_async($vers, serial, &data, is_compressed, w).await?;
                             log::debug!("encode_async {} size={encoded_size}", stringify!($name));
                             metrics::histogram!("pdu.size", "pdu" => stringify!($name)).record(encoded_size as f64);
@@ -394,7 +418,7 @@ macro_rules! pdu {
                             metrics::histogram!("pdu.size.rate", "pdu" => stringify!($name)).record(decoded.data.len() as f64);
                             Ok(DecodedPdu {
                                 serial: decoded.serial,
-                                pdu: Pdu::$name(deserialize(decoded.data.as_slice(), decoded.is_compressed)?)
+                                pdu: Pdu::$name(pdu_wrap_value!(deserialize(decoded.data.as_slice(), decoded.is_compressed)?, $name $( $wrapper )?))
                             })
                         }
                     ,)*
@@ -421,7 +445,7 @@ macro_rules! pdu {
                             metrics::histogram!("pdu.size", "pdu" => stringify!($name)).record(decoded.data.len() as f64);
                             Ok(DecodedPdu {
                                 serial: decoded.serial,
-                                pdu: Pdu::$name(deserialize(decoded.data.as_slice(), decoded.is_compressed)?)
+                                pdu: Pdu::$name(pdu_wrap_value!(deserialize(decoded.data.as_slice(), decoded.is_compressed)?, $name $( $wrapper )?))
                             })
                         }
                     ,)*
@@ -464,7 +488,7 @@ pdu! {
     GetLines: 22,
     GetLinesResponse: 23,
     GetPaneRenderChanges: 24,
-    GetPaneRenderChangesResponse: 25,
+    GetPaneRenderChangesResponse: 25 => Box,
     GetCodecVersion: 26,
     GetCodecVersionResponse: 27,
     GetTlsCreds: 28,
@@ -477,7 +501,7 @@ pdu! {
     KillPane: 35,
     SpawnV2: 36,
     PaneRemoved: 37,
-    SetPalette: 38,
+    SetPalette: 38 => Box,
     NotifyAlert: 39,
     SetClientId: 40,
     GetClientList: 41,
@@ -509,17 +533,17 @@ impl Pdu {
     /// directly by a user, rather than background traffic on
     /// a live connection
     pub fn is_user_input(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::WriteToPane(_)
-            | Self::SendKeyDown(_)
-            | Self::SendMouseEvent(_)
-            | Self::SendPaste(_)
-            | Self::Resize(_)
-            | Self::SetClipboard(_)
-            | Self::SetPaneZoomed(_)
-            | Self::SpawnV2(_) => true,
-            _ => false,
-        }
+                | Self::SendKeyDown(_)
+                | Self::SendMouseEvent(_)
+                | Self::SendPaste(_)
+                | Self::Resize(_)
+                | Self::SetClipboard(_)
+                | Self::SetPaneZoomed(_)
+                | Self::SpawnV2(_)
+        )
     }
 
     pub fn stream_decode(buffer: &mut Vec<u8>) -> anyhow::Result<Option<DecodedPdu>> {
@@ -590,9 +614,9 @@ impl Pdu {
 
     pub fn pane_id(&self) -> Option<PaneId> {
         match self {
-            Pdu::GetPaneRenderChangesResponse(GetPaneRenderChangesResponse { pane_id, .. })
-            | Pdu::SetPalette(SetPalette { pane_id, .. })
-            | Pdu::NotifyAlert(NotifyAlert { pane_id, .. })
+            Pdu::GetPaneRenderChangesResponse(payload) => Some(payload.pane_id),
+            Pdu::SetPalette(payload) => Some(payload.pane_id),
+            Pdu::NotifyAlert(NotifyAlert { pane_id, .. })
             | Pdu::SetClipboard(SetClipboard { pane_id, .. })
             | Pdu::PaneFocused(PaneFocused { pane_id })
             | Pdu::PaneRemoved(PaneRemoved { pane_id }) => Some(*pane_id),
@@ -921,7 +945,7 @@ pub struct GetPaneRenderChangesResponse {
     pub working_dir: Option<SerdeUrl>,
     /// Lines that the server thought we'd almost certainly
     /// want to fetch as soon as we received this response
-    pub bonus_lines: SerializedLines,
+    pub bonus_lines: Box<SerializedLines>,
 
     pub input_serial: Option<InputSerial>,
     pub seqno: SequenceNo,

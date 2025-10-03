@@ -23,10 +23,9 @@ pub use direction::Direction;
 pub use level::Level;
 
 /// Placeholder codepoint index that corresponds to NO_LEVEL
-const DELETED: usize = usize::max_value();
+const DELETED: usize = usize::MAX;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum ParagraphDirectionHint {
     #[default]
     LeftToRight,
@@ -36,7 +35,6 @@ pub enum ParagraphDirectionHint {
     /// Attempt to auto-detect but fall back to RTL
     AutoRightToLeft,
 }
-
 
 impl ParagraphDirectionHint {
     /// Returns just the direction portion of the hint, independent
@@ -359,13 +357,15 @@ impl BidiContext {
         }
 
         // Initial visual order
-        let mut visual = vec![];
-        for i in 0..levels.len() {
-            if levels[i].removed_by_x9() {
+        let mut visual = Vec::with_capacity(levels.len());
+        let mut index = 0;
+        while index < levels.len() {
+            if levels[index].removed_by_x9() {
                 visual.push(DELETED);
             } else {
-                visual.push(i + first_cidx);
+                visual.push(index + first_cidx);
             }
+            index += 1;
         }
 
         // Apply L3. UAX9 has this occur after L2, but we do it
@@ -1263,7 +1263,7 @@ impl BidiContext {
             line_range: Range<usize>,
             base_level: Level,
             orig_char_types: &[BidiClass],
-            levels: &mut Vec<Level>,
+            levels: &mut [Level],
         ) {
             for i in line_range.rev() {
                 if orig_char_types[i] == BidiClass::WhiteSpace
@@ -1296,7 +1296,7 @@ impl BidiContext {
                         line_range.start..idx,
                         self.base_level,
                         &self.orig_char_types,
-                        &mut levels,
+                        levels.as_mut_slice(),
                     );
                 }
                 _ => {}
@@ -1307,7 +1307,7 @@ impl BidiContext {
             line_range.clone(),
             self.base_level,
             &self.orig_char_types,
-            &mut levels,
+            levels.as_mut_slice(),
         );
 
         levels[line_range].to_vec()
@@ -1360,7 +1360,7 @@ impl BidiContext {
                 BidiClass::RightToLeftOverride => {
                     if let Some(level) = stack.embedding_level().least_greater_odd() {
                         if overflow_isolate == 0 && overflow_embedding == 0 {
-                            stack.push(level, Override::RTL, false);
+                            stack.push(level, Override::Rtl, false);
                             continue;
                         }
                     }
@@ -1372,7 +1372,7 @@ impl BidiContext {
                 BidiClass::LeftToRightOverride => {
                     if let Some(level) = stack.embedding_level().least_greater_even() {
                         if overflow_isolate == 0 && overflow_embedding == 0 {
-                            stack.push(level, Override::LTR, false);
+                            stack.push(level, Override::Ltr, false);
                             continue;
                         }
                     }
@@ -1459,8 +1459,7 @@ impl BidiContext {
                         // Do nothing
                     } else if overflow_embedding > 0 {
                         overflow_embedding -= 1;
-                    } else if !stack.isolate_status()
-                    && stack.depth() >= 2 {
+                    } else if !stack.isolate_status() && stack.depth() >= 2 {
                         stack.pop();
                     }
                 }
@@ -1568,9 +1567,9 @@ impl BidiContext {
     ///   1. seqID = 0 (not yet assigned to an isolating run sequence)
     ///   2. its level matches the level we are processing
     ///   3. the first BIDIUNIT is a PDI
-    /// If all those conditions are met, assign that next level run
-    /// to this isolating run sequence (set its seqID, and append to
-    /// the list).
+    ///      If all those conditions are met, assign that next level run
+    ///      to this isolating run sequence (set its seqID, and append to
+    ///      the list).
     ///
     /// Repeat until we hit a level run that doesn't terminate with
     /// an isolate initiator or we hit the end of the list of level
@@ -1707,32 +1706,32 @@ impl BidiContext {
 
 impl BidiClass {
     pub fn is_iso_init(self) -> bool {
-        match self {
+        matches!(
+            self,
             BidiClass::RightToLeftIsolate
-            | BidiClass::LeftToRightIsolate
-            | BidiClass::FirstStrongIsolate => true,
-            _ => false,
-        }
+                | BidiClass::LeftToRightIsolate
+                | BidiClass::FirstStrongIsolate
+        )
     }
 
     pub fn is_iso_control(self) -> bool {
-        match self {
+        matches!(
+            self,
             BidiClass::RightToLeftIsolate
-            | BidiClass::LeftToRightIsolate
-            | BidiClass::PopDirectionalIsolate
-            | BidiClass::FirstStrongIsolate => true,
-            _ => false,
-        }
+                | BidiClass::LeftToRightIsolate
+                | BidiClass::PopDirectionalIsolate
+                | BidiClass::FirstStrongIsolate
+        )
     }
 
     pub fn is_neutral(self) -> bool {
-        match self {
+        matches!(
+            self,
             BidiClass::OtherNeutral
-            | BidiClass::WhiteSpace
-            | BidiClass::SegmentSeparator
-            | BidiClass::ParagraphSeparator => true,
-            _ => self.is_iso_control(),
-        }
+                | BidiClass::WhiteSpace
+                | BidiClass::SegmentSeparator
+                | BidiClass::ParagraphSeparator
+        ) || self.is_iso_control()
     }
 }
 
@@ -1759,9 +1758,9 @@ impl Run {
         types: &[BidiClass],
         levels: &[Level],
     ) -> Option<BidiClass> {
-        for idx in self.start..self.end {
-            if !levels[idx].removed_by_x9() {
-                return types.get(idx).cloned();
+        for (offset, level) in levels[self.start..self.end].iter().enumerate() {
+            if !level.removed_by_x9() {
+                return types.get(self.start + offset).cloned();
             }
         }
         None

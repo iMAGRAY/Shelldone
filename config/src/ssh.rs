@@ -5,17 +5,14 @@ use shelldone_dynamic::{FromDynamic, ToDynamic};
 use std::fmt::Display;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic, Default)]
 pub enum SshBackend {
     Ssh2,
     #[default]
     LibSsh,
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum SshMultiplexing {
     #[default]
     Shelldone,
@@ -23,9 +20,7 @@ pub enum SshMultiplexing {
     // TODO: Tmux-cc in the future?
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
 pub enum Shell {
     /// Unknown command shell: no assumptions can be made
     #[default]
@@ -36,7 +31,6 @@ pub enum Shell {
     Posix,
     // TODO: Cmd, PowerShell in the future?
 }
-
 
 #[derive(Default, Debug, Clone, FromDynamic, ToDynamic)]
 pub struct SshDomain {

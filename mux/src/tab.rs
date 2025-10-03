@@ -213,38 +213,24 @@ fn is_pane(pane: &Arc<dyn Pane>, other: &Option<&Arc<dyn Pane>>) -> bool {
     }
 }
 
-fn pane_tree(
-    tree: &Tree,
+struct PaneTreeContext<'a> {
     tab_id: TabId,
     window_id: WindowId,
-    active: Option<&Arc<dyn Pane>>,
-    zoomed: Option<&Arc<dyn Pane>>,
-    workspace: &str,
-    left_col: usize,
-    top_row: usize,
-) -> PaneNode {
+    active: Option<&'a Arc<dyn Pane>>,
+    zoomed: Option<&'a Arc<dyn Pane>>,
+    workspace: &'a str,
+}
+
+fn pane_tree(tree: &Tree, ctx: &PaneTreeContext<'_>, left_col: usize, top_row: usize) -> PaneNode {
     match tree {
         Tree::Empty => PaneNode::Empty,
         Tree::Node { left, right, data } => {
             let data = data.unwrap();
             PaneNode::Split {
-                left: Box::new(pane_tree(
-                    left.as_ref(),
-                    tab_id,
-                    window_id,
-                    active,
-                    zoomed,
-                    workspace,
-                    left_col,
-                    top_row,
-                )),
+                left: Box::new(pane_tree(left.as_ref(), ctx, left_col, top_row)),
                 right: Box::new(pane_tree(
                     right.as_ref(),
-                    tab_id,
-                    window_id,
-                    active,
-                    zoomed,
-                    workspace,
+                    ctx,
                     if data.direction == SplitDirection::Vertical {
                         left_col
                     } else {
@@ -265,12 +251,12 @@ fn pane_tree(
             let cursor_pos = pane.get_cursor_position();
 
             PaneNode::Leaf(PaneEntry {
-                window_id,
-                tab_id,
+                window_id: ctx.window_id,
+                tab_id: ctx.tab_id,
                 pane_id: pane.pane_id(),
                 title: pane.get_title(),
-                is_active_pane: is_pane(pane, &active),
-                is_zoomed_pane: is_pane(pane, &zoomed),
+                is_active_pane: is_pane(pane, &ctx.active),
+                is_zoomed_pane: is_pane(pane, &ctx.zoomed),
                 size: TerminalSize {
                     cols: dims.cols,
                     rows: dims.viewport_rows,
@@ -279,7 +265,7 @@ fn pane_tree(
                     dpi: dims.dpi,
                 },
                 working_dir: working_dir.map(Into::into),
-                workspace: workspace.to_string(),
+                workspace: ctx.workspace.to_string(),
                 cursor_pos,
                 physical_top: dims.physical_top,
                 left_col,
@@ -850,16 +836,14 @@ impl TabInner {
         let active = self.get_active_pane();
         let zoomed = self.zoomed.as_ref();
         if let Some(root) = self.pane.as_ref() {
-            pane_tree(
-                root,
+            let ctx = PaneTreeContext {
                 tab_id,
                 window_id,
-                active.as_ref(),
+                active: active.as_ref(),
                 zoomed,
-                &workspace,
-                0,
-                0,
-            )
+                workspace: &workspace,
+            };
+            pane_tree(root, &ctx, 0, 0)
         } else {
             PaneNode::Empty
         }
@@ -2224,7 +2208,7 @@ mod test {
     }
 
     impl FakePane {
-        fn new(id: PaneId, size: TerminalSize) -> Arc<dyn Pane> {
+        fn make(id: PaneId, size: TerminalSize) -> Arc<dyn Pane> {
             Arc::new(Self {
                 id,
                 size: Mutex::new(size),
@@ -2290,7 +2274,7 @@ mod test {
         fn reader(&self) -> anyhow::Result<Option<Box<dyn std::io::Read + Send>>> {
             Ok(None)
         }
-        fn writer(&self) -> MappedMutexGuard<dyn std::io::Write> {
+        fn writer(&self) -> MappedMutexGuard<'_, dyn std::io::Write> {
             unimplemented!()
         }
         fn resize(&self, size: TerminalSize) -> anyhow::Result<()> {
@@ -2338,12 +2322,12 @@ mod test {
         };
 
         let tab = Tab::new(&size);
-        tab.assign_pane(&FakePane::new(1, size));
+        tab.assign_pane(&FakePane::make(1, size));
 
         let panes = tab.iter_panes();
         assert_eq!(1, panes.len());
         assert_eq!(0, panes[0].index);
-        assert_eq!(true, panes[0].is_active);
+        assert!(panes[0].is_active);
         assert_eq!(0, panes[0].left);
         assert_eq!(0, panes[0].top);
         assert_eq!(80, panes[0].width);
@@ -2426,7 +2410,7 @@ mod test {
                     direction: SplitDirection::Horizontal,
                     ..Default::default()
                 },
-                FakePane::new(2, horz_size.second),
+                FakePane::make(2, horz_size.second),
             )
             .unwrap();
         assert_eq!(new_index, 1);
@@ -2435,7 +2419,7 @@ mod test {
         assert_eq!(2, panes.len());
 
         assert_eq!(0, panes[0].index);
-        assert_eq!(false, panes[0].is_active);
+        assert!(!panes[0].is_active);
         assert_eq!(0, panes[0].left);
         assert_eq!(0, panes[0].top);
         assert_eq!(39, panes[0].width);
@@ -2445,7 +2429,7 @@ mod test {
         assert_eq!(1, panes[0].pane.pane_id());
 
         assert_eq!(1, panes[1].index);
-        assert_eq!(true, panes[1].is_active);
+        assert!(panes[1].is_active);
         assert_eq!(40, panes[1].left);
         assert_eq!(0, panes[1].top);
         assert_eq!(40, panes[1].width);
@@ -2472,7 +2456,7 @@ mod test {
                     target_is_second: true,
                     size: Default::default(),
                 },
-                FakePane::new(3, vert_size.second),
+                FakePane::make(3, vert_size.second),
             )
             .unwrap();
         assert_eq!(new_index, 1);
@@ -2481,7 +2465,7 @@ mod test {
         assert_eq!(3, panes.len());
 
         assert_eq!(0, panes[0].index);
-        assert_eq!(false, panes[0].is_active);
+        assert!(!panes[0].is_active);
         assert_eq!(0, panes[0].left);
         assert_eq!(0, panes[0].top);
         assert_eq!(39, panes[0].width);
@@ -2491,7 +2475,7 @@ mod test {
         assert_eq!(1, panes[0].pane.pane_id());
 
         assert_eq!(1, panes[1].index);
-        assert_eq!(true, panes[1].is_active);
+        assert!(panes[1].is_active);
         assert_eq!(0, panes[1].left);
         assert_eq!(12, panes[1].top);
         assert_eq!(39, panes[1].width);
@@ -2501,7 +2485,7 @@ mod test {
         assert_eq!(3, panes[1].pane.pane_id());
 
         assert_eq!(2, panes[2].index);
-        assert_eq!(false, panes[2].is_active);
+        assert!(!panes[2].is_active);
         assert_eq!(40, panes[2].left);
         assert_eq!(0, panes[2].top);
         assert_eq!(40, panes[2].width);
@@ -2528,12 +2512,10 @@ mod test {
         assert_eq!(600, panes[2].pixel_height);
     }
 
-    fn is_send_and_sync<T: Send + Sync>() -> bool {
-        true
-    }
+    fn assert_send_and_sync<T: Send + Sync>() {}
 
     #[test]
     fn tab_is_send_and_sync() {
-        assert!(is_send_and_sync::<Tab>());
+        assert_send_and_sync::<Tab>();
     }
 }

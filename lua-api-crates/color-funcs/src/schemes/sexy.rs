@@ -13,9 +13,9 @@ pub struct Sexy {
 }
 
 impl Sexy {
-    pub fn load_file<P: AsRef<Path>>(path: P) -> anyhow::Result<ColorSchemeFile>
+    pub fn load_file<P>(path: P) -> anyhow::Result<ColorSchemeFile>
     where
-        P: std::fmt::Debug,
+        P: AsRef<Path> + std::fmt::Debug,
     {
         let data = std::fs::read(&path).context(format!("read file {path:?}"))?;
         let sexy: Self = serde_json::from_slice(&data)?;

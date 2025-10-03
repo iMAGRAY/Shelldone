@@ -64,18 +64,22 @@ impl ClientInfo {
     pub fn new(client_id: Arc<ClientId>) -> Self {
         Self {
             client_id,
-            connected_at: Utc::now(),
+            connected_at: current_utc(),
             active_workspace: None,
-            last_input: Utc::now(),
+            last_input: current_utc(),
             focused_pane_id: None,
         }
     }
 
     pub fn update_last_input(&mut self) {
-        self.last_input = Utc::now();
+        self.last_input = current_utc();
     }
 
     pub fn update_focused_pane(&mut self, pane_id: PaneId) {
         self.focused_pane_id.replace(pane_id);
     }
+}
+
+fn current_utc() -> DateTime<Utc> {
+    DateTime::<Utc>::from(SystemTime::now())
 }

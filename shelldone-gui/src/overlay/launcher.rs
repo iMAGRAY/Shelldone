@@ -63,18 +63,30 @@ pub struct LauncherArgs {
     alphabet: String,
 }
 
+pub struct LauncherRequest<'a> {
+    pub title: &'a str,
+    pub flags: LauncherFlags,
+    pub mux_window_id: WindowId,
+    pub pane_id: PaneId,
+    pub domain_id_of_current_tab: DomainId,
+    pub help_text: &'a str,
+    pub fuzzy_help_text: &'a str,
+    pub alphabet: &'a str,
+}
+
 impl LauncherArgs {
     /// Must be called on the Mux thread!
-    pub async fn new(
-        title: &str,
-        flags: LauncherFlags,
-        mux_window_id: WindowId,
-        pane_id: PaneId,
-        domain_id_of_current_tab: DomainId,
-        help_text: &str,
-        fuzzy_help_text: &str,
-        alphabet: &str,
-    ) -> Self {
+    pub async fn new(request: LauncherRequest<'_>) -> Self {
+        let LauncherRequest {
+            title,
+            flags,
+            mux_window_id,
+            pane_id,
+            domain_id_of_current_tab,
+            help_text,
+            fuzzy_help_text,
+            alphabet,
+        } = request;
         let mux = Mux::get();
 
         let active_workspace = mux.active_workspace();
@@ -335,10 +347,7 @@ impl LauncherState {
                     // Filter out some noisy, repetitive entries
                     continue;
                 }
-                if key_entries
-                    .iter()
-                    .any(|ent| ent.action == entry.action)
-                {
+                if key_entries.iter().any(|ent| ent.action == entry.action) {
                     // Avoid duplicate entries
                     continue;
                 }
@@ -348,7 +357,7 @@ impl LauncherState {
                     None => format!(
                         "{:?} ({} {})",
                         entry.action,
-                        mods.to_string(),
+                        mods,
                         keycode.to_string().escape_debug()
                     ),
                 };
@@ -615,10 +624,9 @@ impl LauncherState {
                     if y > 0 && y as usize <= self.filtered_entries.len() {
                         self.active_idx = self.top_row + y as usize - 1;
 
-                        if mouse_buttons == MouseButtons::LEFT
-                            && self.launch(self.active_idx) {
-                                break;
-                            }
+                        if mouse_buttons == MouseButtons::LEFT && self.launch(self.active_idx) {
+                            break;
+                        }
                     }
                     if mouse_buttons != MouseButtons::NONE {
                         // Treat any other mouse button as cancel

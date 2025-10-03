@@ -22,7 +22,7 @@ use mux::renderable::{RenderableDimensions, StableCursorPosition};
 use ordered_float::NotNan;
 use shelldone_font::shaper::PresentationWidth;
 use shelldone_font::units::{IntPixelLength, PixelLength};
-use shelldone_font::{ClearShapeCache, GlyphInfo, LoadedFont};
+use shelldone_font::{ClearShapeCache, GlyphInfo, LoadedFont, ShapeOptions};
 use shelldone_term::color::{ColorAttribute, ColorPalette};
 use shelldone_term::{CellAttributes, Line, StableRowIndex};
 use std::ops::Range;
@@ -81,6 +81,34 @@ pub struct LineQuadCacheValue {
     // that we can invalidate when it changes
     pub current_highlight: Option<Arc<Hyperlink>>,
     pub invalidate_on_hover_change: bool,
+}
+
+pub struct PolyQuadParams {
+    pub layer: usize,
+    pub position: PointF,
+    pub polys: &'static [Poly],
+    pub underline_height: IntPixelLength,
+    pub cell_size: SizeF,
+    pub color: LinearRgba,
+}
+
+pub struct BlockQuadParams<'a> {
+    pub block: BlockKey,
+    pub gl_state: &'a RenderState,
+    pub position_x: f32,
+    pub params: &'a RenderScreenLineParams<'a>,
+    pub hsv: Option<config::HsbTransform>,
+    pub glyph_color: LinearRgba,
+}
+
+pub struct ImageQuadParams<'a> {
+    pub image: &'a termwiz::image::ImageCell,
+    pub gl_state: &'a RenderState,
+    pub layer: usize,
+    pub cell_index: usize,
+    pub params: &'a RenderScreenLineParams<'a>,
+    pub hsv: Option<config::HsbTransform>,
+    pub glyph_color: LinearRgba,
 }
 
 pub struct LineToElementParams<'a> {
@@ -286,16 +314,23 @@ impl crate::TermWindow {
         Ok(quad)
     }
 
-    pub fn poly_quad<'a>(
+    pub fn poly_quad<F>(
         &self,
-        layers: &'a mut TripleLayerQuadAllocator,
-        layer_num: usize,
-        point: PointF,
-        polys: &'static [Poly],
-        underline_height: IntPixelLength,
-        cell_size: SizeF,
-        color: LinearRgba,
-    ) -> anyhow::Result<QuadImpl<'a>> {
+        layers: &mut TripleLayerQuadAllocator<'_>,
+        params: PolyQuadParams,
+        mut configure: F,
+    ) -> anyhow::Result<()>
+    where
+        F: FnMut(&mut QuadImpl<'_>),
+    {
+        let PolyQuadParams {
+            layer,
+            position,
+            polys,
+            underline_height,
+            cell_size,
+            color,
+        } = params;
         let left_offset = self.dimensions.pixel_width as f32 / 2.;
         let top_offset = self.dimensions.pixel_height as f32 / 2.;
         let gl_state = self.render_state.as_ref().unwrap();
@@ -312,20 +347,21 @@ impl crate::TermWindow {
             )?
             .texture_coords();
 
-        let mut quad = layers.allocate(layer_num)?;
+        let mut quad = layers.allocate(layer)?;
 
         quad.set_position(
-            point.x - left_offset,
-            point.y - top_offset,
-            (point.x + cell_size.width) - left_offset,
-            (point.y + cell_size.height) - top_offset,
+            position.x - left_offset,
+            position.y - top_offset,
+            (position.x + cell_size.width) - left_offset,
+            (position.y + cell_size.height) - top_offset,
         );
         quad.set_texture(sprite);
         quad.set_fg_color(color);
         quad.set_alt_color_and_mix_value(color, 0.);
         quad.set_hsv(None);
         quad.set_has_color(false);
-        Ok(quad)
+        configure(&mut quad);
+        Ok(())
     }
 
     pub fn min_scroll_bar_height(&self) -> f32 {
@@ -411,14 +447,18 @@ impl crate::TermWindow {
 
     pub fn populate_block_quad(
         &self,
-        block: BlockKey,
-        gl_state: &RenderState,
         quads: &mut dyn QuadAllocator,
-        pos_x: f32,
-        params: &RenderScreenLineParams,
-        hsv: Option<config::HsbTransform>,
-        glyph_color: LinearRgba,
+        params: BlockQuadParams<'_>,
     ) -> anyhow::Result<()> {
+        let BlockQuadParams {
+            block,
+            gl_state,
+            position_x,
+            params,
+            hsv,
+            glyph_color,
+        } = params;
+
         let sprite = gl_state
             .glyph_cache
             .borrow_mut()
@@ -429,7 +469,12 @@ impl crate::TermWindow {
         let cell_width = params.render_metrics.cell_size.width as f32;
         let cell_height = params.render_metrics.cell_size.height as f32;
         let pos_y = (self.dimensions.pixel_height as f32 / -2.) + params.top_pixel_y;
-        quad.set_position(pos_x, pos_y, pos_x + cell_width, pos_y + cell_height);
+        quad.set_position(
+            position_x,
+            pos_y,
+            position_x + cell_width,
+            pos_y + cell_height,
+        );
         quad.set_hsv(hsv);
         quad.set_fg_color(glyph_color);
         quad.set_texture(sprite);
@@ -440,15 +485,18 @@ impl crate::TermWindow {
     /// Render iTerm2 style image attributes
     pub fn populate_image_quad(
         &self,
-        image: &termwiz::image::ImageCell,
-        gl_state: &RenderState,
-        layers: &mut TripleLayerQuadAllocator,
-        layer_num: usize,
-        cell_idx: usize,
-        params: &RenderScreenLineParams,
-        hsv: Option<config::HsbTransform>,
-        glyph_color: LinearRgba,
+        layers: &mut TripleLayerQuadAllocator<'_>,
+        params: ImageQuadParams<'_>,
     ) -> anyhow::Result<()> {
+        let ImageQuadParams {
+            image,
+            gl_state,
+            layer,
+            cell_index,
+            params,
+            hsv,
+            glyph_color,
+        } = params;
         if self.allow_images == AllowImage::No {
             return Ok(());
         }
@@ -495,14 +543,14 @@ impl crate::TermWindow {
 
         let texture_rect = TextureRect::new(origin, size);
 
-        let mut quad = layers.allocate(layer_num)?;
+        let mut quad = layers.allocate(layer)?;
         let cell_width = params.render_metrics.cell_size.width as f32;
         let cell_height = params.render_metrics.cell_size.height as f32;
         let pos_y = (self.dimensions.pixel_height as f32 / -2.) + params.top_pixel_y;
 
         let pos_x = (self.dimensions.pixel_width as f32 / -2.)
             + params.left_pixel_x
-            + (cell_idx as f32 * cell_width);
+            + (cell_index as f32 * cell_width);
 
         let (padding_left, padding_top, padding_right, padding_bottom) = image.padding();
 
@@ -741,23 +789,24 @@ impl crate::TermWindow {
         let mut iter = infos.iter().peekable();
         while let Some(info) = iter.next() {
             if self.config.custom_block_glyphs
-                && info.only_char.and_then(BlockKey::from_char).is_some() {
-                    // Don't bother rendering the glyph from the font, as it can
-                    // have incorrect advance metrics.
-                    // Instead, just use our pixel-perfect cell metrics
-                    glyphs.push(Rc::new(CachedGlyph {
-                        brightness_adjust: 1.0,
-                        has_color: false,
-                        texture: None,
-                        x_advance: PixelLength::new(metrics.cell_size.width as f64),
-                        x_offset: PixelLength::zero(),
-                        y_offset: PixelLength::zero(),
-                        bearing_x: PixelLength::zero(),
-                        bearing_y: PixelLength::zero(),
-                        scale: 1.0,
-                    }));
-                    continue;
-                }
+                && info.only_char.and_then(BlockKey::from_char).is_some()
+            {
+                // Don't bother rendering the glyph from the font, as it can
+                // have incorrect advance metrics.
+                // Instead, just use our pixel-perfect cell metrics
+                glyphs.push(Rc::new(CachedGlyph {
+                    brightness_adjust: 1.0,
+                    has_color: false,
+                    texture: None,
+                    x_advance: PixelLength::new(metrics.cell_size.width as f64),
+                    x_offset: PixelLength::zero(),
+                    y_offset: PixelLength::zero(),
+                    bearing_x: PixelLength::zero(),
+                    bearing_y: PixelLength::zero(),
+                    scale: 1.0,
+                }));
+                continue;
+            }
 
             let followed_by_space = match iter.peek() {
                 Some(next_info) => next_info.is_space,
@@ -802,14 +851,17 @@ impl crate::TermWindow {
 
                 let presentation_width = PresentationWidth::with_cluster(cluster);
 
+                let options = ShapeOptions {
+                    presentation: Some(cluster.presentation),
+                    direction: cluster.direction,
+                    range: None,
+                    presentation_width: Some(&presentation_width),
+                };
                 match font.shape(
                     &cluster.text,
                     move || window.notify(TermWindowNotif::InvalidateShapeCache),
                     BlockKey::filter_out_synthetic,
-                    Some(cluster.presentation),
-                    cluster.direction,
-                    None, // FIXME: need more paragraph context
-                    Some(&presentation_width),
+                    options,
                 ) {
                     Ok(info) => {
                         let glyphs = self.glyph_infos_to_glyphs(

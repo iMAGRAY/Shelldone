@@ -1,10 +1,10 @@
+use gl_generator::{Api, Fallbacks, Profile, Registry};
+use std::env;
+use std::fs::{self, File};
+use std::path::PathBuf;
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-
-    use gl_generator::{Api, Fallbacks, Profile, Registry};
-    use std::env;
-    use std::fs::File;
-    use std::path::PathBuf;
 
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
     let target = env::var("TARGET").unwrap();
@@ -33,10 +33,12 @@ fn main() {
 
     if target.contains("android") || target.contains("ios") {
         reg.write_bindings(gl_generator::StaticStructGenerator, &mut file)
+            .unwrap();
     } else {
         reg.write_bindings(gl_generator::StructGenerator, &mut file)
+            .unwrap();
+        sanitize_transmute(dest.join("egl_bindings.rs")).unwrap();
     }
-    .unwrap();
 
     if target.contains("apple") {
         println!("cargo:rustc-link-lib=framework=Carbon");
@@ -74,4 +76,22 @@ fn main() {
         .write_bindings(gl_generator::StructGenerator, &mut file)
         .unwrap();
     }
+}
+
+fn sanitize_transmute(path: PathBuf) -> std::io::Result<()> {
+    let original = fs::read_to_string(&path)?;
+    let updated = original
+        .replace(
+            "mem::transmute::<_, extern \"system\"",
+            "mem::transmute::<*const std::ffi::c_void, extern \"system\"",
+        )
+        .replace(
+            "mem::transmute::<_, Option<extern \"system\"",
+            "mem::transmute::<*const std::ffi::c_void, Option<extern \"system\"",
+        );
+
+    if updated != original {
+        fs::write(path, updated)?;
+    }
+    Ok(())
 }

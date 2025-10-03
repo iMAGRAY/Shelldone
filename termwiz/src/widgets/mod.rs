@@ -375,7 +375,7 @@ impl<'widget> Ui<'widget> {
                 abs_coords.x + render_data.coordinates.x,
                 abs_coords.y + render_data.coordinates.y,
             );
-            surface.flush_changes_older_than(SequenceNo::max_value());
+            surface.flush_changes_older_than(SequenceNo::MAX);
             render_data.coordinates
         };
 
@@ -400,7 +400,7 @@ impl<'widget> Ui<'widget> {
         let mut changed = false;
 
         // Clippy is dead wrong about this iterator being an identity_conversion
-        #[allow(clippy::identity_conversion)]
+        #[allow(clippy::useless_conversion)]
         for result in layout.compute_constraints(width, height, root)? {
             let render_data = self.render.get_mut(&result.widget).unwrap();
             let coords = ParentRelativeCoords::new(result.rect.x, result.rect.y);
