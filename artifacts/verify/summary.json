@@ -23,14 +23,20 @@
     {
       "name": "roadmap",
       "status": "PASS",
-      "duration_sec": 0.02,
+      "duration_sec": 0.03,
       "details": "Roadmap lists 6 epics and 18 tasks"
     },
     {
       "name": "banned-markers",
       "status": "PASS",
-      "duration_sec": 0.16,
+      "duration_sec": 0.25,
       "details": "Forbidden markers under control (total 162)"
+    },
+    {
+      "name": "agents",
+      "status": "PASS",
+      "duration_sec": 0.05,
+      "details": "Agent adapters emit structured errors without dependencies"
     },
     {
       "name": "rust-fmt",
@@ -41,39 +47,39 @@
     {
       "name": "rust-clippy",
       "status": "PASS",
-      "duration_sec": 15.75,
+      "duration_sec": 29.84,
       "details": "Clippy warnings: 0 (match baseline)"
     },
     {
       "name": "rust-test",
       "status": "PASS",
-      "duration_sec": 21.75,
+      "duration_sec": 19.99,
       "details": "cargo test --workspace --all-features"
     },
     {
       "name": "rust-nextest",
       "status": "PASS",
-      "duration_sec": 6.38,
+      "duration_sec": 4.58,
       "details": "cargo nextest run --workspace"
     }
   ],
   "commands": {
     "rust-clippy": {
       "command": "cargo clippy --workspace --all-features --message-format=json --exclude cairo-sys-rs --exclude freetype --exclude fontconfig --exclude harfbuzz -- --no-deps",
-      "duration_sec": "15.75",
+      "duration_sec": "29.84",
       "warning_count": "0"
     },
     "rust-test": {
       "command": "cargo test --workspace --all-features --exclude cairo-sys-rs --exclude freetype --exclude fontconfig --exclude harfbuzz",
-      "duration_sec": "21.75",
+      "duration_sec": "19.99",
       "exit_code": "0",
-      "output_tail": "shelldone_version\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests spawn_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests ssh_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests tabout\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests termwiz\n\nrunning 3 tests\ntest termwiz/src/lineedit/mod.rs - lineedit (line 4) - compile ... ok\ntest termwiz/src/lineedit/mod.rs - lineedit::LineEditor<'term>::new (line 141) - compile ... ok\ntest termwiz/src/lineedit/mod.rs - lineedit::LineEditor (line 58) - compile ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s\n\n   Doc-tests termwiz_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests time_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests umask\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests url_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests vtparse\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests window\n\nrunning 1 test\ntest target/debug/build/window-4b3b5f48096f77c9/out/egl_bindings.rs - egl::ffi::generated::Egl::load_with (line 376) ... ignored\n\ntest result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests window_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+      "output_tail": "shelldone_version\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests spawn_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests ssh_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests tabout\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests termwiz\n\nrunning 3 tests\ntest termwiz/src/lineedit/mod.rs - lineedit::LineEditor (line 58) - compile ... ok\ntest termwiz/src/lineedit/mod.rs - lineedit::LineEditor<'term>::new (line 141) - compile ... ok\ntest termwiz/src/lineedit/mod.rs - lineedit (line 4) - compile ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s\n\n   Doc-tests termwiz_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests time_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests umask\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests url_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests vtparse\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests window\n\nrunning 1 test\ntest target/debug/build/window-4b3b5f48096f77c9/out/egl_bindings.rs - egl::ffi::generated::Egl::load_with (line 376) ... ignored\n\ntest result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests window_funcs\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
     },
     "rust-nextest": {
       "command": "cargo nextest run --workspace --exclude cairo-sys-rs --exclude freetype --exclude fontconfig --exclude harfbuzz",
-      "duration_sec": "6.38",
+      "duration_sec": "4.58",
       "exit_code": "0",
-      "output_tail": "test::test_csi_omitted_param\n        PASS [   0.003s] vtparse test::test_mixed\n        PASS [   0.005s] vtparse test::osc_utf8\n        PASS [   0.004s] vtparse test::test_ommitted_dcs_param\n        PASS [   0.010s] termwiz render::terminfo::test::clear_screen\n        PASS [   0.004s] vtparse test::test_fancy_underline\n        PASS [   0.006s] vtparse test::print_utf8\n        PASS [   0.011s] termwiz render::terminfo::test::bold_text_no_terminfo\n        PASS [   0.004s] vtparse test::test_osc_too_many_params\n        PASS [   0.004s] vtparse test::test_osc_with_bel_st\n        PASS [   0.017s] termwiz input::test::partial_bracketed_paste\n        PASS [   0.012s] termwiz render::terminfo::test::basic_text\n        PASS [   0.006s] vtparse test::test_decset\n        PASS [   0.004s] vtparse test::test_osc_with_c1_st\n        PASS [   0.003s] vtparse test::tmux_passthru\n        PASS [   0.003s] vtparse test::tmux_control\n        PASS [   0.006s] vtparse test::test_csi_too_many_params\n        PASS [   0.004s] vtparse test::test_osc_with_esc_sequence_st\n        PASS [   0.004s] vtparse test::test_print\n        PASS [   0.004s] vtparse test::test_osc_with_no_params\n        PASS [   0.004s] vtparse transitions::tests::test_transitions\n        PASS [   0.004s] window os::x11::xsettings::test::test_parse_xsettings\n        PASS [   0.005s] vtparse test::utf8_control\n        PASS [   0.129s] codec test::test_frame_lengths\n        PASS [   0.127s] shelldone-gui::bin/shelldone-gui shapecache::test::ligatures_fira\n        PASS [   0.120s] shelldone-surface hyperlink::test::parse_with_parentheses\n        PASS [   0.183s] shelldone-gui::bin/shelldone-gui shapecache::test::ligatures_jetbrains\n        PASS [   1.835s] shelldone-bidi::conformance bidi_character_test\n        PASS [   3.734s] shelldone-bidi::conformance bidi_test\n        PASS [   3.751s] shelldone-gui::bin/shelldone-gui shapecache::test::bench_shaping\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n     Summary [   3.777s] 369 tests run: 369 passed, 0 skipped\n"
+      "output_tail": "e\n        PASS [   0.005s] vtparse test::kitty_img\n        PASS [   0.006s] termwiz render::terminfo::test::clear_screen_bce\n        PASS [   0.005s] termwiz render::terminfo::test::clear_screen_bce_no_terminfo\n        PASS [   0.003s] vtparse test::test_fancy_underline\n        PASS [   0.003s] vtparse test::test_decset\n        PASS [   0.003s] vtparse test::test_ommitted_dcs_param\n        PASS [   0.003s] vtparse test::test_mixed\n        PASS [   0.003s] vtparse test::test_osc_too_many_params\n        PASS [   0.008s] termwiz render::terminfo::test::truecolor\n        PASS [   0.003s] vtparse test::test_csi_omitted_param\n        PASS [   0.003s] vtparse test::tmux_control\n        PASS [   0.003s] vtparse test::test_csi_too_many_params\n        PASS [   0.003s] vtparse test::test_osc_with_no_params\n        PASS [   0.003s] vtparse test::test_print\n        PASS [   0.004s] vtparse test::test_osc_with_c1_st\n        PASS [   0.004s] vtparse test::test_osc_with_bel_st\n        PASS [   0.003s] vtparse test::tmux_passthru\n        PASS [   0.004s] vtparse test::test_osc_with_esc_sequence_st\n        PASS [   0.003s] vtparse test::utf8_control\n        PASS [   0.077s] shelldone-font shaper::harfbuzz::test::ligatures\n        PASS [   0.003s] vtparse transitions::tests::test_transitions\n        PASS [   0.003s] window os::x11::xsettings::test::test_parse_xsettings\n        PASS [   0.127s] codec test::test_frame_lengths\n        PASS [   0.109s] shelldone-gui::bin/shelldone-gui shapecache::test::ligatures_fira\n        PASS [   0.141s] shelldone-gui::bin/shelldone-gui shapecache::test::ligatures_jetbrains\n        PASS [   0.180s] shelldone-surface hyperlink::test::parse_with_parentheses\n        PASS [   1.087s] shelldone-bidi::conformance bidi_character_test\n        PASS [   3.453s] shelldone-bidi::conformance bidi_test\n        PASS [   3.769s] shelldone-gui::bin/shelldone-gui shapecache::test::bench_shaping\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n     Summary [   3.791s] 369 tests run: 369 passed, 0 skipped\n"
     }
   }
 }
