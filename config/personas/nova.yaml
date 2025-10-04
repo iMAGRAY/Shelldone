@@ -1,0 +1,16 @@
+id: nova
+mode: guided
+hints:
+  enable: true
+  triggers:
+    - sla_violation
+    - policy_pending
+    - unfamiliar_command
+max_hint_rate_per_min: 6
+safety_prompts:
+  auto_confirm: false
+  require_ack: true
+telemetry:
+  collect: basic
+  tags:
+    - persona:nova

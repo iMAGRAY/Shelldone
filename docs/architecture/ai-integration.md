@@ -6,9 +6,9 @@
 - Deliver a cognitively simple interface for automation and human–AI collaboration.
 
 ## Control Protocol
-- **Transport:** local gRPC/WebSocket server with optional STDIO/MCP bridge.
-- **High-level commands:** `open_tab`, `run_task`, `stream_output`, `apply_theme`, `query_context`.
-- **Context payload:** serialised snapshot (panes, processes, paths, pipeline status) with versioned JSON.
+- **Transport:** local gRPC/WebSocket server with optional STDIO/MCP bridge, встроенный в Σ-json канал UTIF-Σ (реализован в `shelldone-agentd`).
+- **High-level commands:** `agent.plan`, `agent.exec`, `agent.form`, `agent.undo`, `agent.guard`, `agent.journal`, `agent.inspect`, `agent.connect` (см. ACK в `docs/architecture/utif-sigma.md`).
+- **Context payload:** serialised snapshot (panes, processes, paths, pipeline status) с spectral-тегами и версионным JSON.
 - **Security:**
   - Policy files in `config/policies/` define allowed capabilities.
   - Prompt for confirmation on sensitive actions (rm, sudo, deployment, etc.).
@@ -17,14 +17,15 @@
 ## Automation
 - **Playbooks:**
   - YAML/JSON description of command/API sequences with assertions.
-  - Supports parameters, conditionals, retries, notifications.
-  - Executable via CLI (`shelldone play run <file>`) or through the agent API.
+  - Supports parameters, conditionals, retries, notifications, persona overrides.
+  - Executable via CLI (`shelldone play run <file>`) or через ACK `agent.plan`.
+- **Developer tooling:** `shelldone agent handshake|exec|journal` вызывает Σ-cap/ACK/Continuum эндпоинты напрямую (см. `make run-agentd`).
 - **Event hooks:** `on_process_exit`, `on_git_status`, `on_alert`, `on_agent_action`.
 
 ## Agent UI
-- Dedicated agent status panel (progress, errors, suggested steps).
-- Action history with undo/redo.
-- “Guided mode”: agent proposes actions, user approves or rejects.
+- Dedicated agent status panel (progress, errors, suggested steps) подключён к Σ-json событиям.
+- Action history with undo/redo основана на Continuum snapshot.
+- “Guided mode”: agent proposes actions, user approves or rejects с persona-профилями Nova/Core/Flux.
 
 ## MCP Compatibility
 - MCP tool registry resides in `agents/mcp/tools/`.
@@ -34,13 +35,13 @@
 ## Roadmap
 1. Define protobuf/JSON schema for the agent API.
 2. Prototype the MCP bridge and run a security threat model.
-3. Implement the server; expose CLI `shelldone agent serve`.
-4. Add UI panel and action log.
-5. Ship SDK and sample agents (auto-deploy, coding assistant, observability triage).
+3. Implement the server; expose CLI `shelldone agent serve` поверх Σ-json/Σ-cap.
+4. Add UI panel and action log powered by Continuum journal.
+5. Ship SDK and sample agents (auto-deploy, coding assistant, observability triage) с ACK примерами.
 
 ## Внешние SDK и адаптеры
 
-Shelldone встраивает два внешних стека агентных SDK. Они поставляются как отдельные адаптеры, которые подключаются к единой шине `shelldone-agentd` (gRPC/MCP). Каждый адаптер реализует контракт `AgentAdapter` (инициализация, трансляция сообщений, управление сессиями) и живёт в собственном каталоге `agents/<vendor>/`.
+Shelldone встраивает три внешних стека агентных SDK. Они поставляются как отдельные адаптеры, которые подключаются к единой шине `shelldone-agentd` (gRPC/MCP). Каждый адаптер реализует контракт `AgentAdapter` (инициализация, трансляция сообщений, управление сессиями) и живёт в собственном каталоге `agents/<vendor>/`.
 
 Определения адаптеров хранятся в `agents/manifest.json`. Утилита `python scripts/agentd.py` умеет:
 
@@ -78,5 +79,8 @@ Shelldone встраивает два внешних стека агентных
 - Тестирование: `make verify` вызывает smoke-тесты `agents:<vendor>:test`, которые запускают адаптер в offline-режиме и проверяют hand-off/undo.
 - Наблюдаемость: каждый адаптер публикует метрики (`agent.bridge.latency`, `agent.bridge.errors`) в общую систему telemetry (см. `docs/architecture/observability.md`).
 - Безопасность: адаптеры читают политики (`config/policies/*.yaml`) и выставляют capabilities при старте; несоответствие политике приводит к отказу запуска.
+- Microsoft адаптер требует `MICROSOFT_AGENT_API_KEY` и предоставляет fallback-ответ для smoke-тестов (см. ADR-0006).
 
 Related milestones: `docs/ROADMAP/2025Q4.md`, section “AI & Automation”.
+- `microsoft`: выполните `npm ci` в каталоге `agents/microsoft`, предоставьте `MICROSOFT_AGENT_API_KEY` и запустите `node bridge.mjs`.
+- Все адаптеры экспортируют структурированные ошибки при отсутствии зависимостей/ключей (используется в smoke-тестах `scripts/agentd.py`).

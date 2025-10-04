@@ -1,12 +1,14 @@
 use anyhow::anyhow;
 use clap::Parser;
 use shelldone_client::client::Client;
+use std::env;
 use std::ffi::OsString;
 
 mod activate_pane;
 mod activate_pane_direction;
 mod activate_tab;
 mod adjust_pane_size;
+pub mod agent;
 mod get_pane_direction;
 mod get_text;
 mod kill_pane;
@@ -163,23 +165,46 @@ Outputs the pane-id for the newly created pane on success"
     /// Zoom, unzoom, or toggle zoom state
     #[command(name = "zoom-pane", rename_all = "kebab")]
     ZoomPane(zoom_pane::ZoomPane),
+
+    /// Interact with the agent control plane.
+    #[command(name = "agent", rename_all = "kebab")]
+    Agent(agent::AgentCommand),
 }
 
 async fn run_cli_async(opts: &crate::Opt, cli: CliCommand) -> anyhow::Result<()> {
+    let CliCommand {
+        no_auto_start,
+        prefer_mux,
+        class,
+        sub,
+    } = cli;
+
+    if let CliSubCommand::Agent(agent_cmd) = sub {
+        return agent::run(agent_cmd).await;
+    }
+
+    let endpoint_env = env::var("SHELLDONE_AGENT_ENDPOINT").ok();
+    let persona_env = env::var("SHELLDONE_AGENT_PERSONA").ok();
+    if let Err(err) =
+        agent::default_handshake(endpoint_env.as_deref(), persona_env.as_deref()).await
+    {
+        log::warn!("agent handshake failed: {err:?}");
+    }
+
     let mut ui = mux::connui::ConnectionUI::new_headless();
     let initial = true;
 
     let client = Client::new_default_unix_domain(
         initial,
         &mut ui,
-        cli.no_auto_start,
-        cli.prefer_mux,
-        cli.class
+        no_auto_start,
+        prefer_mux,
+        class
             .as_deref()
             .unwrap_or(shelldone_gui_subcommands::DEFAULT_WINDOW_CLASS),
     )?;
 
-    match cli.sub {
+    match sub {
         CliSubCommand::ListClients(cmd) => cmd.run(client).await,
         CliSubCommand::List(cmd) => cmd.run(client).await,
         CliSubCommand::MovePaneToNewTab(cmd) => cmd.run(client).await,
@@ -199,6 +224,7 @@ async fn run_cli_async(opts: &crate::Opt, cli: CliCommand) -> anyhow::Result<()>
         CliSubCommand::SetWindowTitle(cmd) => cmd.run(client).await,
         CliSubCommand::RenameWorkspace(cmd) => cmd.run(client).await,
         CliSubCommand::ZoomPane(cmd) => cmd.run(client).await,
+        CliSubCommand::Agent(_) => unreachable!(),
     }
 }
 

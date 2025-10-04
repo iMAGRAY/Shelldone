@@ -1,0 +1,15 @@
+id: core
+mode: adaptive
+hints:
+  enable: true
+  triggers:
+    - policy_pending
+    - sla_violation
+max_hint_rate_per_min: 3
+safety_prompts:
+  auto_confirm: false
+  require_ack: true
+telemetry:
+  collect: full
+  tags:
+    - persona:core

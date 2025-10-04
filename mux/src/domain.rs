@@ -7,6 +7,7 @@
 
 use crate::localpane::LocalPane;
 use crate::pane::{alloc_pane_id, Pane, PaneId};
+use crate::sigma_proxy::{SigmaProxyChild, SigmaProxyPty};
 use crate::tab::{SplitRequest, Tab, TabId};
 use crate::window::WindowId;
 use crate::Mux;
@@ -612,8 +613,9 @@ impl Domain for LocalDomain {
             },
             self.name
         );
+        let mut proxy_master = Some(SigmaProxyPty::new(pair.master));
         let child_result = pair.slave.spawn_command(cmd);
-        let mut writer = WriterWrapper::new(pair.master.take_writer()?);
+        let mut writer = WriterWrapper::new(proxy_master.as_mut().unwrap().take_writer()?);
 
         let mut terminal = shelldone_term::Terminal::new(
             size,
@@ -627,26 +629,30 @@ impl Domain for LocalDomain {
         }
 
         let pane: Arc<dyn Pane> = match child_result {
-            Ok(child) => Arc::new(LocalPane::new(
-                pane_id,
-                terminal,
-                child,
-                pair.master,
-                Box::new(writer),
-                self.id,
-                command_description,
-            )),
+            Ok(child) => {
+                let proxy = proxy_master.take().unwrap();
+                Arc::new(LocalPane::new(
+                    pane_id,
+                    terminal,
+                    Box::new(SigmaProxyChild::new(child)),
+                    Box::new(proxy),
+                    Box::new(writer),
+                    self.id,
+                    command_description,
+                ))
+            }
             Err(err) => {
                 // Show the error to the user in the new pane
                 write!(writer, "{err:#}").ok();
 
                 // and return a dummy pane that has exited
+                let proxy = proxy_master.take().unwrap();
                 Arc::new(LocalPane::new(
                     pane_id,
                     terminal,
                     Box::new(FailedProcessSpawn {}),
                     Box::new(FailedSpawnPty {
-                        inner: Mutex::new(pair.master),
+                        inner: Mutex::new(proxy.into_inner()),
                     }),
                     Box::new(writer),
                     self.id,

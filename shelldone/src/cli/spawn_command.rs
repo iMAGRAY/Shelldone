@@ -5,6 +5,7 @@ use config::ConfigHandle;
 use mux::pane::PaneId;
 use mux::window::WindowId;
 use portable_pty::cmdbuilder::CommandBuilder;
+use serde_json::json;
 use shelldone_client::client::Client;
 use std::ffi::OsString;
 
@@ -96,28 +97,63 @@ impl SpawnCommand {
 
         let size = config.initial_size(0, None);
 
+        let domain_name = self.domain_name.clone();
+        let command_args = self.prog.clone();
+
         let spawned = client
             .spawn_v2(codec::SpawnV2 {
-                domain: self
-                    .domain_name
-                    .map_or(SpawnTabDomain::DefaultDomain, |name| {
-                        SpawnTabDomain::DomainName(name)
-                    }),
+                domain: domain_name
+                    .clone()
+                    .map_or(SpawnTabDomain::DefaultDomain, SpawnTabDomain::DomainName),
                 window_id,
-                command: if self.prog.is_empty() {
+                command: if command_args.is_empty() {
                     None
                 } else {
-                    let builder = CommandBuilder::from_argv(self.prog);
+                    let builder = CommandBuilder::from_argv(command_args.clone());
                     Some(builder)
                 },
                 command_dir: resolve_relative_cwd(self.cwd)?,
                 size,
-                workspace,
+                workspace: workspace.clone(),
             })
             .await?;
 
         log::debug!("{:?}", spawned);
         println!("{}", spawned.pane_id);
+
+        let endpoint_env = std::env::var("SHELLDONE_AGENT_ENDPOINT").ok();
+        let persona_env = std::env::var("SHELLDONE_AGENT_PERSONA").ok();
+        let argv_serialized = if command_args.is_empty() {
+            None
+        } else {
+            Some(
+                command_args
+                    .iter()
+                    .map(|arg| arg.to_string_lossy().to_string())
+                    .collect::<Vec<_>>(),
+            )
+        };
+
+        if let Err(err) = crate::cli::agent::submit_event(
+            endpoint_env.as_deref(),
+            "cli.spawn",
+            persona_env.as_deref(),
+            Some("exec::spawn"),
+            json!({
+                "pane_id": spawned.pane_id,
+                "tab_id": spawned.tab_id,
+                "window_id": spawned.window_id,
+                "workspace": workspace,
+                "domain": domain_name,
+                "argv": argv_serialized,
+            }),
+            None,
+        )
+        .await
+        {
+            log::warn!("failed to journal spawn event: {err:?}");
+        }
+
         Ok(())
     }
 }

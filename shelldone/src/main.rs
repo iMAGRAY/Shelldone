@@ -736,6 +736,15 @@ fn run() -> anyhow::Result<()> {
 
     let opts = Opt::parse();
 
+    let agent_endpoint_env = std::env::var("SHELLDONE_AGENT_ENDPOINT").ok();
+    let agent_persona_env = std::env::var("SHELLDONE_AGENT_PERSONA").ok();
+    if let Err(err) = smol::block_on(crate::cli::agent::default_handshake(
+        agent_endpoint_env.as_deref(),
+        agent_persona_env.as_deref(),
+    )) {
+        log::warn!("agent handshake failed: {err:?}");
+    }
+
     match opts
         .cmd
         .as_ref()

@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke roadmap status roadmap-status ship clippy lint
+.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint
 
 all: build
 
@@ -64,3 +64,9 @@ servedocs:
 
 agents-smoke:
 	python3 scripts/agentd.py smoke
+
+run-agentd:
+	cargo run -p shelldone-agentd -- --state-dir state
+
+perf-utif:
+	k6 run scripts/perf/utif_exec.js --vus 50 --duration 60s

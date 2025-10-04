@@ -25,6 +25,11 @@ agents/
     package.json        — метаданные проекта
     package-lock.json   — зафиксированные зависимости
     README.md           — инструкции по развёртыванию
+  microsoft/            — адаптер для Microsoft Agent SDK (Node.js ≥ 18)
+    bridge.mjs          — точка входа Shelldone ↔ Microsoft Agents
+    package.json        — метаданные проекта
+    package-lock.json   — зафиксированные зависимости
+    README.md           — инструкции по развёртыванию
 ```
 
 Утилита `python scripts/agentd.py` читает `manifest.json` и предоставляет
@@ -38,6 +43,7 @@ agents/
 - `openai`: создайте виртуальное окружение Python ≥ 3.9, выполните
   `pip install -r requirements.lock`, затем запускайте `python bridge.py ...`.
 - `claude`: выполните `npm ci` в каталоге `agents/claude`, запустите `node bridge.mjs ...`.
+- `microsoft`: выполните `npm ci` в каталоге `agents/microsoft`, запустите `node bridge.mjs ...`.
 
 Адаптеры можно запускать как самостоятельные процессы или через служебные
 скрипты, которые появятся в `shelldone-agentd` на этапах внедрения.

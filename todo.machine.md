@@ -103,7 +103,8 @@ big_tasks_planned:
   - task-plugin-sdk
   - task-plugin-examples
   - task-observability-reports
-progress_pct: 13
+  - task-marketplace-hooks
+progress_pct: 11
 health: yellow
 tests_required:
   - make verify-prepush
@@ -151,7 +152,9 @@ big_tasks_planned:
   - task-mcp-bridge
   - task-agent-policy
   - task-security-agent-gov
-progress_pct: 11
+  - task-persona-engine
+  - task-agent-microsoft
+progress_pct: 6.3
 health: yellow
 tests_required:
   - make verify-prepush
@@ -160,9 +163,11 @@ verify_commands:
   - make verify-full
 docs_updates:
   - docs/architecture/ai-integration.md
+  - docs/architecture/persona-engine.md
   - docs/community/communications.md
 artifacts:
   - artifacts/agents/
+  - artifacts/ux/
   - docs/ROADMAP/notes/
 audit:
   created_at: 2025-09-23T00:00:00Z
@@ -294,7 +299,8 @@ big_tasks_planned:
   - task-security-hardening
   - task-observability-pipeline
   - task-release-hardening
-progress_pct: 7
+  - task-utif-sigma-foundation
+progress_pct: 5
 health: yellow
 tests_required:
   - make verify-full
@@ -1067,5 +1073,183 @@ audit:
   created_at: 2025-09-26T00:00:00Z
   created_by: gpt-5-codex
   updated_at: 2025-09-26T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-utif-sigma-foundation
+title: "UTIF-Σ Foundations"
+type: ops
+status: planned
+priority: P0
+size_points: 8
+parent_epic: epic-platform-resilience
+scope_paths:
+  - docs/architecture/utif-sigma.md
+  - scripts/perf/**
+  - policies/**
+  - shelldone-*/src/**
+spec: |
+  Given the UTIF-Σ control plane
+  When Σ-pty, Σ-cap, and ACK are enabled
+  Then commands execute with p99 ≤ 25 ms and policies gate unsafe ESC/OSC
+budgets:
+  latency_ms: 25
+  memory_mb: 128
+  bundle_kb: 0
+risks:
+  - Cross-platform handshake drift
+  - Policy regressions blocking workflows
+dependencies:
+  - task-qa-orchestrator
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+  - k6 run perf/utif_exec.js
+verify_commands:
+  - make verify-full
+  - make verify VERIFY_MODE=ci
+docs_updates:
+  - docs/architecture/utif-sigma.md
+  - docs/architecture/perf-budget.md
+artifacts:
+  - artifacts/perf/utif-sigma/
+  - artifacts/telemetry/
+audit:
+  created_at: 2025-10-03T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-10-03T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-persona-engine
+title: "Persona Engine"
+type: feature
+status: planned
+priority: P0
+size_points: 8
+parent_epic: epic-ai-automation
+scope_paths:
+  - config/personas/**
+  - docs/architecture/utif-sigma.md
+  - shelldone-gui/**
+spec: |
+  Given personas Nova/Core/Flux
+  When personas switch or negotiate
+  Then hints and policy prompts adapt without cognitive overload
+budgets:
+  latency_ms: 40
+  memory_mb: 192
+  bundle_kb: 0
+risks:
+  - UX fatigue if hints misfire
+  - Complex consent flows for agents
+dependencies:
+  - task-utif-sigma-foundation
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-full
+  - cargo test -p shelldone-gui -- persona scenarios
+verify_commands:
+  - make verify-full
+docs_updates:
+  - docs/architecture/utif-sigma.md
+  - docs/architecture/ai-integration.md
+artifacts:
+  - config/personas/
+  - artifacts/ux/
+audit:
+  created_at: 2025-10-03T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-10-03T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-agent-microsoft
+title: "Microsoft Agent SDK Adapter"
+type: feature
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-ai-automation
+scope_paths:
+  - agents/microsoft/**
+  - docs/architecture/ai-integration.md
+  - scripts/agentd.py
+spec: |
+  Given parity with Microsoft Agent SDK
+  When agents/microsoft is installed
+  Then shelldone-agentd recognises the adapter and smoke tests pass
+budgets:
+  latency_ms: 50
+  memory_mb: 128
+  bundle_kb: 1024
+risks:
+  - SDK surface changes breaking bridge API
+  - API key leakage if secrets не защищены
+dependencies:
+  - task-mcp-bridge
+progress_pct: 0
+health: yellow
+tests_required:
+  - python3 scripts/agentd.py smoke
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - agents/README.md
+  - docs/architecture/ai-integration.md
+artifacts:
+  - agents/microsoft/package-lock.json
+  - agents/microsoft/README.md
+audit:
+  created_at: 2025-10-03T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-10-03T00:00:00Z
+  updated_by: gpt-5-codex
+```
+```yaml
+id: task-marketplace-hooks
+title: "Capability Marketplace Hooks"
+type: feature
+status: planned
+priority: P1
+size_points: 5
+parent_epic: epic-plugin-platform
+scope_paths:
+  - docs/architecture/utif-sigma.md
+  - docs/architecture/plugin-marketplace.md
+  - docs/recipes/plugins.md
+  - plugins/registry/**
+spec: |
+  Given third-party capability bundles
+  When they are installed via marketplace
+  Then Σ-cap updates profiles and policies before activation
+budgets:
+  latency_ms: 60
+  memory_mb: 128
+  bundle_kb: 1024
+risks:
+  - Unsandboxed capabilities slipping in
+  - Marketplace drift vs policy store
+dependencies:
+  - task-plugin-sdk
+  - task-utif-sigma-foundation
+progress_pct: 0
+health: yellow
+tests_required:
+  - make verify-prepush
+verify_commands:
+  - make verify-prepush
+docs_updates:
+  - docs/architecture/utif-sigma.md
+  - docs/architecture/plugin-marketplace.md
+  - docs/recipes/plugins.md
+artifacts:
+  - artifacts/plugins/
+audit:
+  created_at: 2025-10-03T00:00:00Z
+  created_by: gpt-5-codex
+  updated_at: 2025-10-03T00:00:00Z
   updated_by: gpt-5-codex
 ```

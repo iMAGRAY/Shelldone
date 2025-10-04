@@ -11,6 +11,12 @@
       "description": "Claude Agent SDK bridge",
       "command": ["node", "agents/claude/bridge.mjs"],
       "error_contains": ["@anthropic-ai/sdk", "ANTHROPIC_API_KEY"]
+    },
+    {
+      "id": "microsoft",
+      "description": "Microsoft Agent SDK bridge",
+      "command": ["node", "agents/microsoft/bridge.mjs"],
+      "error_contains": ["@microsoft/agents-sdk", "MICROSOFT_AGENT_API_KEY"]
     }
   ]
 }

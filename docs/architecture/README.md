@@ -9,8 +9,12 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 - **Native AI support.** People and agents share one control protocol; automation is a first-class citizen.
 
 ## Thematic Specifications
+- `docs/architecture/utif-sigma.md` — Unified Terminal Intelligence Fabric (Σ-pty/Σ-json/Σ-cap), ACK протокол, Continuum snapshots, policy и perf SLA.
 - `docs/architecture/customization-and-plugins.md` — plugin model, themes, hooks, and IDE capabilities.
 - `docs/architecture/ai-integration.md` — MCP/AI interaction protocols, агентные адаптеры (OpenAI Agents SDK, Claude Agent SDK) и политика обновлений.
+- `docs/architecture/persona-engine.md` — Persona Engine Nova/Core/Flux (хинты, guardrails, telemetry, UX).
+- `docs/architecture/plugin-marketplace.md` — Capability marketplace hooks, bundle lifecycle, σ-cap обновления.
+- `docs/architecture/agent-governance.md` — управление адаптерами, секретами, observability и тестированием agentd.
 - `docs/architecture/animation-framework.md` — high-performance effects and animation system.
 - `docs/architecture/perf-budget.md` — performance budgets, profiling, and fallback modes.
 - `docs/architecture/state-and-storage.md` — lifecycle of state, snapshots, sync, and backups.

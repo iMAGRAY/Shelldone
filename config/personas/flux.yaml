@@ -1,0 +1,12 @@
+id: flux
+mode: expert
+hints:
+  enable: false
+max_hint_rate_per_min: 0
+safety_prompts:
+  auto_confirm: false
+  require_ack: true
+telemetry:
+  collect: minimal
+  tags:
+    - persona:flux
