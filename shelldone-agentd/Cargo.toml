@@ -17,6 +17,9 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { workspace = true }
+regorus = "0.2"
+zstd = "0.13"
+sha2 = "0.10"
 
 [dev-dependencies]
 serde_json = { workspace = true }

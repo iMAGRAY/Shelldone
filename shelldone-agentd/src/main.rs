@@ -20,6 +20,12 @@ struct Cli {
         help = "Directory for Continuum journal and artifacts"
     )]
     state_dir: PathBuf,
+
+    #[arg(
+        long,
+        help = "Path to Rego policy file (defaults to policies/default.rego if exists)"
+    )]
+    policy: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -34,9 +40,19 @@ async fn main() -> anyhow::Result<()> {
         .compact()
         .init();
 
+    let policy_path = cli.policy.or_else(|| {
+        let default_path = PathBuf::from("policies/default.rego");
+        if default_path.exists() {
+            Some(default_path)
+        } else {
+            None
+        }
+    });
+
     let settings = Settings {
         listen: cli.listen,
         state_dir: cli.state_dir,
+        policy_path,
     };
 
     run(settings).await

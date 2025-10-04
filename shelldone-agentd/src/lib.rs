@@ -1,3 +1,5 @@
+mod policy_engine;
+
 use axum::{
     extract::State,
     http::StatusCode,
@@ -6,30 +8,39 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
+use policy_engine::{AckPolicyInput, PolicyEngine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::process::Command;
 use tokio::signal::ctrl_c;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {
     journal_path: Arc<PathBuf>,
+    policy_engine: Arc<Mutex<PolicyEngine>>,
 }
 
 impl AppState {
-    fn new(state_dir: PathBuf) -> Self {
+    fn new(state_dir: PathBuf, policy_path: Option<PathBuf>) -> Self {
         let journal_path = state_dir.join("journal").join("continuum.log");
+        let policy_engine = PolicyEngine::new(policy_path.as_deref())
+            .unwrap_or_else(|e| {
+                warn!("Failed to load policy engine: {e}. Policy enforcement disabled.");
+                PolicyEngine::new(None).expect("creating disabled policy engine")
+            });
+
         Self {
             journal_path: Arc::new(journal_path),
+            policy_engine: Arc::new(Mutex::new(policy_engine)),
         }
     }
 
@@ -60,6 +71,7 @@ impl AppState {
 pub struct Settings {
     pub listen: SocketAddr,
     pub state_dir: PathBuf,
+    pub policy_path: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -67,12 +79,13 @@ impl Default for Settings {
         Self {
             listen: SocketAddr::from(([127, 0, 0, 1], 17717)),
             state_dir: PathBuf::from("state"),
+            policy_path: Some(PathBuf::from("policies/default.rego")),
         }
     }
 }
 
 pub async fn run(settings: Settings) -> anyhow::Result<()> {
-    let state = AppState::new(settings.state_dir.clone());
+    let state = AppState::new(settings.state_dir.clone(), settings.policy_path.clone());
     tokio::fs::create_dir_all(
         state
             .journal_path()
@@ -308,6 +321,41 @@ async fn agent_exec(
         ));
     }
 
+    // Policy check
+    let policy_input = AckPolicyInput::new(
+        packet.command.clone(),
+        packet.persona.clone(),
+        packet.spectral_tag.clone(),
+    );
+
+    let policy_decision = state
+        .policy_engine
+        .lock()
+        .unwrap()
+        .evaluate_ack(&policy_input)
+        .map_err(|e| ApiError::internal("policy_evaluation", e))?;
+
+    if !policy_decision.is_allowed() {
+        let reason = policy_decision.deny_reasons.join("; ");
+        warn!("Policy denied agent.exec: {}", reason);
+
+        // Log policy denial event
+        let event = EventRecord::new(
+            "policy_denied",
+            packet.persona.clone(),
+            json!({
+                "command": packet.command,
+                "deny_reasons": policy_decision.deny_reasons,
+            }),
+            None,
+            packet.spectral_tag.clone(),
+            None,
+        );
+        let _ = state.append_event(&event).await;
+
+        return Err(ApiError::forbidden("policy_denied", reason));
+    }
+
     let args_value = packet
         .args
         .clone()
@@ -471,6 +519,16 @@ impl ApiError {
         }
     }
 
+    fn forbidden(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            body: ErrorBody {
+                code,
+                message: message.into(),
+            },
+        }
+    }
+
     fn unsupported(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_IMPLEMENTED,
@@ -530,7 +588,7 @@ mod tests {
     #[tokio::test]
     async fn exec_writes_event() {
         let temp = TempDir::new().unwrap();
-        let state = AppState::new(temp.path().to_path_buf());
+        let state = AppState::new(temp.path().to_path_buf(), None);
         let packet = AckPacket {
             id: None,
             persona: Some("core".into()),
@@ -551,7 +609,7 @@ mod tests {
     #[tokio::test]
     async fn journal_endpoint_appends_event() {
         let temp = TempDir::new().unwrap();
-        let state = AppState::new(temp.path().to_path_buf());
+        let state = AppState::new(temp.path().to_path_buf(), None);
         let req = JournalRequest {
             kind: "cli.event".to_string(),
             persona: Some("core".into()),
