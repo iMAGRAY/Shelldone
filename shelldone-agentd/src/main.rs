@@ -26,6 +26,12 @@ struct Cli {
         help = "Path to Rego policy file (defaults to policies/default.rego if exists)"
     )]
     policy: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "OTLP endpoint for Prism telemetry (e.g., http://localhost:4318)"
+    )]
+    otlp_endpoint: Option<String>,
 }
 
 #[tokio::main]
@@ -53,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
         listen: cli.listen,
         state_dir: cli.state_dir,
         policy_path,
+        otlp_endpoint: cli.otlp_endpoint,
     };
 
     run(settings).await

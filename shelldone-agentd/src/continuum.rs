@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::io::{Read as _, Write as _};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

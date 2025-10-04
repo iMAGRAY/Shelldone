@@ -1,3 +1,4 @@
+mod telemetry;
 mod continuum;
 mod policy_engine;
 
@@ -30,10 +31,15 @@ struct AppState {
     journal_path: Arc<PathBuf>,
     policy_engine: Arc<Mutex<PolicyEngine>>,
     continuum_store: Arc<tokio::sync::Mutex<ContinuumStore>>,
+    metrics: Option<Arc<telemetry::PrismMetrics>>,
 }
 
 impl AppState {
-    fn new(state_dir: PathBuf, policy_path: Option<PathBuf>) -> Self {
+    fn new(
+        state_dir: PathBuf,
+        policy_path: Option<PathBuf>,
+        metrics: Option<Arc<telemetry::PrismMetrics>>,
+    ) -> Self {
         let journal_path = state_dir.join("journal").join("continuum.log");
         let policy_engine = PolicyEngine::new(policy_path.as_deref())
             .unwrap_or_else(|e| {
@@ -48,6 +54,7 @@ impl AppState {
                 let snapshot_dir = state_dir.join("snapshots");
                 ContinuumStore::new(state_dir.join("journal").join("continuum.log"), snapshot_dir)
             })),
+            metrics,
         }
     }
 
@@ -79,6 +86,7 @@ pub struct Settings {
     pub listen: SocketAddr,
     pub state_dir: PathBuf,
     pub policy_path: Option<PathBuf>,
+    pub otlp_endpoint: Option<String>,
 }
 
 impl Default for Settings {
@@ -87,12 +95,22 @@ impl Default for Settings {
             listen: SocketAddr::from(([127, 0, 0, 1], 17717)),
             state_dir: PathBuf::from("state"),
             policy_path: Some(PathBuf::from("policies/default.rego")),
+            otlp_endpoint: None,
         }
     }
 }
 
 pub async fn run(settings: Settings) -> anyhow::Result<()> {
-    let state = AppState::new(settings.state_dir.clone(), settings.policy_path.clone());
+    // Initialize Prism OTLP telemetry if endpoint provided
+    let (metrics, _provider) = if let Some(ref endpoint) = settings.otlp_endpoint {
+        let (provider, metrics) =
+            telemetry::init_prism(Some(endpoint.clone()), "shelldone-agentd")?;
+        (Some(Arc::new(metrics)), Some(provider))
+    } else {
+        (None, None)
+    };
+
+    let state = AppState::new(settings.state_dir.clone(), settings.policy_path.clone(), metrics);
     tokio::fs::create_dir_all(
         state
             .journal_path()
@@ -115,6 +133,8 @@ pub async fn run(settings: Settings) -> anyhow::Result<()> {
     axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    // Graceful telemetry shutdown handled by provider drop
     Ok(())
 }
 
@@ -347,6 +367,12 @@ async fn agent_exec(
         let reason = policy_decision.deny_reasons.join("; ");
         warn!("Policy denied agent.exec: {}", reason);
 
+        // Record policy denial metrics
+        if let Some(ref metrics) = state.metrics {
+            metrics.record_policy_denial(&packet.command, packet.persona.as_deref());
+            metrics.record_policy_evaluation(false);
+        }
+
         // Log policy denial event
         let event = EventRecord::new(
             "policy_denied",
@@ -362,6 +388,11 @@ async fn agent_exec(
         let _ = state.append_event(&event).await;
 
         return Err(ApiError::forbidden("policy_denied", reason));
+    }
+
+    // Record policy evaluation (allowed)
+    if let Some(ref metrics) = state.metrics {
+        metrics.record_policy_evaluation(true);
     }
 
     let args_value = packet
@@ -391,6 +422,13 @@ async fn agent_exec(
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
+    let duration_ms = (Utc::now() - start_time).num_milliseconds() as f64;
+
+    // Record exec latency metrics
+    if let Some(ref metrics) = state.metrics {
+        metrics.record_exec_latency(duration_ms, persona.as_deref());
+    }
+
     let event = EventRecord::new(
         "exec",
         persona.clone(),
@@ -400,7 +438,7 @@ async fn agent_exec(
             "exit_code": exit_code,
             "stdout_len": stdout.len(),
             "stderr_len": stderr.len(),
-            "duration_ms": (Utc::now() - start_time).num_milliseconds(),
+            "duration_ms": duration_ms as i64,
         }),
         Some(event_id.clone()),
         Some(spectral_tag.clone()),
@@ -596,7 +634,7 @@ mod tests {
     #[tokio::test]
     async fn exec_writes_event() {
         let temp = TempDir::new().unwrap();
-        let state = AppState::new(temp.path().to_path_buf(), None);
+        let state = AppState::new(temp.path().to_path_buf(), None, None);
         let packet = AckPacket {
             id: None,
             persona: Some("core".into()),
@@ -617,7 +655,7 @@ mod tests {
     #[tokio::test]
     async fn journal_endpoint_appends_event() {
         let temp = TempDir::new().unwrap();
-        let state = AppState::new(temp.path().to_path_buf(), None);
+        let state = AppState::new(temp.path().to_path_buf(), None, None);
         let req = JournalRequest {
             kind: "cli.event".to_string(),
             persona: Some("core".into()),
@@ -676,7 +714,19 @@ async fn agent_undo(
     if !policy_decision.is_allowed() {
         let reason = policy_decision.deny_reasons.join("; ");
         warn!("Policy denied agent.undo: {}", reason);
+
+        // Record policy denial metrics
+        if let Some(ref metrics) = state.metrics {
+            metrics.record_policy_denial(&packet.command, packet.persona.as_deref());
+            metrics.record_policy_evaluation(false);
+        }
+
         return Err(ApiError::forbidden("policy_denied", reason));
+    }
+
+    // Record policy evaluation (allowed)
+    if let Some(ref metrics) = state.metrics {
+        metrics.record_policy_evaluation(true);
     }
 
     let args_value = packet
@@ -688,7 +738,7 @@ async fn agent_undo(
 
     let start_time = Utc::now();
 
-    let mut store = state.continuum_store.lock().await;
+    let store = state.continuum_store.lock().await;
 
     let snapshots = store
         .list_snapshots()
@@ -717,7 +767,13 @@ async fn agent_undo(
         .map_err(|e| ApiError::internal("restore_events", e))?;
 
     let restored_count = events.len();
-    let duration = (Utc::now() - start_time).num_milliseconds();
+    let duration_ms = (Utc::now() - start_time).num_milliseconds() as f64;
+
+    // Record undo metrics
+    if let Some(ref metrics) = state.metrics {
+        metrics.record_undo_latency(duration_ms, &undo_args.snapshot_id);
+        metrics.record_events_restored(restored_count as u64);
+    }
 
     let undo_event = EventRecord::new(
         "undo",
@@ -725,7 +781,7 @@ async fn agent_undo(
         json!({
             "snapshot_id": undo_args.snapshot_id,
             "restored_events": restored_count,
-            "duration_ms": duration,
+            "duration_ms": duration_ms as i64,
         }),
         None,
         packet.spectral_tag.clone(),
@@ -738,14 +794,14 @@ async fn agent_undo(
 
     info!(
         "Restored {} events from snapshot {} in {}ms",
-        restored_count, undo_args.snapshot_id, duration
+        restored_count, undo_args.snapshot_id, duration_ms as i64
     );
 
     Ok(Json(UndoResponse {
         status: "ok",
         snapshot_id: undo_args.snapshot_id,
         restored_events: restored_count,
-        duration_ms: duration,
+        duration_ms: duration_ms as i64,
     }))
 }
 
