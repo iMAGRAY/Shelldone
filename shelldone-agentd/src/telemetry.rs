@@ -19,10 +19,12 @@ pub struct PrismMetrics {
     pub policy_denials: Counter<u64>,
     pub policy_evaluations: Counter<u64>,
 
-    // Persona hints
+    // Persona hints (Wave 2)
+    #[allow(dead_code)]
     pub persona_hints: Counter<u64>,
 
-    // Continuum operations
+    // Continuum operations (Wave 2)
+    #[allow(dead_code)]
     pub snapshot_created: Counter<u64>,
     pub events_restored: Counter<u64>,
 }
@@ -111,7 +113,8 @@ impl PrismMetrics {
         );
     }
 
-    /// Record persona hint
+    /// Record persona hint (Wave 2: Persona Engine)
+    #[allow(dead_code)]
     pub fn record_persona_hint(&self, persona: &str, hint_type: &str) {
         self.persona_hints.add(
             1,
@@ -122,7 +125,8 @@ impl PrismMetrics {
         );
     }
 
-    /// Record snapshot creation
+    /// Record snapshot creation (Wave 2: Continuum API)
+    #[allow(dead_code)]
     pub fn record_snapshot_created(&self, _event_count: u64) {
         self.snapshot_created.add(1, &[]);
         // Could add event_count as attribute if needed

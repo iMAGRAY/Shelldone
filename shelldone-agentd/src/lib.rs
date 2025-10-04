@@ -102,7 +102,7 @@ impl Default for Settings {
 
 pub async fn run(settings: Settings) -> anyhow::Result<()> {
     // Initialize Prism OTLP telemetry if endpoint provided
-    let (metrics, _provider) = if let Some(ref endpoint) = settings.otlp_endpoint {
+    let (metrics, provider) = if let Some(ref endpoint) = settings.otlp_endpoint {
         let (provider, metrics) =
             telemetry::init_prism(Some(endpoint.clone()), "shelldone-agentd")?;
         (Some(Arc::new(metrics)), Some(provider))
@@ -134,7 +134,13 @@ pub async fn run(settings: Settings) -> anyhow::Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
-    // Graceful telemetry shutdown handled by provider drop
+    // Graceful telemetry shutdown
+    if let Some(provider) = provider {
+        if let Err(e) = telemetry::shutdown_prism(provider) {
+            warn!("Failed to shutdown telemetry: {}", e);
+        }
+    }
+
     Ok(())
 }
 

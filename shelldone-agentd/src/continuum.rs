@@ -59,6 +59,8 @@ impl ContinuumEvent {
     }
 
     /// Verify this event's hash matches its content
+    /// Wave 2: Event verification API
+    #[allow(dead_code)]
     pub fn verify_hash(&self) -> bool {
         let mut temp = self.clone();
         let original_hash = temp.merkle_hash.clone();
@@ -88,6 +90,8 @@ pub struct ContinuumSnapshot {
 
 impl ContinuumSnapshot {
     /// Create snapshot from events
+    /// Wave 2: Snapshot creation API
+    #[allow(dead_code)]
     pub fn from_events(
         events: &[ContinuumEvent],
         snapshot_id: String,
@@ -194,6 +198,8 @@ impl ContinuumSnapshot {
     }
 
     /// Save snapshot to disk
+    /// Wave 2: Snapshot persistence API
+    #[allow(dead_code)]
     pub fn save(&self, snapshot_dir: &Path) -> Result<PathBuf> {
         std::fs::create_dir_all(snapshot_dir)
             .context("creating snapshot directory")?;
@@ -233,11 +239,12 @@ impl ContinuumSnapshot {
 
 /// Continuum event store manager
 pub struct ContinuumStore {
+    #[allow(dead_code)] // Wave 2: Journal replay API
     journal_path: PathBuf,
     snapshot_dir: PathBuf,
-    /// Events loaded in memory (for fast snapshot creation)
+    #[allow(dead_code)] // Wave 2: In-memory event buffer
     events: Vec<ContinuumEvent>,
-    /// Snapshot every N events
+    #[allow(dead_code)] // Wave 2: Auto-snapshot trigger
     snapshot_interval: usize,
 }
 
@@ -252,6 +259,8 @@ impl ContinuumStore {
     }
 
     /// Load events from journal
+    /// Wave 2: Journal replay and recovery
+    #[allow(dead_code)]
     pub fn load_journal(&mut self) -> Result<usize> {
         if !self.journal_path.exists() {
             info!("Journal file does not exist yet: {}", self.journal_path.display());
@@ -298,6 +307,8 @@ impl ContinuumStore {
     }
 
     /// Create snapshot if interval reached
+    /// Wave 2: Auto-snapshot trigger
+    #[allow(dead_code)]
     pub fn maybe_snapshot(&mut self) -> Result<Option<PathBuf>> {
         if self.events.len() < self.snapshot_interval {
             return Ok(None);

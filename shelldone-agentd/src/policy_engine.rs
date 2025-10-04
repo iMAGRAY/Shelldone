@@ -35,6 +35,7 @@ impl PolicyDecision {
 pub struct PolicyEngine {
     engine: RwLock<Engine>,
     enabled: bool,
+    #[allow(dead_code)] // Stored for future reload capability
     policy_path: Option<std::path::PathBuf>,
 }
 
@@ -90,6 +91,8 @@ impl PolicyEngine {
     }
 
     /// Reload policy from disk (hot-reload support)
+    /// Wave 2: Will be used for dynamic policy updates
+    #[allow(dead_code)]
     pub fn reload(&self) -> Result<()> {
         if !self.enabled {
             return Ok(());
@@ -171,6 +174,8 @@ impl PolicyEngine {
     }
 
     /// Evaluate OSC escape sequence against policy
+    /// Wave 2: OSC filtering integration with Σ-pty proxy
+    #[allow(dead_code)]
     pub fn evaluate_osc(&self, osc_code: u32, operation: &str) -> Result<PolicyDecision> {
         if !self.enabled {
             return Ok(PolicyDecision::allow());
@@ -280,6 +285,8 @@ impl AckPolicyInput {
         }
     }
 
+    /// Builder method for tests
+    #[allow(dead_code)]
     pub fn with_approval(mut self, granted: bool) -> Self {
         self.approval_granted = granted;
         self

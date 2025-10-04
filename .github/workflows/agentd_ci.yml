@@ -1,0 +1,128 @@
+name: Shelldone Agent CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'shelldone-agentd/**'
+      - 'mux/**'
+      - 'policies/**'
+      - 'scripts/perf/**'
+      - '.github/workflows/agentd_ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'shelldone-agentd/**'
+      - 'mux/**'
+      - 'policies/**'
+      - 'scripts/perf/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test (Ubuntu 22.04)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run unit tests
+        run: cargo test -p shelldone-agentd --lib
+
+      - name: Run E2E tests
+        run: cargo test -p shelldone-agentd --test e2e_ack
+
+      - name: Check for warnings
+        run: cargo check -p shelldone-agentd 2>&1 | tee check.log && ! grep -q "warning:" check.log
+
+  performance:
+    name: Performance Regression Check
+    runs-on: ubuntu-22.04
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Build shelldone-agentd
+        run: cargo build -p shelldone-agentd --release
+
+      - name: Start agentd
+        run: |
+          mkdir -p /tmp/shelldone-ci
+          cargo run -p shelldone-agentd --release -- --state-dir /tmp/shelldone-ci &
+          echo $! > /tmp/agentd.pid
+          sleep 3
+
+      - name: Run k6 performance test
+        run: k6 run --quiet scripts/perf/utif_exec.js
+
+      - name: Run policy performance test
+        run: k6 run --quiet scripts/perf/policy_perf.js
+
+      - name: Stop agentd
+        if: always()
+        run: kill $(cat /tmp/agentd.pid) || true
+
+  lint:
+    name: Clippy & Format Check
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          profile: minimal
+          override: true
+
+      - name: Run clippy
+        run: cargo clippy -p shelldone-agentd --all-targets -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt -p shelldone-agentd -- --check
