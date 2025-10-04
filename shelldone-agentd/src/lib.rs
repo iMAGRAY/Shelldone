@@ -10,6 +10,7 @@ use axum::{
 };
 use chrono::Utc;
 use policy_engine::{AckPolicyInput, PolicyEngine};
+use continuum::{ContinuumSnapshot, ContinuumStore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -28,6 +29,7 @@ use uuid::Uuid;
 struct AppState {
     journal_path: Arc<PathBuf>,
     policy_engine: Arc<Mutex<PolicyEngine>>,
+    continuum_store: Arc<tokio::sync::Mutex<ContinuumStore>>,
 }
 
 impl AppState {
@@ -42,6 +44,10 @@ impl AppState {
         Self {
             journal_path: Arc::new(journal_path),
             policy_engine: Arc::new(Mutex::new(policy_engine)),
+            continuum_store: Arc::new(tokio::sync::Mutex::new({
+                let snapshot_dir = state_dir.join("snapshots");
+                ContinuumStore::new(state_dir.join("journal").join("continuum.log"), snapshot_dir)
+            })),
         }
     }
 
@@ -100,6 +106,7 @@ pub async fn run(settings: Settings) -> anyhow::Result<()> {
         .route("/sigma/handshake", post(handshake))
         .route("/ack/exec", post(agent_exec))
         .route("/journal/event", post(journal_event))
+        .route("/ack/undo", post(agent_undo))
         .with_state(state.clone());
 
     let listener = TcpListener::bind(settings.listen).await?;
@@ -628,3 +635,117 @@ mod tests {
         assert!(journal.contains("\"cli.event\""));
     }
 }
+
+#[derive(Debug, Deserialize)]
+struct UndoArgs {
+    snapshot_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UndoResponse {
+    status: &'static str,
+    snapshot_id: String,
+    restored_events: usize,
+    duration_ms: i64,
+}
+
+async fn agent_undo(
+    State(state): State<AppState>,
+    Json(packet): Json<AckPacket>,
+) -> Result<Json<UndoResponse>, ApiError> {
+    if packet.command != "agent.undo" {
+        return Err(ApiError::unsupported(
+            "unsupported_command",
+            "expected agent.undo",
+        ));
+    }
+
+    let policy_input = AckPolicyInput::new(
+        packet.command.clone(),
+        packet.persona.clone(),
+        packet.spectral_tag.clone(),
+    );
+
+    let policy_decision = state
+        .policy_engine
+        .lock()
+        .unwrap()
+        .evaluate_ack(&policy_input)
+        .map_err(|e| ApiError::internal("policy_evaluation", e))?;
+
+    if !policy_decision.is_allowed() {
+        let reason = policy_decision.deny_reasons.join("; ");
+        warn!("Policy denied agent.undo: {}", reason);
+        return Err(ApiError::forbidden("policy_denied", reason));
+    }
+
+    let args_value = packet
+        .args
+        .clone()
+        .ok_or_else(|| ApiError::invalid("missing_args", "agent.undo requires args"))?;
+    let undo_args: UndoArgs = serde_json::from_value(args_value)
+        .map_err(|err| ApiError::invalid("invalid_args", err.to_string()))?;
+
+    let start_time = Utc::now();
+
+    let mut store = state.continuum_store.lock().await;
+
+    let snapshots = store
+        .list_snapshots()
+        .map_err(|e| ApiError::internal("list_snapshots", e))?;
+
+    let snapshot_path = snapshots
+        .iter()
+        .find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.contains(&undo_args.snapshot_id))
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            ApiError::invalid(
+                "snapshot_not_found",
+                format!("Snapshot {} not found", undo_args.snapshot_id),
+            )
+        })?;
+
+    let snapshot = ContinuumSnapshot::load(snapshot_path)
+        .map_err(|e| ApiError::internal("load_snapshot", e))?;
+
+    let events = snapshot
+        .restore_events()
+        .map_err(|e| ApiError::internal("restore_events", e))?;
+
+    let restored_count = events.len();
+    let duration = (Utc::now() - start_time).num_milliseconds();
+
+    let undo_event = EventRecord::new(
+        "undo",
+        packet.persona.clone(),
+        json!({
+            "snapshot_id": undo_args.snapshot_id,
+            "restored_events": restored_count,
+            "duration_ms": duration,
+        }),
+        None,
+        packet.spectral_tag.clone(),
+        None,
+    );
+
+    if let Err(err) = state.append_event(&undo_event).await {
+        error!(%err, "failed to log undo event");
+    }
+
+    info!(
+        "Restored {} events from snapshot {} in {}ms",
+        restored_count, undo_args.snapshot_id, duration
+    );
+
+    Ok(Json(UndoResponse {
+        status: "ok",
+        snapshot_id: undo_args.snapshot_id,
+        restored_events: restored_count,
+        duration_ms: duration,
+    }))
+}
+
