@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
+use lru::LruCache;
 use regorus::Engine;
+use std::num::NonZeroUsize;
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
 /// Policy evaluation result
@@ -31,23 +33,37 @@ impl PolicyDecision {
     }
 }
 
-/// Production-grade Rego policy engine
+/// Cache key for policy evaluation results
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+struct PolicyCacheKey {
+    command: String,
+    persona: Option<String>,
+    spectral_tag: Option<String>,
+}
+
+/// Production-grade Rego policy engine with LRU cache
 pub struct PolicyEngine {
     engine: RwLock<Engine>,
     enabled: bool,
     #[allow(dead_code)] // Stored for future reload capability
     policy_path: Option<std::path::PathBuf>,
+    /// LRU cache for policy evaluation results (256 entries)
+    cache: Mutex<LruCache<PolicyCacheKey, PolicyDecision>>,
 }
 
 impl PolicyEngine {
     /// Create a new policy engine and load policy from file
     pub fn new(policy_path: Option<&Path>) -> Result<Self> {
+        let cache_size = NonZeroUsize::new(256).unwrap();
+        let cache = Mutex::new(LruCache::new(cache_size));
+
         let Some(path) = policy_path else {
             info!("Policy engine disabled (no policy file specified)");
             return Ok(Self {
                 engine: RwLock::new(Engine::new()),
                 enabled: false,
                 policy_path: None,
+                cache,
             });
         };
 
@@ -60,6 +76,7 @@ impl PolicyEngine {
                 engine: RwLock::new(Engine::new()),
                 enabled: false,
                 policy_path: None,
+                cache,
             });
         }
 
@@ -87,6 +104,7 @@ impl PolicyEngine {
             engine: RwLock::new(engine),
             enabled: true,
             policy_path: Some(path.to_path_buf()),
+            cache,
         })
     }
 
@@ -122,7 +140,14 @@ impl PolicyEngine {
             .context("reloading policy")?;
 
         *engine = new_engine;
-        info!("Policy reloaded from {}", path.display());
+
+        // Clear cache on policy reload (invalidate all cached decisions)
+        let mut cache = self.cache.lock().map_err(|e| {
+            anyhow::anyhow!("failed to acquire cache lock: {}", e)
+        })?;
+        cache.clear();
+
+        info!("Policy reloaded from {} (cache cleared)", path.display());
 
         Ok(())
     }
@@ -133,6 +158,26 @@ impl PolicyEngine {
             debug!("Policy engine disabled, allowing by default");
             return Ok(PolicyDecision::allow());
         }
+
+        // Check cache first (hot path optimization)
+        let cache_key = PolicyCacheKey {
+            command: input.command.clone(),
+            persona: input.persona.clone(),
+            spectral_tag: input.spectral_tag.clone(),
+        };
+
+        {
+            let mut cache = self.cache.lock().map_err(|e| {
+                anyhow::anyhow!("failed to acquire cache lock: {}", e)
+            })?;
+
+            if let Some(cached) = cache.get(&cache_key) {
+                debug!("Policy cache hit for {}", input.command);
+                return Ok(cached.clone());
+            }
+        }
+
+        debug!("Policy cache miss, evaluating policy for {}", input.command);
 
         let input_json =
             serde_json::to_string(input).context("serializing ACK policy input")?;
@@ -150,27 +195,37 @@ impl PolicyEngine {
             .context("evaluating policy query data.shelldone.policy.allow")?;
 
         // Empty result means false (policy didn't match)
-        if result.result.is_empty() {
+        let decision = if result.result.is_empty() {
             let deny_reasons = self.extract_deny_reasons_internal(&mut engine)?;
             debug!("Policy denied ACK command: {:?}", deny_reasons);
-            return Ok(PolicyDecision::deny(deny_reasons));
+            PolicyDecision::deny(deny_reasons)
+        } else {
+            let allowed = result
+                .result
+                .first()
+                .and_then(|r| r.expressions.first())
+                .and_then(|e| e.value.as_bool().ok().copied())
+                .unwrap_or(false);
+
+            if !allowed {
+                let deny_reasons = self.extract_deny_reasons_internal(&mut engine)?;
+                debug!("Policy denied ACK command: {:?}", deny_reasons);
+                PolicyDecision::deny(deny_reasons)
+            } else {
+                debug!("Policy allowed ACK command: {}", input.command);
+                PolicyDecision::allow()
+            }
+        };
+
+        // Cache the result for future lookups
+        {
+            let mut cache = self.cache.lock().map_err(|e| {
+                anyhow::anyhow!("failed to acquire cache lock: {}", e)
+            })?;
+            cache.put(cache_key, decision.clone());
         }
 
-        let allowed = result
-            .result
-            .first()
-            .and_then(|r| r.expressions.first())
-            .and_then(|e| e.value.as_bool().ok().copied())
-            .unwrap_or(false);
-
-        if !allowed {
-            let deny_reasons = self.extract_deny_reasons_internal(&mut engine)?;
-            debug!("Policy denied ACK command: {:?}", deny_reasons);
-            return Ok(PolicyDecision::deny(deny_reasons));
-        }
-
-        debug!("Policy allowed ACK command: {}", input.command);
-        Ok(PolicyDecision::allow())
+        Ok(decision)
     }
 
     /// Evaluate OSC escape sequence against policy

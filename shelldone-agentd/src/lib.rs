@@ -1,6 +1,6 @@
 mod telemetry;
 mod continuum;
-mod policy_engine;
+pub mod policy_engine; // Public for benchmarks
 
 use axum::{
     extract::State,
