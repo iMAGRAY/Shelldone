@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint
+.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci
 
 all: build
 
@@ -70,3 +70,25 @@ run-agentd:
 
 perf-utif:
 	k6 run scripts/perf/utif_exec.js --vus 50 --duration 60s
+
+# E2E and performance testing targets
+test-e2e:
+	cargo test -p shelldone-agentd --test e2e_ack
+
+test-e2e-verbose:
+	cargo test -p shelldone-agentd --test e2e_ack -- --nocapture
+
+perf-policy:
+	k6 run scripts/perf/policy_perf.js
+
+perf-baseline: perf-utif perf-policy
+	@echo "All performance baselines complete"
+
+perf-ci:
+	cargo run -p shelldone-agentd -- --state-dir /tmp/shelldone-ci & \
+	sleep 2 && \
+	k6 run --quiet scripts/perf/utif_exec.js && \
+	killall shelldone-agentd || true
+
+ci: verify-ci test-e2e perf-ci
+	@echo "Full CI pipeline complete"

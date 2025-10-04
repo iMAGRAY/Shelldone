@@ -28,7 +28,8 @@ export default function () {
   });
   const execPayload = JSON.stringify({
     command: 'agent.exec',
-    args: { cmd: 'echo "hello"', zone: 'perf' },
+    persona: 'core',
+    args: { cmd: 'echo hello_k6_perf' },
   });
 
   const hand = http.post('http://localhost:17717/sigma/handshake', handshakePayload, {
@@ -49,5 +50,5 @@ export default function () {
   const elapsed = Date.now() - start;
 
   latency.add(elapsed);
-  errors.add(exec.status !== 200);
+  errors.add(exec.status !== 200 ? 1 : 0);
 }
