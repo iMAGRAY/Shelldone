@@ -16,10 +16,12 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "fs", "io-util", "signal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 regorus = "0.2"
 zstd = "0.13"
 sha2 = "0.10"
+hex = "0.4"
+serde_bytes = "0.11"
 
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -1,3 +1,4 @@
+mod continuum;
 mod policy_engine;
 
 use axum::{
