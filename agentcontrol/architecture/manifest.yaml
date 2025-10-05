@@ -466,7 +466,8 @@ big_tasks:
 
     When make verify runs
 
-    Then new marker tokens (todo, fixme, xxx, triple-question) are blocked unless baseline is updated
+    Then new marker tokens (todo, fixme, xxx, triple-question) are blocked unless
+    baseline is updated
 
     '
   budgets:
@@ -1019,7 +1020,8 @@ big_tasks:
 
     When an agent requests an approval-required action
 
-    Then the policy executes automatically, decisions are logged, and secrets remain safe
+    Then the policy executes automatically, decisions are logged, and secrets remain
+    safe
 
     '
   budgets:
@@ -1395,7 +1397,8 @@ big_tasks:
 
     When TermBridge boots or receives MCP updates
 
-    Then terminal endpoints are discovered, validated against policy, and exposed to command runners without drift
+    Then terminal endpoints are discovered, validated against policy, and exposed
+    to command runners without drift
 
     '
   budgets:
@@ -1408,7 +1411,7 @@ big_tasks:
   dependencies:
   - task-mcp-bridge
   progress_pct: 33
-  health: yellow
+  health: green
   tests_required:
   - cargo test -p shelldone-agentd termbridge::discovery
   - cargo test -p shelldone-agentd --test e2e_mcp_grpc
@@ -1422,10 +1425,10 @@ big_tasks:
   audit:
     created_at: '2025-10-04T22:28:00Z'
     created_by: gpt-5-codex
-    updated_at: '2025-10-04T22:28:00Z'
+    updated_at: '2025-10-05T10:15:14.998983+00:00'
     updated_by: gpt-5-codex
   metrics:
-    progress_pct: 33
+    progress_pct: 75
   roadmap_phase: m2
 - id: task-termbridge-core
   title: TermBridge Core Orchestrator
@@ -1444,7 +1447,8 @@ big_tasks:
 
     When wezterm spawn/focus/send_text are invoked via HTTP or persona flows
 
-    Then bindings persist, CLI runs through the command runner, and policy/telemetry capture outcomes deterministically
+    Then bindings persist, CLI runs through the command runner, and policy/telemetry
+    capture outcomes deterministically
 
     '
   budgets:

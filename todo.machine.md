@@ -16,7 +16,7 @@ kpis:
 policies:
   task_min_points: 5
 progress_pct: 16
-health: yellow
+health: green
 milestones:
 - id: m1
   title: QA Hardening
@@ -76,7 +76,7 @@ phase_progress:
   - task-security-hardening
   - task-observability-pipeline
   progress_pct: 67
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   - cargo nextest run --workspace
@@ -126,7 +126,7 @@ phase_progress:
   - task-observability-reports
   - task-marketplace-hooks
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   - cargo test -p plugins
@@ -177,7 +177,7 @@ phase_progress:
   - task-persona-engine
   - task-agent-microsoft
   progress_pct: 16
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   - cargo test -p shelldone-client
@@ -228,7 +228,7 @@ phase_progress:
   - task-animation-toolkit
   - task-observability-visual
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - cargo test -p shelldone-gui
@@ -276,7 +276,7 @@ phase_progress:
   - task-ide-file-manager
   - task-state-sync-ui
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -326,7 +326,7 @@ phase_progress:
   - task-release-hardening
   - task-utif-sigma-foundation
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - make roadmap status
@@ -420,7 +420,7 @@ phase_progress:
   dependencies:
   - task-qa-orchestrator
   progress_pct: 50
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -500,7 +500,7 @@ phase_progress:
   dependencies:
   - task-qa-orchestrator
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -540,7 +540,7 @@ phase_progress:
   dependencies:
   - task-plugin-sdk
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -581,7 +581,7 @@ phase_progress:
   dependencies:
   - task-qa-orchestrator
   progress_pct: 31
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -621,7 +621,7 @@ phase_progress:
   dependencies:
   - task-mcp-bridge
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -662,7 +662,7 @@ phase_progress:
   dependencies:
   - task-plugin-sdk
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -704,7 +704,7 @@ phase_progress:
   dependencies:
   - task-animation-core
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -746,7 +746,7 @@ phase_progress:
   - task-plugin-examples
   - task-mcp-bridge
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -788,7 +788,7 @@ phase_progress:
   - task-qa-orchestrator
   - task-release-hardening
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - JSON=1 make roadmap status
@@ -836,7 +836,7 @@ phase_progress:
   - task-state-persistence
   - task-mcp-bridge
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - make verify VERIFY_MODE=ci JSON=1
@@ -882,7 +882,7 @@ phase_progress:
   dependencies:
   - task-qa-orchestrator
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - make verify VERIFY_MODE=ci JSON=1
@@ -932,7 +932,7 @@ phase_progress:
   dependencies:
   - task-observability-pipeline
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify VERIFY_MODE=prepush
   - make verify VERIFY_MODE=ci JSON=1
@@ -977,7 +977,7 @@ phase_progress:
   dependencies:
   - task-security-hardening
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - make roadmap status
@@ -1021,7 +1021,7 @@ phase_progress:
   dependencies:
   - task-observability-pipeline
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -1063,7 +1063,7 @@ phase_progress:
   dependencies:
   - task-observability-pipeline
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -1104,7 +1104,7 @@ phase_progress:
   dependencies:
   - task-state-persistence
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   verify_commands:
@@ -1148,7 +1148,7 @@ phase_progress:
   dependencies:
   - task-qa-orchestrator
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - k6 run perf/utif_exec.js
@@ -1194,7 +1194,7 @@ phase_progress:
   dependencies:
   - task-utif-sigma-foundation
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-full
   - cargo test -p shelldone-gui -- persona scenarios
@@ -1239,7 +1239,7 @@ phase_progress:
   dependencies:
   - task-mcp-bridge
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - python3 scripts/agentd.py smoke
   verify_commands:
@@ -1285,7 +1285,7 @@ phase_progress:
   - task-plugin-sdk
   - task-utif-sigma-foundation
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -1331,7 +1331,7 @@ phase_progress:
   dependencies:
   - task-termbridge-discovery
   progress_pct: 36
-  health: yellow
+  health: green
   tests_required:
   - cargo test -p shelldone-agentd termbridge
   - cargo test -p shelldone-agentd --test e2e_ack
@@ -1375,7 +1375,7 @@ phase_progress:
   dependencies:
   - task-termbridge-core
   progress_pct: 0
-  health: yellow
+  health: green
   tests_required:
   - scripts/tests/termbridge_matrix.py --dry-run
   verify_commands:

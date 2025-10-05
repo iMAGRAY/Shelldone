@@ -629,9 +629,17 @@
       "system": null,
       "roadmap_phase": "m2",
       "metrics": {
-        "progress_pct": 50,
-        "health": "yellow"
-      }
+        "progress_pct": 75,
+        "health": "green"
+      },
+      "updated_at": "2025-10-05T10:15:04.278256+00:00",
+      "events": [
+        {
+          "kind": "progress_update",
+          "timestamp": "2025-10-05T10:15:04.278256+00:00",
+          "details": "Persistent discovery registry + MCP triggers"
+        }
+      ]
     },
     {
       "id": "task-termbridge-discovery-registry",

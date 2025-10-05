@@ -1353,8 +1353,8 @@ milestones:
   - Policy misconfiguration leaking unmanaged terminals
   dependencies:
   - task-mcp-bridge
-  progress_pct: 25
-  health: yellow
+  progress_pct: 75
+  health: green
   acceptance: []
   tests_required:
   - cargo test -p shelldone-agentd termbridge::discovery
@@ -1369,8 +1369,8 @@ milestones:
   audit:
     created_at: '2025-10-04T22:28:00Z'
     created_by: gpt-5-codex
-    updated_at: '2025-10-04T22:28:00Z'
-    updated_by: gpt-5-codex
+    updated_at: '2025-10-05T10:16:46.328107+00:00'
+    updated_by: gpt-5-codex-5-codex
 - id: task-termbridge-core
   title: TermBridge Core Orchestrator
   type: feature
