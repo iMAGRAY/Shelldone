@@ -5,10 +5,12 @@ use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct InMemoryMcpSessionRepository {
     inner: RwLock<HashMap<SessionId, McpSession>>,
 }
 
+#[allow(dead_code)]
 impl InMemoryMcpSessionRepository {
     pub fn new() -> Self {
         Self {
@@ -20,17 +22,11 @@ impl InMemoryMcpSessionRepository {
 #[async_trait]
 impl McpSessionRepository for InMemoryMcpSessionRepository {
     async fn insert(&self, session: McpSession) {
-        self.inner
-            .write()
-            .await
-            .insert(session.id(), session);
+        self.inner.write().await.insert(session.id(), session);
     }
 
     async fn update(&self, session: McpSession) {
-        self.inner
-            .write()
-            .await
-            .insert(session.id(), session);
+        self.inner.write().await.insert(session.id(), session);
     }
 
     async fn get(&self, id: &SessionId) -> Option<McpSession> {
@@ -39,6 +35,10 @@ impl McpSessionRepository for InMemoryMcpSessionRepository {
 
     async fn remove(&self, id: &SessionId) {
         self.inner.write().await.remove(id);
+    }
+
+    async fn list(&self) -> Vec<McpSession> {
+        self.inner.read().await.values().cloned().collect()
     }
 }
 

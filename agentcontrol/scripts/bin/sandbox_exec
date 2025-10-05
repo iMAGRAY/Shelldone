@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+# Простая обёртка: если доступен bubblewrap, используем его для изоляции,
+# иначе запускаем команду напрямую.
+if command -v bwrap >/dev/null 2>&1; then
+  WORK_DIR="${SANDBOX_WORK:-/tmp/sandbox-work}"
+  mkdir -p "$WORK_DIR"
+  exec bwrap \
+    --dev-bind / / \
+    --proc /proc \
+    --tmpfs /tmp \
+    --dir /tmp/work \
+    --chdir "$PWD" \
+    "$@"
+else
+  exec "$@"
+fi

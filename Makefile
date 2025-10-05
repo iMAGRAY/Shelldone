@@ -47,6 +47,7 @@ roadmap-status:
 roadmap: roadmap-status
 
 status: roadmap
+	python3 scripts/status.py
 
 ship: verify
 
@@ -69,7 +70,7 @@ run-agentd:
 	cargo run -p shelldone-agentd -- --state-dir state
 
 perf-utif:
-	k6 run scripts/perf/utif_exec.js --vus 50 --duration 60s
+	python3 -m perf_runner run --probe utif_exec
 
 # E2E and performance testing targets
 test-e2e:
@@ -79,16 +80,14 @@ test-e2e-verbose:
 	cargo test -p shelldone-agentd --test e2e_ack -- --nocapture
 
 perf-policy:
-	k6 run scripts/perf/policy_perf.js
+	python3 -m perf_runner run --probe policy_perf
 
-perf-baseline: perf-utif perf-policy
-	@echo "All performance baselines complete"
+perf-baseline:
+	python3 -m perf_runner run
 
 perf-ci:
-	cargo run -p shelldone-agentd -- --state-dir /tmp/shelldone-ci & \
-	sleep 2 && \
-	k6 run --quiet scripts/perf/utif_exec.js && \
-	killall shelldone-agentd || true
+	SHELLDONE_PERF_PROFILE=ci python3 -m perf_runner run
+
 
 ci: verify-ci test-e2e perf-ci
 	@echo "Full CI pipeline complete"

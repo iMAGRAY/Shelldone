@@ -26,6 +26,11 @@ shelldone-blob-leases = {workspace=true, features=["simple_tempdir"]}
 shelldone-mux-server-impl.workspace = true
 shelldone-gui-subcommands.workspace = true
 shelldone-term.workspace = true
+crossbeam.workspace = true
+reqwest = { workspace = true, features = ["blocking"] }
+serde_json.workspace = true
+chrono.workspace = true
+serde.workspace = true
 
 [target."cfg(windows)".dependencies]
 winapi = { workspace=true, features = [ "winuser" ]}

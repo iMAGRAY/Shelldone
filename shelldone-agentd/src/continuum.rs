@@ -111,12 +111,11 @@ impl ContinuumSnapshot {
             .clone();
 
         // Serialize events to JSON
-        let json_data = serde_json::to_vec(events)
-            .context("serializing events to JSON")?;
+        let json_data = serde_json::to_vec(events).context("serializing events to JSON")?;
 
         // Compress with zstd
-        let compressed_data = zstd::encode_all(&json_data[..], 3)
-            .context("compressing snapshot with zstd")?;
+        let compressed_data =
+            zstd::encode_all(&json_data[..], 3).context("compressing snapshot with zstd")?;
 
         let compression_ratio = json_data.len() as f64 / compressed_data.len() as f64;
 
@@ -143,12 +142,12 @@ impl ContinuumSnapshot {
     /// Restore events from snapshot
     pub fn restore_events(&self) -> Result<Vec<ContinuumEvent>> {
         // Decompress
-        let decompressed = zstd::decode_all(&self.compressed_data[..])
-            .context("decompressing snapshot")?;
+        let decompressed =
+            zstd::decode_all(&self.compressed_data[..]).context("decompressing snapshot")?;
 
         // Deserialize
-        let events: Vec<ContinuumEvent> = serde_json::from_slice(&decompressed)
-            .context("deserializing events from snapshot")?;
+        let events: Vec<ContinuumEvent> =
+            serde_json::from_slice(&decompressed).context("deserializing events from snapshot")?;
 
         // Verify event count matches
         if events.len() != self.event_count {
@@ -201,24 +200,20 @@ impl ContinuumSnapshot {
     /// Wave 2: Snapshot persistence API
     #[allow(dead_code)]
     pub fn save(&self, snapshot_dir: &Path) -> Result<PathBuf> {
-        std::fs::create_dir_all(snapshot_dir)
-            .context("creating snapshot directory")?;
+        std::fs::create_dir_all(snapshot_dir).context("creating snapshot directory")?;
 
         let filename = format!("{}.snapshot.json.zst", self.snapshot_id);
         let path = snapshot_dir.join(filename);
 
-        let json = serde_json::to_vec(self)
-            .context("serializing snapshot metadata")?;
+        let json = serde_json::to_vec(self).context("serializing snapshot metadata")?;
 
         // Double-compress: snapshot already contains compressed data
         let mut file = std::fs::File::create(&path)
             .with_context(|| format!("creating snapshot file {}", path.display()))?;
 
-        file.write_all(&json)
-            .context("writing snapshot to disk")?;
+        file.write_all(&json).context("writing snapshot to disk")?;
 
-        file.sync_all()
-            .context("syncing snapshot to disk")?;
+        file.sync_all().context("syncing snapshot to disk")?;
 
         info!("Saved snapshot {} to {}", self.snapshot_id, path.display());
         Ok(path)
@@ -229,10 +224,14 @@ impl ContinuumSnapshot {
         let json = std::fs::read(path)
             .with_context(|| format!("reading snapshot from {}", path.display()))?;
 
-        let snapshot: Self = serde_json::from_slice(&json)
-            .context("deserializing snapshot metadata")?;
+        let snapshot: Self =
+            serde_json::from_slice(&json).context("deserializing snapshot metadata")?;
 
-        debug!("Loaded snapshot {} from {}", snapshot.snapshot_id, path.display());
+        debug!(
+            "Loaded snapshot {} from {}",
+            snapshot.snapshot_id,
+            path.display()
+        );
         Ok(snapshot)
     }
 }
@@ -263,7 +262,10 @@ impl ContinuumStore {
     #[allow(dead_code)]
     pub fn load_journal(&mut self) -> Result<usize> {
         if !self.journal_path.exists() {
-            info!("Journal file does not exist yet: {}", self.journal_path.display());
+            info!(
+                "Journal file does not exist yet: {}",
+                self.journal_path.display()
+            );
             return Ok(0);
         }
 
@@ -317,11 +319,7 @@ impl ContinuumStore {
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now().to_rfc3339();
 
-        let snapshot = ContinuumSnapshot::from_events(
-            &self.events,
-            snapshot_id,
-            timestamp,
-        )?;
+        let snapshot = ContinuumSnapshot::from_events(&self.events, snapshot_id, timestamp)?;
 
         let path = snapshot.save(&self.snapshot_dir)?;
 

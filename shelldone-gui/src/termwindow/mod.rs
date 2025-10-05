@@ -44,22 +44,25 @@ use mux::pane::{
     CachePolicy, CloseReason, Pane, PaneId, Pattern as MuxPattern, PerformAssignmentResult,
 };
 use mux::renderable::RenderableDimensions;
+use mux::sigma_proxy::SigmaDirection;
 use mux::tab::{
     PositionedPane, PositionedSplit, SplitDirection, SplitRequest, SplitSize as MuxSplitSize, Tab,
     TabId,
 };
 use mux::window::WindowId as MuxWindowId;
-use mux::{Mux, MuxNotification};
+use mux::{Mux, MuxNotification, SigmaGuardData};
 use mux_lua::MuxPane;
 use shelldone_dynamic::Value;
 use shelldone_font::FontConfiguration;
 use shelldone_term::color::ColorPalette;
 use shelldone_term::input::LastMouseClick;
 use shelldone_term::{Alert, Progress, StableRowIndex, TerminalConfiguration, TerminalSize};
+use shelldone_toast_notification::persistent_toast_notification;
 use smol::channel::Sender;
 use smol::Timer;
 use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, LinkedList};
+use std::env;
 use std::ops::Add;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -87,6 +90,112 @@ use crate::spawn::SpawnWhere;
 use prevcursor::PrevCursorPos;
 
 const ATLAS_SIZE: usize = 128;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PersonaMode {
+    Nova,
+    Core,
+    Flux,
+}
+
+impl PersonaMode {
+    fn detect() -> Self {
+        match env::var("SHELLDONE_PERSONA")
+            .unwrap_or_else(|_| "core".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "nova" => PersonaMode::Nova,
+            "flux" | "expert" => PersonaMode::Flux,
+            _ => PersonaMode::Core,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SigmaGuardBanner {
+    fragment: String,
+    expires_at: Instant,
+}
+
+#[derive(Clone, Debug)]
+struct SigmaGuidance {
+    fragment: String,
+    toast_message: Option<String>,
+    ttl: Duration,
+}
+
+fn build_sigma_guidance(persona: PersonaMode, data: &SigmaGuardData) -> Option<SigmaGuidance> {
+    let (title, detail) = match data.reason.as_str() {
+        "OSC 52 read blocked" => (
+            "Clipboard read blocked",
+            "Remote program attempted to read your clipboard; Σ Guard denied the request.",
+        ),
+        "OSC 52 payload too large" => (
+            "Clipboard payload trimmed",
+            "Outgoing clipboard content exceeded the safe limit and was truncated.",
+        ),
+        "control character filtered" => (
+            "Control character filtered",
+            "Discarded non-printable control byte from input stream.",
+        ),
+        "invalid escape" => (
+            "Invalid escape sequence",
+            "Malformed escape sequence removed to protect the terminal state.",
+        ),
+        "OSC code not allowed" => (
+            "Unsupported OSC sequence",
+            "Escape sequence not in the negotiated capability profile was filtered.",
+        ),
+        _ => ("Escape sanitized", "Sequence filtered by Σ Guard sandbox."),
+    };
+
+    match persona {
+        PersonaMode::Flux => None,
+        PersonaMode::Core | PersonaMode::Nova => {
+            let fragment = match persona {
+                PersonaMode::Nova => format!("Σ guard · {}", title),
+                PersonaMode::Core => format!("Σ guard: {}", title),
+                PersonaMode::Flux => unreachable!(),
+            };
+
+            let toast_message = if matches!(persona, PersonaMode::Nova) {
+                let direction_hint = match data.direction {
+                    SigmaDirection::Input => "Input sanitized",
+                    SigmaDirection::Output => "Output sanitized",
+                };
+                let mut message = format!(
+                    "{} — {} {} ({} bytes)",
+                    title, detail, direction_hint, data.sequence_len
+                );
+                let preview_snippet = data
+                    .sequence_preview
+                    .split_whitespace()
+                    .take(4)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if !preview_snippet.is_empty() {
+                    message.push_str(&format!(" · seq {}", preview_snippet));
+                }
+                Some(message)
+            } else {
+                None
+            };
+
+            let ttl = if matches!(persona, PersonaMode::Nova) {
+                Duration::from_secs(12)
+            } else {
+                Duration::from_secs(8)
+            };
+
+            Some(SigmaGuidance {
+                fragment,
+                toast_message,
+                ttl,
+            })
+        }
+    }
+}
 
 lazy_static::lazy_static! {
     static ref WINDOW_CLASS: Mutex<String> = Mutex::new(shelldone_gui_subcommands::DEFAULT_WINDOW_CLASS.to_owned());
@@ -392,6 +501,9 @@ pub struct TermWindow {
     tab_bar: TabBarState,
     fancy_tab_bar: Option<box_model::ComputedElement>,
     pub right_status: String,
+    user_right_status: String,
+    sigma_guard_banner: Option<SigmaGuardBanner>,
+    persona_mode: PersonaMode,
     pub left_status: String,
     last_ui_item: Option<UIItem>,
     /// Tracks whether the current mouse-down event is part of click-focus.
@@ -677,7 +789,7 @@ impl TermWindow {
 
         let connection_name = Connection::get().unwrap().name();
 
-        let myself = Self {
+        let mut myself = Self {
             created: Instant::now(),
             connection_name,
             last_fps_check_time: Instant::now(),
@@ -713,6 +825,9 @@ impl TermWindow {
             tab_bar: TabBarState::default(),
             fancy_tab_bar: None,
             right_status: String::new(),
+            user_right_status: String::new(),
+            sigma_guard_banner: None,
+            persona_mode: PersonaMode::detect(),
             left_status: String::new(),
             last_mouse_coords: (0, -1),
             window_drag_position: None,
@@ -789,6 +904,8 @@ impl TermWindow {
             modal: RefCell::new(None),
             opengl_info: None,
         };
+
+        myself.update_right_status_from_components();
 
         let tw = Rc::new(RefCell::new(myself));
         let tw_event = Rc::clone(&tw);
@@ -1149,12 +1266,8 @@ impl TermWindow {
                 }
             }
             TermWindowNotif::SetRightStatus(status) => {
-                if status != self.right_status {
-                    self.right_status = status;
-                    self.update_title_post_status();
-                } else {
-                    self.schedule_next_status_update();
-                }
+                self.user_right_status = status;
+                self.update_right_status_from_components();
             }
             TermWindowNotif::SetLeftStatus(status) => {
                 if status != self.left_status {
@@ -1195,6 +1308,9 @@ impl TermWindow {
                 self.cancel_overlay_for_tab(tab_id, pane_id);
             }
             TermWindowNotif::MuxNotification(n) => match n {
+                MuxNotification::SigmaGuard(data) => {
+                    self.handle_sigma_guard_event(data);
+                }
                 MuxNotification::Alert {
                     alert: Alert::SetUserVar { name, value },
                     pane_id,
@@ -1452,6 +1568,9 @@ impl TermWindow {
         }
 
         match n {
+            MuxNotification::SigmaGuard(_) => {
+                // handled via TermWindowNotif::MuxNotification
+            }
             MuxNotification::Alert {
                 pane_id,
                 alert:
@@ -2098,6 +2217,73 @@ impl TermWindow {
                 })
                 .detach();
             }
+        }
+    }
+
+    fn update_right_status_from_components(&mut self) {
+        if let Some(banner) = &self.sigma_guard_banner {
+            if banner.expires_at <= Instant::now() {
+                self.sigma_guard_banner = None;
+            }
+        }
+
+        let mut combined = self.user_right_status.clone();
+        if let Some(banner) = &self.sigma_guard_banner {
+            if !combined.trim().is_empty() {
+                combined.push_str("   ");
+            }
+            combined.push_str(&banner.fragment);
+        }
+
+        if combined != self.right_status {
+            self.right_status = combined;
+            self.update_title_post_status();
+        } else {
+            self.schedule_next_status_update();
+        }
+    }
+
+    fn handle_sigma_guard_event(&mut self, data: SigmaGuardData) {
+        if matches!(self.persona_mode, PersonaMode::Flux) {
+            if self.sigma_guard_banner.is_some() {
+                self.sigma_guard_banner = None;
+                self.update_right_status_from_components();
+            }
+            return;
+        }
+
+        if let Some(guidance) = build_sigma_guidance(self.persona_mode, &data) {
+            let expires_at = Instant::now() + guidance.ttl;
+            self.sigma_guard_banner = Some(SigmaGuardBanner {
+                fragment: guidance.fragment,
+                expires_at,
+            });
+            if let Some(message) = guidance.toast_message {
+                persistent_toast_notification("Σ guard", &message);
+            }
+            self.update_right_status_from_components();
+            self.schedule_sigma_guard_expiry(expires_at);
+        }
+    }
+
+    fn schedule_sigma_guard_expiry(&self, expires_at: Instant) {
+        if let Some(window) = self.window.as_ref() {
+            let window = window.clone();
+            promise::spawn::spawn(async move {
+                if expires_at > Instant::now() {
+                    Timer::at(expires_at).await;
+                }
+                window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                    let now = Instant::now();
+                    if let Some(banner) = term_window.sigma_guard_banner.as_ref() {
+                        if banner.expires_at <= now {
+                            term_window.sigma_guard_banner = None;
+                            term_window.update_right_status_from_components();
+                        }
+                    }
+                })));
+            })
+            .detach();
         }
     }
 

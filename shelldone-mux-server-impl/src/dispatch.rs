@@ -118,6 +118,7 @@ where
                     .await?;
                 stream.flush().await.context("flushing PDU to client")?;
             }
+            Ok(Item::Notif(MuxNotification::SigmaGuard(_))) => {}
             Ok(Item::Notif(MuxNotification::Alert { pane_id, alert })) => {
                 {
                     let per_pane = handler.per_pane(pane_id);

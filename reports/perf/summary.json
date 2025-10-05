@@ -1,0 +1,116 @@
+{
+  "artifacts": [
+    "/tmp/tmpqlbtesct/artifacts/utif_exec/utif_exec_trial1_stub.json",
+    "/tmp/tmpqlbtesct/artifacts/utif_exec/utif_exec_trial2_stub.json",
+    "/tmp/tmpqlbtesct/artifacts/utif_exec/summary.json",
+    "/tmp/tmpqlbtesct/artifacts/policy_perf/policy_perf_trial1_stub.json",
+    "/tmp/tmpqlbtesct/artifacts/policy_perf/policy_perf_trial2_stub.json",
+    "/tmp/tmpqlbtesct/artifacts/policy_perf/summary.json",
+    "/tmp/tmpqlbtesct/artifacts/summary.json"
+  ],
+  "generated_at": "2025-10-05T01:28:16.791371",
+  "probes": [
+    {
+      "aggregated": {
+        "error_rate_ratio": {
+          "unit": "ratio",
+          "value": 0.001
+        },
+        "latency_p95_ms": {
+          "unit": "ms",
+          "value": 10.0
+        },
+        "latency_p99_ms": {
+          "unit": "ms",
+          "value": 10.0
+        }
+      },
+      "budgets": [
+        {
+          "actual": 10.0,
+          "alias": "latency_p95_ms",
+          "comparator": "<=",
+          "limit": 15.0,
+          "passed": true,
+          "unit": "ms"
+        },
+        {
+          "actual": 10.0,
+          "alias": "latency_p99_ms",
+          "comparator": "<=",
+          "limit": 25.0,
+          "passed": true,
+          "unit": "ms"
+        },
+        {
+          "actual": 0.001,
+          "alias": "error_rate_ratio",
+          "comparator": "<",
+          "limit": 0.005,
+          "passed": true,
+          "unit": "ratio"
+        }
+      ],
+      "label": "UTIF \u03a3 agent.exec load",
+      "probe_id": "utif_exec",
+      "violations": []
+    },
+    {
+      "aggregated": {
+        "allowed_latency_p95_ms": {
+          "unit": "ms",
+          "value": 10.0
+        },
+        "allowed_latency_p99_ms": {
+          "unit": "ms",
+          "value": 10.0
+        },
+        "denied_latency_p95_ms": {
+          "unit": "ms",
+          "value": 10.0
+        },
+        "policy_error_rate_ratio": {
+          "unit": "ratio",
+          "value": 0.001
+        }
+      },
+      "budgets": [
+        {
+          "actual": 10.0,
+          "alias": "allowed_latency_p95_ms",
+          "comparator": "<=",
+          "limit": 20.0,
+          "passed": true,
+          "unit": "ms"
+        },
+        {
+          "actual": 10.0,
+          "alias": "allowed_latency_p99_ms",
+          "comparator": "<=",
+          "limit": 30.0,
+          "passed": true,
+          "unit": "ms"
+        },
+        {
+          "actual": 10.0,
+          "alias": "denied_latency_p95_ms",
+          "comparator": "<=",
+          "limit": 10.0,
+          "passed": true,
+          "unit": "ms"
+        },
+        {
+          "actual": 0.001,
+          "alias": "policy_error_rate_ratio",
+          "comparator": "<",
+          "limit": 0.01,
+          "passed": true,
+          "unit": "ratio"
+        }
+      ],
+      "label": "Policy enforcement mix",
+      "probe_id": "policy_perf",
+      "violations": []
+    }
+  ]
+}

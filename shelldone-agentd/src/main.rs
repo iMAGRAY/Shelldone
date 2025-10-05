@@ -1,5 +1,5 @@
 use clap::Parser;
-use shelldone_agentd::{run, Settings};
+use shelldone_agentd::{run, CipherPolicy, Settings};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
@@ -13,6 +13,42 @@ struct Cli {
         help = "Listen address for Σ-json endpoints"
     )]
     listen: SocketAddr,
+
+    #[arg(
+        long,
+        default_value = "127.0.0.1:17718",
+        help = "Listen address for MCP gRPC bridge"
+    )]
+    grpc_listen: SocketAddr,
+
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "PEM certificate file enabling TLS for the MCP gRPC bridge"
+    )]
+    grpc_tls_cert: Option<PathBuf>,
+
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "PEM private key file enabling TLS for the MCP gRPC bridge"
+    )]
+    grpc_tls_key: Option<PathBuf>,
+
+    #[arg(
+        long,
+        value_name = "PATH",
+        help = "PEM CA bundle enforcing mutual TLS for the MCP gRPC bridge"
+    )]
+    grpc_tls_ca: Option<PathBuf>,
+
+    #[arg(
+        long,
+        default_value = "balanced",
+        value_parser = parse_cipher_policy,
+        help = "Cipher policy for gRPC TLS (strict|balanced|legacy)"
+    )]
+    grpc_tls_policy: CipherPolicy,
 
     #[arg(
         long,
@@ -57,10 +93,19 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = Settings {
         listen: cli.listen,
+        grpc_listen: cli.grpc_listen,
+        grpc_tls_cert: cli.grpc_tls_cert,
+        grpc_tls_key: cli.grpc_tls_key,
+        grpc_tls_ca: cli.grpc_tls_ca,
+        grpc_tls_policy: cli.grpc_tls_policy,
         state_dir: cli.state_dir,
         policy_path,
         otlp_endpoint: cli.otlp_endpoint,
     };
 
     run(settings).await
+}
+
+fn parse_cipher_policy(value: &str) -> Result<CipherPolicy, String> {
+    value.parse()
 }

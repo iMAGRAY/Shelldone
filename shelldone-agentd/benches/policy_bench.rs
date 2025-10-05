@@ -53,11 +53,7 @@ fn policy_eval_hot_cache(c: &mut Criterion) {
     let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
 
     // Warm up cache
-    let input = AckPolicyInput::new(
-        "agent.exec".to_string(),
-        Some("core".to_string()),
-        None,
-    );
+    let input = AckPolicyInput::new("agent.exec".to_string(), Some("core".to_string()), None);
     engine.evaluate_ack(&input).unwrap();
 
     c.bench_function("policy_eval_hot_cache", |b| {

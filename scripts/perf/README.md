@@ -1,7 +1,7 @@
 # Performance Test Suite (UTIF-Σ)
 
 ## Overview
-k6 performance baselines for shelldone-agentd control plane.
+k6-based performance probes covering the Shelldone agent control plane. The suite powers the `perf-probes` gate in `make verify` (modes `full` and `ci`) and exports reproducible artifacts under `artifacts/perf/`.
 
 ## Prerequisites
 ```bash
@@ -9,111 +9,132 @@ k6 performance baselines for shelldone-agentd control plane.
 brew install k6  # macOS
 # or
 sudo gpg -k
-sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A
 echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
 sudo apt-get update
 sudo apt-get install k6
 ```
 
+## Verify Integration
+`make verify-full`/`make verify-ci` start `shelldone-agentd`, run three trials for each probe, enforce budgets, and emit:
+
+```
+artifacts/perf/
+├── agentd_perf.log
+├── summary.json
+├── policy_perf/
+│   ├── policy_perf_trial1.json
+│   ├── policy_perf_trial2.json
+│   ├── policy_perf_trial3.json
+│   └── summary.json
+└── utif_exec/
+    ├── utif_exec_trial1.json
+    ├── utif_exec_trial2.json
+    ├── utif_exec_trial3.json
+    └── summary.json
+```
+
+`summary.json` captures pass/fail status for every budget; individual probe directories contain the per-trial k6 exports plus an aggregated summary used by dashboards.
+
 ## Performance Targets
 
 | Metric | Target | Description |
 |--------|--------|-------------|
-| `p95` | ≤ 15 ms | 95th percentile latency |
-| `p99` | ≤ 25 ms | 99th percentile latency |
-| `error_rate` | < 0.5% | HTTP error rate |
-| `policy_overhead` | < 5 ms | Policy evaluation overhead |
+| `latency_p95_ms` | ≤ 15 ms | 95th percentile end-to-end latency for `agent.exec` |
+| `latency_p99_ms` | ≤ 25 ms | 99th percentile end-to-end latency |
+| `error_rate_ratio` | < 0.005 | Error ratio (0.5 %) under steady load |
+| `policy_allowed_latency` | ≤ 20 ms | Policy pass path latency |
+| `policy_denied_latency` | ≤ 10 ms | Policy deny path latency |
+| `policy_error_rate_ratio` | < 0.01 | Error ratio (1 %) for policy scenario |
+
+Budgets are enforced after the median across three trials; failing probes unblock only once metrics drop below targets again.
 
 ## Scripts
 
 ### `utif_exec.js`
-**Purpose**: Baseline agent.exec performance under load
+Measures `agent.exec` latency under sustained load.
 
-**Scenario**:
-- 200 req/s for 60s
-- Pre-allocated 50 VUs, max 100 VUs
-- Executes `echo` command via shell
-
-**Thresholds**:
-- `utif_exec_latency`: p95≤15ms, p99≤25ms
-- `utif_exec_errors`: <0.5%
-
-**Usage**:
-```bash
-# Start agentd
-cargo run -p shelldone-agentd -- --listen 127.0.0.1:17717
-
-# Run test
-k6 run scripts/perf/utif_exec.js
-```
+**Scenario defaults**
+- Rate: 200 req/s (`SHELLDONE_PERF_RATE`)
+- Duration: 60s (`SHELLDONE_PERF_DURATION`)
+- Warm-up offset: 0s (`SHELLDONE_PERF_WARMUP_SEC`)
+- Pre-allocated VUs: 50 (`SHELLDONE_PERF_VUS`)
+- Max VUs: 100 (`SHELLDONE_PERF_MAX_VUS`)
 
 ### `policy_perf.js`
-**Purpose**: Policy enforcement overhead measurement
+Blends allowed/denied policy decisions (50/50 split) to track governance overhead.
 
-**Scenario**:
-- 100 req/s for 30s
-- 50% allowed requests (core persona)
-- 50% denied requests (unknown persona)
+**Scenario defaults**
+- Rate: 100 req/s (`SHELLDONE_PERF_POLICY_RATE` or `SHELLDONE_PERF_RATE`)
+- Duration: 30s (`SHELLDONE_PERF_POLICY_DURATION` or `SHELLDONE_PERF_DURATION`)
+- Warm-up offset inherits `SHELLDONE_PERF_POLICY_WARMUP_SEC` (fallback to `SHELLDONE_PERF_WARMUP_SEC`).
 
-**Thresholds**:
-- `policy_allowed_latency`: p95≤20ms, p99≤30ms
-- `policy_denied_latency`: p95≤10ms, p99≤15ms
-- `policy_errors`: <1%
+Both scripts honour the environment variables listed below when executed via `k6 run` or through the verify pipeline.
 
-**Usage**:
+## Environment Overrides
+
+| Variable | Default | Applies to | Notes |
+|----------|---------|------------|-------|
+| `SHELLDONE_PERF_RATE` | 200 | utif_exec | Requests per second. |
+| `SHELLDONE_PERF_DURATION` | 60s | utif_exec & fallback | ISO-like duration string accepted by k6. |
+| `SHELLDONE_PERF_VUS` | 50 | utif_exec | Pre-allocated virtual users. |
+| `SHELLDONE_PERF_MAX_VUS` | 100 | utif_exec | Maximum virtual users. |
+| `SHELLDONE_PERF_WARMUP_SEC` | 0 | both | Delay before scenario start (seconds). |
+| `SHELLDONE_PERF_TRIALS` | 3 | verify.py | Number of trials per probe. |
+| `SHELLDONE_PERF_POLICY_RATE` | 100 | policy_perf | Overrides mix scenario rate. |
+| `SHELLDONE_PERF_POLICY_DURATION` | 30s | policy_perf | Overrides duration for policy mix. |
+| `SHELLDONE_PERF_POLICY_VUS` | 30 | policy_perf | Overrides VUs for policy mix. |
+| `SHELLDONE_PERF_POLICY_MAX_VUS` | 60 | policy_perf | Overrides max VUs for policy mix. |
+| `SHELLDONE_PERF_POLICY_WARMUP_SEC` | inherit | policy_perf | Warm-up for policy probe only. |
+
+## Local Usage
 ```bash
-# Run with default policy
-k6 run scripts/perf/policy_perf.js
+# One-shot run (agentd + обе пробы)
+python3 -m perf_runner run
+
+# Только utif_exec без запуска agentd
+python3 -m perf_runner run --probe utif_exec --no-agentd
+
+# Настройка длительности и числа прогонов
+SHELLDONE_PERF_TRIALS=1 SHELLDONE_PERF_DURATION=20s python3 -m perf_runner run
 ```
 
-## CI Integration
+CLI автоматически стартует `shelldone-agentd` (если не передан `--no-agentd`), пишет лог в `agentd_perf.log` и завершает работу с ненулевым кодом при нарушении бюджетов.
 
-### Makefile Targets
+## Profiles
+
 ```bash
-make perf-baseline    # Run all perf tests
-make perf-exec        # Run exec baseline
-make perf-policy      # Run policy overhead test
+python3 -m perf_runner run --profile dev      # trials=1, 20s длительность
+python3 -m perf_runner run --profile ci       # trials=1, 30s длительность
+python3 -m perf_runner run --profile full     # trials=3, 60s длительность
+python3 -m perf_runner run --profile staging  # trials=2, 45s длительность
+python3 -m perf_runner run --profile prod     # trials=5, 120s длительность
 ```
 
-### GitHub Actions
-```yaml
-- name: Run performance regression check
-  run: |
-    cargo run -p shelldone-agentd &
-    sleep 2
-    k6 run --quiet scripts/perf/utif_exec.js
-```
+Профиль можно переопределять отдельными флагами (`--trials`, `--warmup-sec`, env `SHELLDONE_PERF_*`).
 
-## Results Export
+Подробнее о textfile ingest: `docs/observability/prometheus-textfile.md`.
 
-Results exported to `artifacts/perf/`:
-```
-artifacts/perf/
-├── utif-sigma/
-│   ├── utif_exec_<timestamp>.json
-│   └── policy_perf_<timestamp>.json
-└── summary.md
+### Production & Staging
+- `--profile staging` — двухпрогонный smoke (45 s, rate 200/110) перед выкладкой.
+- `--profile prod` — полный контракт (5 прогонов по 120 s, rate 240/150); используем в ночных jobах и при релизе.
+- Для кастомизации CI можно комбинировать `SHELLDONE_PERF_PROFILE=ci` с точечными `SHELLDONE_PERF_TRIALS=2` и т.д.
+
+## CI / Make Targets
+```bash
+make perf-utif         # python3 -m perf_runner run --probe utif_exec
+make perf-policy       # python3 -m perf_runner run --probe policy_perf
+make perf-baseline     # python3 -m perf_runner run (оба прогона)
+make verify-full       # включает perf-probes gate + артефакты
 ```
 
 ## Analyzing Results
-
-### k6 JSON Output
 ```bash
-k6 run --out json=results.json scripts/perf/utif_exec.js
-jq '.metrics | {exec_p95: .utif_exec_latency.values["p(95)"], exec_p99: .utif_exec_latency.values["p(99)"]}' results.json
+jq '.aggregated.latency.value' artifacts/perf/utif_exec/summary.json
+jq '.probes' artifacts/perf/summary.json
 ```
 
-### Grafana Dashboard
-Import `docs/dashboards/k6-perf.json` into Grafana for live monitoring.
-
 ## Troubleshooting
-
-### High Latency
-- Check CPU usage: `top -p $(pgrep shelldone-agentd)`
-- Profile with: `cargo flamegraph -p shelldone-agentd`
-- Increase file descriptors: `ulimit -n 10000`
-
-### Policy Evaluation Slow
-- Enable hot-reload caching in policy engine
-- Reduce Rego policy complexity
-- Profile with `--log-level=debug`
+- **Missing k6**: install the binary (see prerequisites).
+- **High latency**: profile `shelldone-agentd` with `cargo flamegraph -p shelldone-agentd` and inspect `agentd_perf.log`.
+- **Policy budgets failing**: inspect `artifacts/perf/policy_perf/*.json` for outliers and review Rego rules.

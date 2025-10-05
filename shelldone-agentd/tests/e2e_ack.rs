@@ -18,6 +18,11 @@ async fn e2e_agent_exec_echo_command() {
     let state_dir = temp.path().to_path_buf();
     let settings = shelldone_agentd::Settings {
         listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
         state_dir: state_dir.clone(),
         policy_path: None,
         otlp_endpoint: None,
@@ -51,7 +56,11 @@ async fn e2e_agent_exec_echo_command() {
     let body: serde_json::Value = response.json().await.unwrap();
     assert_eq!(body["status"], "ok");
     let stdout = body["stdout"].as_str().unwrap();
-    assert!(stdout.contains("hello") && stdout.contains("e2e"), "stdout was: {}", stdout);
+    assert!(
+        stdout.contains("hello") && stdout.contains("e2e"),
+        "stdout was: {}",
+        stdout
+    );
     assert_eq!(body["exit_code"], 0);
 
     // Verify journal was written
@@ -61,6 +70,66 @@ async fn e2e_agent_exec_echo_command() {
     let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
     assert!(journal.contains("\"kind\":\"exec\""));
     assert!(journal.contains("\"persona\":\"core\""));
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn e2e_sigma_guard_journal_event() {
+    let temp = TempDir::new().unwrap();
+    let port = find_free_port().await;
+
+    let state_dir = temp.path().to_path_buf();
+    let settings = shelldone_agentd::Settings {
+        listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
+        state_dir: state_dir.clone(),
+        policy_path: None,
+        otlp_endpoint: None,
+    };
+
+    let server_handle = tokio::spawn(async move {
+        shelldone_agentd::run(settings).await.unwrap();
+    });
+
+    sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let payload = json!({
+        "kind": "sigma.guard",
+        "payload": {
+            "reason": "OSC 52 read blocked",
+            "direction": "output",
+            "sequence_preview": "1B 5D 35 32",
+            "sequence_len": 12,
+            "occurred_at": "2025-10-04T00:00:00Z"
+        },
+        "spectral_tag": "sigma::guard",
+        "bytes": 12
+    });
+
+    let response = client
+        .post(format!("http://127.0.0.1:{}/journal/event", port))
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    sleep(Duration::from_millis(50)).await;
+    let journal_path = state_dir.join("journal").join("continuum.log");
+    let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
+    let last_line = journal.lines().last().unwrap().to_string();
+    let event: serde_json::Value = serde_json::from_str(&last_line).unwrap();
+    assert_eq!(event["kind"], "sigma.guard");
+    assert_eq!(event["payload"]["reason"], "OSC 52 read blocked");
+    assert_eq!(event["payload"]["direction"], "output");
+    assert_eq!(event["bytes"], 12);
 
     server_handle.abort();
 }
@@ -98,6 +167,11 @@ allow if {
     let state_dir = temp.path().to_path_buf();
     let settings = shelldone_agentd::Settings {
         listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
         state_dir: state_dir.clone(),
         policy_path: Some(policy_path),
         otlp_endpoint: None,
@@ -127,7 +201,10 @@ allow if {
 
     assert_eq!(response.status(), 403);
     let body: serde_json::Value = response.json().await.unwrap();
-    assert_eq!(body.get("code").and_then(|v| v.as_str()), Some("policy_denied"));
+    assert_eq!(
+        body.get("code").and_then(|v| v.as_str()),
+        Some("policy_denied")
+    );
 
     // Try with nova persona (should succeed)
     let response = client
@@ -160,6 +237,11 @@ async fn e2e_agent_undo_snapshot_restore() {
     let state_dir = temp.path().to_path_buf();
     let settings = shelldone_agentd::Settings {
         listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
         state_dir: state_dir.clone(),
         policy_path: None,
         otlp_endpoint: None,
@@ -189,7 +271,7 @@ async fn e2e_agent_undo_snapshot_restore() {
             .unwrap();
     }
 
-    // Create snapshot manually (TODO: use Continuum API)
+    // Manual snapshot creation; Continuum API integration tracked via task-continuum-api
     let snapshot_dir = state_dir.join("snapshots");
     tokio::fs::create_dir_all(&snapshot_dir).await.unwrap();
 
@@ -206,6 +288,11 @@ async fn e2e_healthz_endpoint() {
 
     let settings = shelldone_agentd::Settings {
         listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
         state_dir: temp.path().to_path_buf(),
         policy_path: None,
         otlp_endpoint: None,
@@ -240,6 +327,11 @@ async fn e2e_concurrent_requests() {
 
     let settings = shelldone_agentd::Settings {
         listen: ([127, 0, 0, 1], port).into(),
+        grpc_listen: ([127, 0, 0, 1], 0).into(),
+        grpc_tls_cert: None,
+        grpc_tls_key: None,
+        grpc_tls_ca: None,
+        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
         state_dir: temp.path().to_path_buf(),
         policy_path: None,
         otlp_endpoint: None,

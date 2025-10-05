@@ -1,6 +1,30 @@
 import http from 'k6/http';
 import { Trend, Rate } from 'k6/metrics';
 
+function envNumber(key, fallback, allowZero = false) {
+  const raw = __ENV[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  if (!allowZero && parsed <= 0) {
+    return fallback;
+  }
+  if (allowZero && parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+const rate = envNumber('SHELLDONE_PERF_RATE', 200);
+const duration = __ENV.SHELLDONE_PERF_DURATION || '60s';
+const preAllocatedVUs = envNumber('SHELLDONE_PERF_VUS', 50, true);
+const maxVUs = envNumber('SHELLDONE_PERF_MAX_VUS', 100, true);
+const warmupSeconds = envNumber('SHELLDONE_PERF_WARMUP_SEC', 0, true);
+
 const latency = new Trend('utif_exec_latency');
 const errors = new Rate('utif_exec_errors');
 
@@ -8,11 +32,12 @@ export const options = {
   scenarios: {
     constant_rate: {
       executor: 'constant-arrival-rate',
-      rate: 200,
+      rate,
       timeUnit: '1s',
-      duration: '60s',
-      preAllocatedVUs: 50,
-      maxVUs: 100,
+      duration,
+      preAllocatedVUs,
+      maxVUs,
+      startTime: `${warmupSeconds}s`,
     },
   },
   thresholds: {

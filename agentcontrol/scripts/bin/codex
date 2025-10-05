@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BIN="$SCRIPT_DIR/codex.bin"
+CODEX_HOME_DEFAULT="$ROOT_DIR/state/agents/codex-home"
+if [[ ! -f "$BIN" ]]; then
+  echo "codex CLI не установлен — выполните make agents-install" >&2
+  exit 1
+fi
+if [[ -z "${CODEX_HOME:-}" ]]; then
+  CODEX_HOME="$CODEX_HOME_DEFAULT"
+fi
+mkdir -p "$CODEX_HOME"
+export CODEX_HOME
+cd "$SCRIPT_DIR"
+exec "./codex.bin" "$@"

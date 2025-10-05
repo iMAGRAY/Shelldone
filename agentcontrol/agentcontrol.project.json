@@ -1,0 +1,11 @@
+{
+  "channel": "stable",
+  "checksum": "8cb9794919b9395f3901bcce6eeddca83eda38ff6eb69ae378f91ae3300f1a71",
+  "metadata": {
+    "created_with": "0.3.0"
+  },
+  "registry_version": 1,
+  "settings_hash": "e5fc6260a73d6d2ddba5e514c947ca0a8ba502c51aa4d573a815c859d0bc123f",
+  "template": "default",
+  "template_version": "0.3.0"
+}

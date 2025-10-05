@@ -51,6 +51,7 @@ impl GuiFrontEnd {
 
         mux.subscribe(move |n| {
             match n {
+                MuxNotification::SigmaGuard(_) => {}
                 MuxNotification::WorkspaceRenamed {
                     old_workspace,
                     new_workspace,

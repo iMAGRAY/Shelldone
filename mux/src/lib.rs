@@ -1,5 +1,6 @@
 use crate::client::{ClientId, ClientInfo};
 use crate::pane::{CachePolicy, Pane, PaneId};
+use crate::sigma_proxy::SigmaDirection;
 use crate::ssh_agent::AgentProxy;
 use crate::tab::{SplitRequest, Tab, TabId};
 use crate::window::{Window, WindowId};
@@ -26,7 +27,7 @@ use std::os::raw::c_int;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use termwiz::escape::csi::{DecPrivateMode, DecPrivateModeCode, Device, Mode};
 use termwiz::escape::{Action, CSI};
 use thiserror::*;
@@ -96,6 +97,16 @@ pub enum MuxNotification {
         old_workspace: String,
         new_workspace: String,
     },
+    SigmaGuard(SigmaGuardData),
+}
+
+#[derive(Clone, Debug)]
+pub struct SigmaGuardData {
+    pub direction: SigmaDirection,
+    pub reason: String,
+    pub sequence_preview: String,
+    pub sequence_len: usize,
+    pub occurred_at: SystemTime,
 }
 
 static SUB_ID: AtomicUsize = AtomicUsize::new(0);

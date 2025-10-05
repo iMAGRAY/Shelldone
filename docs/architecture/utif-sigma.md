@@ -26,7 +26,7 @@ UTIF-Σ defines the end-to-end control plane for Shelldone's agent-first termina
 ```
 
 ## Channels
-- **Σ-pty:** hardened PTY proxy applying the ESC/OSC sandbox and capability-aware fallbacks (default allowlist: CSI, OSC 0/2/4/8/52, OSC 133 markers, OSC 1337 graphics profile).
+- **Σ-pty:** hardened PTY proxy applying the ESC/OSC sandbox and capability-aware fallbacks (default allowlist: CSI, OSC 0/2/4/8/52, OSC 133 markers, OSC 1337 graphics profile). Sigma reporter отправляет `sigma.guard` события в agentd.
 - **Σ-json:** duplex WebSocket or ZeroMQ channel that carries ACK packets, persona context, telemetry hints, and policy prompts.
 - **Σ-cap:** capability handshake endpoint exchanging feature manifests between the terminal, shells, and remote hosts.
 
@@ -38,6 +38,12 @@ UTIF-Σ defines the end-to-end control plane for Shelldone's agent-first termina
 - Escape sandbox:
   - Allowlist: CSI, `OSC 0/2/4/8/52/133/1337`, `APC`, `DCS` (screen), `DCS tmux`.
   - Violations → `agent.guard` with policy enforcement (`security_level: hardened`).
+-  - Sigma proxy публикует `sigma.guard` через reporter: события уходят в `/journal/event` и Continuum.
+-  - Конфигурация reporter'а:
+     - `SHELLDONE_AGENTD_URL` — endpoint (default `http://127.0.0.1:17717/journal/event`).
+     - `SHELLDONE_SIGMA_REPORTER=0` — отключить отправку.
+     - Spooler: `CACHE_DIR/sigma_guard_spool.jsonl`, env `SHELLDONE_SIGMA_SPOOL=0` отключает, `SHELLDONE_SIGMA_SPOOL_MAX_BYTES` (default 1 MiB) ограничивает размер, сброс по LRU.
+-  - OTLP метрики: `shelldone.sigma.guard.events{reason=,direction=}`.
 - Capability downgrade:
   - On capability mismatch (tmux, ConPTY) proxy rewrites capabilities and emits `/journal/event` (`kind: "sigma.downgrade"`).
 - Continuum hook: every command emit `kind: "pty.output"`, payload: bytes (truncated), spectral tags: `pty::<domain>`.
@@ -63,6 +69,8 @@ capabilities:
   unicode_version: "15.1"
 ```
 Failure to reach agreement triggers an explicit downgrade event on Σ-json and a visible toast in the UI/logs.
+
+As part of every handshake ответ содержит `tls_fingerprint` и `tls_policy` (значения, собранные TLS watcher’ом). Клиент обязан проверить, что fingerprint присутствует в discovery и соответствует ожидаемой политике; при рассинхронизации handshake завершится `policy_denied` (`rule_id: tls.policy.mismatch`). Это позволяет свежим агентам отлавливать “застрявший” reload и автоматически эскалировать (`agent.guard.suggest`).
 
 ## ACK (Agent Command Kernel)
 Eight primitive commands (extensible via macros) exposed to agents and humans:
@@ -109,6 +117,8 @@ Personas are configured via `config/personas/*.yaml` and negotiated during hands
 - Local daemon exposing gRPC/MCP endpoints (`fs.*`, `git.*`, `proc.*`, `codeactions.*`).
 - Authenticated using mutual TLS or Noise; follows policy envelopes defined in Rego.
 - Provides clipboard brokerage (Wayland/X11/WSL), remote execution scopes, and workspace snapshots.
+- Current bridge: `shelldone-agentd` offers a local MCP WebSocket (`ws://127.0.0.1:17717/mcp`) that forwards MCP tool calls into the ACK kernel with full Continuum journaling.
+- gRPC clients SHOULD connect via TLS (`--grpc-tls-cert/--grpc-tls-key`, optional `--grpc-tls-ca` for mTLS) to enforce transport confidentiality when crossing trust boundaries.
 
 ## Security & Safety
 - ESC/OSC sandbox denies unsafe sequences by default (OSC 52 read, OSC 1337 file upload, window title manipulations). Policy overrides require explicit consent.
@@ -125,6 +135,7 @@ Personas are configured via `config/personas/*.yaml` and negotiated during hands
 
 ## Observability
 - Prism Telemetry exports OTLP metrics: `terminal.latency.input_to_render`, `terminal.undo.duration`, `agent.policy.denied.count`, `handshake.downgrade.count`.
+- Sigma guard события пишутся как `shelldone.sigma.guard.events` с атрибутами `direction` и `reason` (см. Prism telemetry).
 - JSONL journal includes `cmd.start`, `cmd.stop`, exit codes, git diffs, artefacts.
 - Alerts: SLA breach, policy denial spikes, snapshot restore failures.
 

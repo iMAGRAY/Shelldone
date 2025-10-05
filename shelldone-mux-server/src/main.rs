@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::thread;
 
 mod daemonize;
+mod sigma;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -227,6 +228,8 @@ fn run() -> anyhow::Result<()> {
     let domain: Arc<dyn Domain> = Arc::new(LocalDomain::new("local")?);
     let mux = Arc::new(mux::Mux::new(Some(domain.clone())));
     Mux::set_mux(&mux);
+
+    sigma::install_sigma_reporter();
 
     let executor = promise::spawn::SimpleExecutor::new();
 

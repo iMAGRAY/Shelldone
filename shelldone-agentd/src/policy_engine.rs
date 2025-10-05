@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use lru::LruCache;
 use regorus::Engine;
+use serde::Serialize;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::{Mutex, RwLock};
@@ -123,9 +124,10 @@ impl PolicyEngine {
         let policy_text = std::fs::read_to_string(path)
             .with_context(|| format!("reloading policy from {}", path.display()))?;
 
-        let mut engine = self.engine.write().map_err(|e| {
-            anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e)
-        })?;
+        let mut engine = self
+            .engine
+            .write()
+            .map_err(|e| anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e))?;
 
         // Create new engine to avoid stale state
         let mut new_engine = Engine::new();
@@ -142,9 +144,10 @@ impl PolicyEngine {
         *engine = new_engine;
 
         // Clear cache on policy reload (invalidate all cached decisions)
-        let mut cache = self.cache.lock().map_err(|e| {
-            anyhow::anyhow!("failed to acquire cache lock: {}", e)
-        })?;
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|e| anyhow::anyhow!("failed to acquire cache lock: {}", e))?;
         cache.clear();
 
         info!("Policy reloaded from {} (cache cleared)", path.display());
@@ -167,9 +170,10 @@ impl PolicyEngine {
         };
 
         {
-            let mut cache = self.cache.lock().map_err(|e| {
-                anyhow::anyhow!("failed to acquire cache lock: {}", e)
-            })?;
+            let mut cache = self
+                .cache
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to acquire cache lock: {}", e))?;
 
             if let Some(cached) = cache.get(&cache_key) {
                 debug!("Policy cache hit for {}", input.command);
@@ -179,12 +183,12 @@ impl PolicyEngine {
 
         debug!("Policy cache miss, evaluating policy for {}", input.command);
 
-        let input_json =
-            serde_json::to_string(input).context("serializing ACK policy input")?;
+        let input_json = serde_json::to_string(input).context("serializing ACK policy input")?;
 
-        let mut engine = self.engine.write().map_err(|e| {
-            anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e)
-        })?;
+        let mut engine = self
+            .engine
+            .write()
+            .map_err(|e| anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e))?;
 
         engine
             .set_input_json(&input_json)
@@ -219,13 +223,120 @@ impl PolicyEngine {
 
         // Cache the result for future lookups
         {
-            let mut cache = self.cache.lock().map_err(|e| {
-                anyhow::anyhow!("failed to acquire cache lock: {}", e)
-            })?;
+            let mut cache = self
+                .cache
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to acquire cache lock: {}", e))?;
             cache.put(cache_key, decision.clone());
         }
 
         Ok(decision)
+    }
+
+    /// Evaluate TermBridge action against policy (clipboard, spawn, send_text)
+    pub fn evaluate_termbridge(&self, input: &TermBridgePolicyInput) -> Result<PolicyDecision> {
+        if !self.enabled {
+            debug!("Policy engine disabled, allowing termbridge action by default");
+            return Ok(PolicyDecision::allow());
+        }
+
+        let cache_key = PolicyCacheKey {
+            command: input.action.clone(),
+            persona: input.persona.clone(),
+            spectral_tag: None,
+        };
+
+        {
+            let mut cache = self
+                .cache
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to acquire cache lock: {}", e))?;
+            if let Some(cached) = cache.get(&cache_key) {
+                debug!("TermBridge policy cache hit for {}", input.action);
+                return Ok(cached.clone());
+            }
+        }
+
+        let input_json =
+            serde_json::to_string(input).context("serializing TermBridge policy input")?;
+
+        let mut engine = self
+            .engine
+            .write()
+            .map_err(|e| anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e))?;
+
+        engine
+            .set_input_json(&input_json)
+            .context("setting termbridge policy input")?;
+
+        let result = engine
+            .eval_query("data.shelldone.policy.termbridge_allow".to_string(), false)
+            .context("evaluating policy query data.shelldone.policy.termbridge_allow")?;
+
+        let mut allowed = true;
+        if let Some(res) = result.result.first() {
+            if let Some(expr) = res.expressions.first() {
+                if let Ok(value) = expr.value.as_bool() {
+                    allowed = *value;
+                }
+            }
+        }
+
+        let decision = if allowed {
+            PolicyDecision::allow()
+        } else {
+            let reasons = self.extract_termbridge_deny_reasons_internal(&mut engine)?;
+            PolicyDecision::deny(reasons)
+        };
+
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|e| anyhow::anyhow!("failed to acquire cache lock: {}", e))?;
+        cache.put(cache_key, decision.clone());
+
+        Ok(decision)
+    }
+
+    /// Evaluate TLS configuration against policy (hot-path on startup and reload)
+    pub fn evaluate_tls(&self, input: &TlsPolicyInput) -> Result<PolicyDecision> {
+        if !self.enabled {
+            return Ok(PolicyDecision::allow());
+        }
+
+        let input_json = serde_json::to_string(input).context("serializing TLS policy input")?;
+
+        let mut engine = self
+            .engine
+            .write()
+            .map_err(|e| anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e))?;
+
+        engine
+            .set_input_json(&input_json)
+            .context("setting TLS policy input")?;
+
+        let result = engine
+            .eval_query("data.shelldone.policy.tls_allow".to_string(), false)
+            .context("evaluating TLS policy")?;
+
+        if result.result.is_empty() {
+            let reasons = self.extract_tls_deny_reasons_internal(&mut engine)?;
+            return Ok(PolicyDecision::deny(reasons));
+        }
+
+        let allowed = result
+            .result
+            .first()
+            .and_then(|r| r.expressions.first())
+            .and_then(|e| e.value.as_bool().ok().copied())
+            .unwrap_or(false);
+
+        if !allowed {
+            let reasons = self.extract_tls_deny_reasons_internal(&mut engine)?;
+            return Ok(PolicyDecision::deny(reasons));
+        }
+
+        Ok(PolicyDecision::allow())
     }
 
     /// Evaluate OSC escape sequence against policy
@@ -242,9 +353,10 @@ impl PolicyEngine {
         });
         let input_str = serde_json::to_string(&input).context("serializing OSC input")?;
 
-        let mut engine = self.engine.write().map_err(|e| {
-            anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e)
-        })?;
+        let mut engine = self
+            .engine
+            .write()
+            .map_err(|e| anyhow::anyhow!("failed to acquire write lock on policy engine: {}", e))?;
 
         engine
             .set_input_json(&input_str)
@@ -280,28 +392,52 @@ impl PolicyEngine {
 
     /// Extract deny reasons from policy evaluation (internal, assumes lock held)
     fn extract_deny_reasons_internal(&self, engine: &mut Engine) -> Result<Vec<String>> {
+        self.extract_reasons_internal(
+            engine,
+            "data.shelldone.policy.deny_reason",
+            "Policy denied without specific reason",
+        )
+    }
+
+    fn extract_tls_deny_reasons_internal(&self, engine: &mut Engine) -> Result<Vec<String>> {
+        self.extract_reasons_internal(
+            engine,
+            "data.shelldone.policy.tls_deny_reason",
+            "TLS configuration denied without specific reason",
+        )
+    }
+
+    fn extract_termbridge_deny_reasons_internal(&self, engine: &mut Engine) -> Result<Vec<String>> {
+        self.extract_reasons_internal(
+            engine,
+            "data.shelldone.policy.termbridge_deny_reason",
+            "TermBridge action denied without specific reason",
+        )
+    }
+
+    fn extract_reasons_internal(
+        &self,
+        engine: &mut Engine,
+        query: &str,
+        default_reason: &str,
+    ) -> Result<Vec<String>> {
         let result = engine
-            .eval_query("data.shelldone.policy.deny_reason".to_string(), false)
+            .eval_query(query.to_string(), false)
             .context("extracting deny reasons")?;
 
         let mut reasons = Vec::new();
 
         for res in result.result {
             for expr in res.expressions {
-                // deny_reason is typically a set of strings
                 if let Ok(set) = expr.value.as_set() {
                     for item in set {
                         if let Ok(s) = item.as_string() {
                             reasons.push(s.to_string());
                         }
                     }
-                }
-                // Fallback: check if it's a single string
-                else if let Ok(s) = expr.value.as_string() {
+                } else if let Ok(s) = expr.value.as_string() {
                     reasons.push(s.to_string());
-                }
-                // Fallback: check if it's an array
-                else if let Ok(arr) = expr.value.as_array() {
+                } else if let Ok(arr) = expr.value.as_array() {
                     for item in arr {
                         if let Ok(s) = item.as_string() {
                             reasons.push(s.to_string());
@@ -312,7 +448,7 @@ impl PolicyEngine {
         }
 
         if reasons.is_empty() {
-            reasons.push("Policy denied without specific reason".to_string());
+            reasons.push(default_reason.to_string());
         }
 
         Ok(reasons)
@@ -320,7 +456,7 @@ impl PolicyEngine {
 }
 
 /// Input structure for ACK policy evaluation
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AckPolicyInput {
     pub command: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -346,6 +482,39 @@ impl AckPolicyInput {
         self.approval_granted = granted;
         self
     }
+}
+
+/// Input structure for TLS policy evaluation
+#[derive(Debug, Clone, Serialize)]
+pub struct TlsPolicyInput {
+    pub listener: String,
+    pub cipher_policy: String,
+    pub tls_versions: Vec<String>,
+    pub client_auth_required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub certificate_fingerprint_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_fingerprint_sha256: Option<String>,
+}
+
+/// Input for TermBridge policy evaluation
+#[derive(Debug, Clone, Serialize)]
+pub struct TermBridgePolicyInput {
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persona: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
 }
 
 #[cfg(test)]
@@ -393,6 +562,59 @@ deny_reason contains msg if {{
     msg := sprintf("Command %v denied for persona %v", [input.command, input.persona])
 }}
 
+termbridge_allowed_actions := {{
+    "spawn",
+    "send_text",
+    "focus",
+    "clipboard.write",
+    "clipboard.read",
+    "cwd.update",
+}}
+
+default termbridge_allow := false
+
+termbridge_allow if {{
+    input.action in {{"spawn", "send_text", "focus"}}
+}}
+
+termbridge_allow if {{
+    input.action == "clipboard.write"
+    not termbridge_clipboard_exceeds_limit
+}}
+
+termbridge_allow if {{
+    input.action == "clipboard.read"
+}}
+
+termbridge_allow if {{
+    input.action == "cwd.update"
+    input.cwd
+    count(input.cwd) <= 4096
+}}
+
+termbridge_deny_reason contains msg if {{
+    not termbridge_allow
+    input.action == "cwd.update"
+    msg := sprintf(
+        "TermBridge action %v denied (cwd=%v)",
+        [input.action, input.cwd]
+    )
+}}
+
+termbridge_clipboard_exceeds_limit if {{
+    input.action == "clipboard.write"
+    input.bytes
+    input.bytes > 4096
+}}
+
+termbridge_deny_reason contains msg if {{
+    not termbridge_allow
+    msg := sprintf(
+        "TermBridge action %v denied (bytes=%v, cwd=%v)",
+        [input.action, input.bytes, input.cwd]
+    )
+}}
+
 default allow_osc := false
 
 allow_osc if {{
@@ -402,6 +624,22 @@ allow_osc if {{
 allow_osc if {{
     input.osc_code == 52
     input.operation == "write"
+}}
+
+default tls_allow := false
+
+tls_allow if {{
+    input.cipher_policy == "strict"
+}}
+
+tls_allow if {{
+    input.cipher_policy == "balanced"
+    input.client_auth_required == true
+}}
+
+tls_deny_reason contains msg if {{
+    not tls_allow
+    msg := sprintf("TLS policy rejected (%v, mTLS=%v)", [input.cipher_policy, input.client_auth_required])
 }}
 "#
         )
@@ -430,11 +668,7 @@ allow_osc if {{
         let policy_file = create_test_policy();
         let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
 
-        let input = AckPolicyInput::new(
-            "agent.guard".to_string(),
-            Some("core".to_string()),
-            None,
-        );
+        let input = AckPolicyInput::new("agent.guard".to_string(), Some("core".to_string()), None);
 
         let decision = engine.evaluate_ack(&input).unwrap();
         assert!(!decision.is_allowed(), "Expected guard to be denied");
@@ -443,16 +677,151 @@ allow_osc if {{
     }
 
     #[test]
+    fn policy_termbridge_allows_clipboard_write() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TermBridgePolicyInput {
+            action: "clipboard.write".to_string(),
+            persona: Some("core".to_string()),
+            terminal: None,
+            command: None,
+            backend: Some("wl-copy".to_string()),
+            channel: Some("clipboard".to_string()),
+            bytes: Some(1024),
+            cwd: None,
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(decision.is_allowed(), "Clipboard write should be allowed");
+    }
+
+    #[test]
+    fn policy_termbridge_denies_large_clipboard() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TermBridgePolicyInput {
+            action: "clipboard.write".to_string(),
+            persona: Some("core".to_string()),
+            terminal: None,
+            command: None,
+            backend: Some("wl-copy".to_string()),
+            channel: Some("clipboard".to_string()),
+            bytes: Some(10_000),
+            cwd: None,
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(
+            !decision.is_allowed(),
+            "Large clipboard payload should be denied"
+        );
+        assert!(decision
+            .deny_reasons
+            .iter()
+            .any(|reason| reason.contains("TermBridge action")));
+    }
+
+    #[test]
+    fn policy_termbridge_allows_send_text() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TermBridgePolicyInput {
+            action: "send_text".to_string(),
+            persona: Some("core".to_string()),
+            terminal: Some("wezterm".to_string()),
+            command: Some("ls".to_string()),
+            backend: None,
+            channel: None,
+            bytes: Some(128),
+            cwd: None,
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(decision.is_allowed(), "send_text should be allowed");
+    }
+
+    #[test]
+    fn policy_termbridge_allows_focus() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TermBridgePolicyInput {
+            action: "focus".to_string(),
+            persona: Some("core".to_string()),
+            terminal: Some("wezterm".to_string()),
+            command: None,
+            backend: None,
+            channel: None,
+            bytes: None,
+            cwd: None,
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(decision.is_allowed(), "focus should be allowed");
+    }
+
+    #[test]
+    fn policy_termbridge_allows_cwd_update() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TermBridgePolicyInput {
+            action: "cwd.update".to_string(),
+            persona: Some("core".to_string()),
+            terminal: Some("wezterm".to_string()),
+            command: None,
+            backend: None,
+            channel: None,
+            bytes: None,
+            cwd: Some("/workspace".to_string()),
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(decision.is_allowed(), "cwd.update should be allowed");
+    }
+
+    #[test]
+    fn policy_termbridge_denies_oversized_cwd_update() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let oversized = "a".repeat(5000);
+        let input = TermBridgePolicyInput {
+            action: "cwd.update".to_string(),
+            persona: Some("core".to_string()),
+            terminal: Some("wezterm".to_string()),
+            command: None,
+            backend: None,
+            channel: None,
+            bytes: None,
+            cwd: Some(oversized),
+        };
+
+        let decision = engine.evaluate_termbridge(&input).unwrap();
+        assert!(
+            !decision.is_allowed(),
+            "oversized cwd.update should be denied by policy"
+        );
+        assert!(
+            decision
+                .deny_reasons
+                .iter()
+                .any(|reason| reason.contains("cwd")),
+            "expected deny reason to mention cwd, got {:?}",
+            decision.deny_reasons
+        );
+    }
+
+    #[test]
     fn policy_allows_guard_with_approval() {
         let policy_file = create_test_policy();
         let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
 
-        let input = AckPolicyInput::new(
-            "agent.guard".to_string(),
-            Some("core".to_string()),
-            None,
-        )
-        .with_approval(true);
+        let input = AckPolicyInput::new("agent.guard".to_string(), Some("core".to_string()), None)
+            .with_approval(true);
 
         let decision = engine.evaluate_ack(&input).unwrap();
         assert!(
@@ -468,6 +837,49 @@ allow_osc if {{
 
         let decision = engine.evaluate_osc(133, "marker").unwrap();
         assert!(decision.is_allowed(), "OSC 133 should be allowed");
+    }
+
+    #[test]
+    fn policy_tls_allows_strict_cipher() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TlsPolicyInput {
+            listener: "127.0.0.1:17718".to_string(),
+            cipher_policy: "strict".to_string(),
+            tls_versions: vec!["TLS1.3".to_string()],
+            client_auth_required: false,
+            certificate_fingerprint_sha256: Some("cafef00d".to_string()),
+            ca_fingerprint_sha256: None,
+        };
+
+        let decision = engine.evaluate_tls(&input).unwrap();
+        assert!(decision.is_allowed(), "Strict TLS should be allowed");
+    }
+
+    #[test]
+    fn policy_tls_denies_legacy_without_mtls() {
+        let policy_file = create_test_policy();
+        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+
+        let input = TlsPolicyInput {
+            listener: "127.0.0.1:17718".to_string(),
+            cipher_policy: "legacy".to_string(),
+            tls_versions: vec!["TLS1.2".to_string()],
+            client_auth_required: false,
+            certificate_fingerprint_sha256: Some("deadbeef".to_string()),
+            ca_fingerprint_sha256: None,
+        };
+
+        let decision = engine.evaluate_tls(&input).unwrap();
+        assert!(
+            !decision.is_allowed(),
+            "Legacy TLS without mTLS should be denied"
+        );
+        assert!(decision
+            .deny_reasons
+            .iter()
+            .any(|reason| reason.contains("legacy")));
     }
 
     #[test]
@@ -501,11 +913,8 @@ allow_osc if {{
     fn policy_engine_disabled_allows_all() {
         let engine = PolicyEngine::new(None).unwrap();
 
-        let input = AckPolicyInput::new(
-            "agent.unknown".to_string(),
-            Some("test".to_string()),
-            None,
-        );
+        let input =
+            AckPolicyInput::new("agent.unknown".to_string(), Some("test".to_string()), None);
 
         let decision = engine.evaluate_ack(&input).unwrap();
         assert!(
@@ -515,9 +924,26 @@ allow_osc if {{
     }
 
     #[test]
+    fn policy_tls_allows_when_disabled() {
+        let engine = PolicyEngine::new(None).unwrap();
+
+        let input = TlsPolicyInput {
+            listener: "127.0.0.1:17718".to_string(),
+            cipher_policy: "legacy".to_string(),
+            tls_versions: vec!["TLS1.2".to_string()],
+            client_auth_required: false,
+            certificate_fingerprint_sha256: None,
+            ca_fingerprint_sha256: None,
+        };
+
+        let decision = engine.evaluate_tls(&input).unwrap();
+        assert!(decision.is_allowed(), "Disabled engine should allow TLS");
+    }
+
+    #[test]
     fn policy_reload_works() {
         use std::io::Seek;
-        
+
         let mut file = NamedTempFile::new().unwrap();
         writeln!(
             file,
@@ -537,7 +963,9 @@ allow if {{ input.command == "test" }}
         assert!(engine.evaluate_ack(&input).unwrap().is_allowed());
 
         // Update policy
-        file.as_file_mut().seek(std::io::SeekFrom::Start(0)).unwrap();
+        file.as_file_mut()
+            .seek(std::io::SeekFrom::Start(0))
+            .unwrap();
         file.as_file_mut().set_len(0).unwrap();
         writeln!(
             file,

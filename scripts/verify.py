@@ -10,12 +10,28 @@ import subprocess
 import sys
 import textwrap
 import time
+import shutil
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import yaml
+
+from perf_runner.app.service import PerfProbeService
+from perf_runner.adapters.k6_runner import K6Runner
+from perf_runner.domain.probe import ProbeSpec
+from perf_runner.domain.value_objects import (
+    MetricBudget,
+    MetricDefinition,
+    MetricValue,
+    ProbeScript,
+)
+from perf_runner.infra.agentd import start_agentd, stop_agentd, wait_for_agentd
+from perf_runner.profiles import apply_env_overrides, get_profile
+from perf_runner.reporting import render_prometheus_metrics
+from perf_runner.specs import default_specs
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS_DIR = ROOT / "artifacts" / "verify"
@@ -149,6 +165,157 @@ def discover_language_stacks() -> Dict[str, bool]:
         "go": (ROOT / "go.mod").exists(),
     }
     return stacks
+
+
+def _env_positive_int(key: str, default: int, *, allow_zero: bool = False) -> int:
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise CheckFailure(f"Environment variable {key} must be an integer") from exc
+    if allow_zero:
+        if parsed < 0:
+            raise CheckFailure(f"Environment variable {key} must be >= 0")
+    else:
+        if parsed <= 0:
+            raise CheckFailure(f"Environment variable {key} must be > 0")
+    return parsed
+
+
+def _format_metric(metric: MetricValue) -> str:
+    if metric.unit == "ratio":
+        return f"{metric.value * 100:.2f}%"
+    return f"{metric.value:.2f}{metric.unit}"
+
+
+def _update_perf_status(status_value: str, suite_report, summary_text: str, artifacts: list[str], profile: str, probes):
+    status_path = ROOT / "reports" / "status.json"
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        status_data = json.loads(status_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        status_data = {"build": [], "tests": [], "perf": {}}
+    except json.JSONDecodeError:
+        status_data = {"build": [], "tests": [], "perf": {}}
+    perf_data = status_data.setdefault("perf", {})
+    perf_data["last_verify"] = {
+        "status": status_value,
+        "profile": profile,
+        "generated_at": suite_report.generated_at,
+        "summary": summary_text,
+        "violations": suite_report.violated_budgets(),
+        "artifacts": artifacts,
+        "probes": probes,
+    }
+    status_path.write_text(json.dumps(status_data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def check_perf_probes(ctx: VerificationContext) -> str:
+    if ctx.mode not in {"full", "ci"}:
+        raise SkipCheck("performance probes run only in full/ci modes")
+    if shutil.which("k6") is None:
+        raise CheckFailure("k6 binary is required for performance probes")
+
+    profile_name = os.environ.get("SHELLDONE_PERF_PROFILE")
+    if profile_name is None:
+        profile_name = "ci" if ctx.mode == "ci" else "full"
+
+    profile_cfg = get_profile(profile_name)
+    if profile_name and profile_cfg is None:
+        raise CheckFailure(f"Unknown performance profile: {profile_name}")
+
+    if profile_cfg is not None:
+        applied_env = apply_env_overrides(os.environ, profile_cfg.env_overrides, overwrite=False)
+        for key, value in profile_cfg.env_overrides.items():
+            ctx.env.setdefault(key, value)
+            os.environ.setdefault(key, value)
+    else:
+        applied_env = os.environ
+
+    artifacts_root = ROOT / "artifacts" / "perf"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    log_path = artifacts_root / "agentd_perf.log"
+    trials = _env_positive_int("SHELLDONE_PERF_TRIALS", profile_cfg.trials if profile_cfg else 3)
+    warmup = _env_positive_int("SHELLDONE_PERF_WARMUP_SEC", profile_cfg.warmup_sec if profile_cfg else 10, allow_zero=True)
+    policy_warmup = _env_positive_int("SHELLDONE_PERF_POLICY_WARMUP_SEC", profile_cfg.policy_warmup_sec if profile_cfg else warmup, allow_zero=True)
+    runner = K6Runner()
+    service = PerfProbeService(runner, artifacts_root)
+    with tempfile.TemporaryDirectory(prefix="perf-agentd-") as tmp:
+        state_dir = Path(tmp)
+        process = None
+        handle = None
+        try:
+            process, handle = start_agentd(
+                state_dir=state_dir,
+                log_path=log_path,
+                cwd=ROOT,
+                env=ctx.env,
+            )
+            try:
+                wait_for_agentd("127.0.0.1:17717", timeout=30.0)
+            except RuntimeError as err:
+                raise CheckFailure(str(err)) from err
+            specs = default_specs(
+                trials,
+                warmup,
+                policy_warmup,
+                env=applied_env,
+            )
+            suite_report = service.run_suite(specs)
+            summary_dict = suite_report.to_dict()
+            reports_perf_dir = ROOT / "reports" / "perf"
+            service.export_suite_summary(reports_perf_dir / "summary.json", suite_report)
+            prom_path = reports_perf_dir / "metrics.prom"
+            prom_path.parent.mkdir(parents=True, exist_ok=True)
+            prom_payload = render_prometheus_metrics(suite_report)
+            if not prom_payload.strip():
+                raise CheckFailure("Prometheus metrics export is empty")
+            prom_path.write_text(prom_payload, encoding="utf-8")
+            artifact_paths = list(dict.fromkeys(suite_report.artifact_paths))
+            artifact_paths.append(str(log_path))
+            artifact_paths.append(str(prom_path))
+            ctx.result_payload["perf-probes"] = {
+                "artifacts": artifact_paths,
+                "generated_at": suite_report.generated_at,
+                "violations": suite_report.violated_budgets(),
+                "summary": summary_dict,
+                "profile": profile_cfg.name if profile_cfg else profile_name,
+                "metrics_prom": str(prom_path),
+            }
+            summaries = []
+            for report in suite_report.reports:
+                metrics = ", ".join(
+                    f"{alias}={_format_metric(metric)}"
+                    for alias, metric in sorted(report.aggregated.items())
+                )
+                summaries.append(f"{report.probe_id}: {metrics}")
+            summary_text = "; ".join(summaries)
+            probes_payload = summary_dict.get("probes", [])
+            if suite_report.has_failures():
+                _update_perf_status(
+                    "fail",
+                    suite_report,
+                    summary_text,
+                    artifact_paths,
+                    profile_cfg.name if profile_cfg else profile_name,
+                    probes_payload,
+                )
+                details = "; ".join(suite_report.violated_budgets())
+                raise CheckFailure(f"Performance budgets violated: {details}")
+            _update_perf_status(
+                "ok",
+                suite_report,
+                summary_text,
+                artifact_paths,
+                profile_cfg.name if profile_cfg else profile_name,
+                probes_payload,
+            )
+            return summary_text
+        finally:
+            if process is not None:
+                stop_agentd(process, handle)
 
 
 MARKER_REGEX = re.compile(r"(TODO|FIXME|XXX|\?\?\?)")
@@ -736,7 +903,13 @@ def check_python(ctx: VerificationContext) -> str:
     if not stacks["python"]:
         raise SkipCheck("python stack not detected")
     ctx.run_command("python-compile", ["python3", "-m", "compileall", str(ROOT)])
-    return "python compileall"
+    tests_dir = ROOT / "scripts" / "tests"
+    if tests_dir.exists():
+        ctx.run_command(
+            "python-unittest",
+            ["python3", "-m", "unittest", "discover", "-s", str(tests_dir)],
+        )
+    return "python compileall + unittest"
 
 
 def check_js(ctx: VerificationContext) -> str:
@@ -770,6 +943,7 @@ CHECKS: List[Check] = [
     Check("rust-test", ("fast", "prepush", "full", "ci"), check_rust_test),
     Check("rust-nextest", ("prepush", "full", "ci"), check_rust_nextest),
     Check("rust-doc", ("full", "ci"), check_rust_doc),
+    Check("perf-probes", ("full", "ci"), check_perf_probes),
     Check("python", ("full", "ci"), check_python),
     Check("javascript", ("full", "ci"), check_js),
     Check("go", ("full", "ci"), check_go),

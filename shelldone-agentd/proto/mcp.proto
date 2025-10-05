@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package shelldone.mcp;
+
+import "google/protobuf/timestamp.proto";
+
+message InitializeRequest {
+  string persona = 1;
+  string protocol_version = 2;
+  repeated string capabilities = 3;
+}
+
+message InitializeResponse {
+  string session_id = 1;
+  string protocol_version = 2;
+  repeated string capabilities = 3;
+}
+
+message ListToolsRequest {
+  string session_id = 1;
+}
+
+message ToolDescriptor {
+  string name = 1;
+  string description = 2;
+  string input_schema_json = 3;
+}
+
+message ListToolsResponse {
+  repeated ToolDescriptor tools = 1;
+}
+
+message CallToolRequest {
+  string session_id = 1;
+  string tool_name = 2;
+  string arguments_json = 3;
+}
+
+message CallToolResponse {
+  int32 exit_code = 1;
+  string stdout = 2;
+  string stderr = 3;
+  string event_id = 4;
+  string spectral_tag = 5;
+  double duration_ms = 6;
+  bool is_error = 7;
+}
+
+message HeartbeatRequest {
+  string session_id = 1;
+}
+
+message HeartbeatResponse {
+  google.protobuf.Timestamp occurred_at = 1;
+}
+
+service McpBridge {
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+  rpc CallTool(CallToolRequest) returns (CallToolResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}

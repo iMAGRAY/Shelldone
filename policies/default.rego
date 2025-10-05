@@ -68,3 +68,56 @@ deny_reason contains msg if {
     not input.approval_granted
     msg := sprintf("Approval required for %v", [input.command])
 }
+
+termbridge_allowed_actions := {
+    "spawn",
+    "send_text",
+    "focus",
+    "clipboard.write",
+    "clipboard.read",
+    "cwd.update",
+}
+
+default termbridge_allow := false
+
+termbridge_allow if {
+    input.action in {"spawn", "send_text", "focus"}
+}
+
+termbridge_allow if {
+    input.action == "clipboard.write"
+    not termbridge_clipboard_exceeds_limit
+}
+
+termbridge_allow if {
+    input.action == "clipboard.read"
+}
+
+termbridge_allow if {
+    input.action == "cwd.update"
+    input.cwd
+    count(input.cwd) <= 4096
+}
+
+termbridge_deny_reason contains msg if {
+    not termbridge_allow
+    input.action == "cwd.update"
+    msg := sprintf(
+        "TermBridge action %v denied (cwd=%v)",
+        [input.action, input.cwd]
+    )
+}
+
+termbridge_clipboard_exceeds_limit if {
+    input.action == "clipboard.write"
+    input.bytes
+    input.bytes > 4096
+}
+
+termbridge_deny_reason contains msg if {
+    not termbridge_allow
+    msg := sprintf(
+        "TermBridge action %v denied (bytes=%v, backend=%v, cwd=%v)",
+        [input.action, input.bytes, input.backend, input.cwd]
+    )
+}

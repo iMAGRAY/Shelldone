@@ -11,8 +11,10 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 ## Thematic Specifications
 - `docs/architecture/utif-sigma.md` — Unified Terminal Intelligence Fabric (Σ-pty/Σ-json/Σ-cap), ACK протокол, Continuum snapshots, policy и perf SLA.
 - `docs/architecture/customization-and-plugins.md` — plugin model, themes, hooks, and IDE capabilities.
-- `docs/architecture/ai-integration.md` — MCP/AI interaction protocols, агентные адаптеры (OpenAI Agents SDK, Claude Agent SDK) и политика обновлений.
-- `docs/architecture/persona-engine.md` — Persona Engine Nova/Core/Flux (хинты, guardrails, telemetry, UX).
+- `docs/architecture/ai-integration.md` — MCP automation fabric, discovery, context schema, adapters, security (TLS/mTLS, горячая ротация, cipher policies).
+- `docs/architecture/agent-sdk-bridge.md` — единый мост для OpenAI/Claude/Microsoft Agent SDK, lifecycle биндингов и политика комплаенса.
+- `docs/architecture/persona-engine.md` — Persona Engine Nova/Core/Flux + Experience presets (Beginner/Ops/Expert), onboarding wizard и YAML-схема hint budgets.
+- `docs/architecture/pain-matrix.md` — соответствие 25 болей Shelldone текущим возможностям, пробелам и roadmap-инициативам.
 - `docs/architecture/plugin-marketplace.md` — Capability marketplace hooks, bundle lifecycle, σ-cap обновления.
 - `docs/architecture/agent-governance.md` — управление адаптерами, секретами, observability и тестированием agentd.
 - `docs/architecture/animation-framework.md` — high-performance effects and animation system.
@@ -21,6 +23,8 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 - `docs/architecture/security-and-secrets.md` — threat model, sandboxing, secret storage, and policies.
 - `docs/architecture/observability.md` — metrics, logging, tracing, SLOs, and alerting.
 - `docs/architecture/release-and-compatibility.md` — release engineering, auto-update, migrations, and API compatibility.
+- `docs/architecture/pain-matrix.md` — приоритизированные pain-points с привязкой к задачам (`task-*`).
+- `docs/architecture/termbridge.md` — единый оркестратор терминалов, capability map schema, consent workflow и UX/obserability контуры.
 
 ## Roadmap
 Quarterly phases and milestones are defined in `docs/ROADMAP/2025Q4.md`; supporting notes live in `docs/ROADMAP/notes/`.

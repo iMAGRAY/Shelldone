@@ -1,86 +1,128 @@
 # Shelldone Integration with AI Agents and MCP
 
 ## Objectives
-- Allow terminal control via agent protocols (MCP, OpenAI Assistants, LangChain agents).
-- Provide bidirectional context exchange: agents see tabs/processes/files while users govern permissions.
-- Deliver a cognitively simple interface for automation and human–AI collaboration.
+- Zero-friction automation: агенты получают полный доступ к возможностям Shelldone без повторяющейся настройки.
+- Человеческое управление без когнитивного шума: каждая автоматизация прозрачно проходит через политики, Continuum и журналирование.
+- Расширяемость: новые агенты и playbooks подключаются декларативно; существующие интеграции получают обновления без ручного вмешательства.
+
+## Experience Pillars
+1. **Discoverable by default** — служба обнаружения (`~/.config/shelldone/agentd.json`, mDNS, CLI `shelldone agent discovery`) сообщает порт, TLS и политики.
+2. **Context in one hop** — `/context/full` и `mcp.context/full` возвращают typed JSON Schema (`schemas/agent_context.json`), включающую панели, процессы, Continuum, personas, политики.
+3. **Automation primitives** — ACK команды (`agent.exec`, `agent.plan`, `agent.batch`, `agent.guard.suggest`) и Playbooks 2.0 заменяют ad-hoc скрипты.
+4. **Governance built-in** — mTLS, policy feedback (`rule_id`, remediation), Continuum snapshots и OTLP метрики доступны из коробки.
 
 ## Control Protocol
-- **Transport:** local gRPC/WebSocket server with optional STDIO/MCP bridge, встроенный в Σ-json канал UTIF-Σ (реализован в `shelldone-agentd`).
-- **High-level commands:** `agent.plan`, `agent.exec`, `agent.form`, `agent.undo`, `agent.guard`, `agent.journal`, `agent.inspect`, `agent.connect` (см. ACK в `docs/architecture/utif-sigma.md`).
-- **Context payload:** serialised snapshot (panes, processes, paths, pipeline status) с spectral-тегами и версионным JSON.
-- **Security:**
-  - Policy files in `config/policies/` define allowed capabilities.
-  - Prompt for confirmation on sensitive actions (rm, sudo, deployment, etc.).
-  - Optional sandbox (container/namespace) for agent processes.
+- **Transports**
+  - WebSocket MCP (`ws://127.0.0.1:17717/mcp`) — JSON-RPC 2.0 (`initialize`, `tools/list`, `tools/call`, `ping`, heartbeat`).
+  - gRPC MCP (`grpc://127.0.0.1:17718`, переопределяется `--grpc-listen`), поддерживает TLS (`--grpc-tls-cert/--grpc-tls-key`) и взаимную аутентификацию (`--grpc-tls-ca`).
+  - STDIO адаптеры для SDK (OpenAI, Claude, Microsoft) → `scripts/agentd.py` управляет runtime.
+- **TermBridge API** (новый bounded context) — Σ-json/HTTP команды `termbridge.spawn/focus/send_text/duplicate/close/clipboard`. Терминалы описываются через Capability Map (см. `docs/architecture/termbridge.md`); агенты получают:
+  - `termbridge.capabilities` — immutable snapshot (`terminal`, `display_name`, `capabilities`, `requires_opt_in`, `risk_flags`, `consent_granted_at`). Снимок формируется один раз per discovery и кэшируется в Continuum; агенты обязаны проверять флаг `requires_opt_in` перед запуском команд.
+  - `termbridge.bindings` — список активных binding’ов (`binding_id`, `token`, `labels` с pane/window id).
+  - `termbridge.spawn` — создаёт новое окно/панель. CLI пример: `curl -X POST localhost:17717/termbridge/spawn -d '{"terminal":"wezterm","command":"top"}'`. Возвращает `ipc_endpoint` (`wezterm://pane/<id>`), используемый для последующих команд.
+  - `termbridge.send_text` — передаёт полезную нагрузку с учётом `bracketed_paste`; при срабатывании PasteGuard возвращает `guard_pending` и Continuum событие `termbridge.paste.guard_triggered`.
+  - `termbridge.focus` — переводит фокус на binding; политика проверяет действие `focus`, успех журналируется как `termbridge.focus`, отказ — `termbridge.focus.denied`.
+  - `termbridge.clipboard.write/read` (beta) — оборачивают ClipboardBridgeService; поддерживают `channel=clipboard|primary`, backend приоритезацию, журналируют `termbridge.clipboard` метрики; policy ступень `data.shelldone.policy.termbridge_allow`.
+  - `termbridge.consent.grant/revoke` (roadmap) — управляет opt-in для удалённого контроля и фиксирует событие `termbridge.consent`.
+  - `/status`, `/context/full`, discovery JSON включают `termbridge`-секцию (capabilities, обнаружение, ошибки) для быстрых health-check.
+- **Capability Map Semantics**
+  - Discoverer собирает факты из адаптеров (kitty `@/listen_on`, wezterm CLI, iTerm2 scripting bridge, Windows Terminal D-Bus/WT.exe, Alacritty IPC, Konsole D-Bus, Tilix session JSON).
+  - Карта хранится как Value Object (`CapabilityRecord`), каждое поле валидируется (например, `max_clipboard_kb` ≤ 512).
+  - Persona engine получает краткие TL;DR карточки с инструкциями enablement (Nova → пошаговый wizard, Core → ссылочный cheatsheet).
+  - PolicyEngine использует `risk_flags[]` (`remote_exec`, `dbus_global`, `no_tls`) для ограничений на команды (запрещает `send_text` без consent, требует подтверждения для `spawn --command`).
+- **Operations** — ACK командами управляет `shelldone-agentd` (см. `docs/architecture/utif-sigma.md`). В разработке `agent.batch` для транзакционных последовательностей.
+- **Context & Journal**
+  - `/context/full` — снимок состояния (Schema, версии, Merkle дельты). Планируется `context.delta` stream.
+  - `agent.journal.tail/range` — доступ к Continuum журнальному файлу с spectral tags.
+- **Security**
+  - Rego policies управляют capability envelopes. Ошибка возвращает `policy_denied` с `rule_id`, `remediation`.
+  - gRPC mTLS требует валидный клиентский сертификат; без него сервер отвечает **UNAUTHENTICATED**.
+  - Σ-json получит Noise/JWT аутентификацию (roadmap). Пока рекомендуется loopback.
+  - Секреты доставляются через `shelldone secrets` и не вытекают в адаптеры.
+  - TLS политика (`--grpc-tls-policy`) позволяет выбрать уровень жёсткости шифров: `strict` (только TLS 1.3), `balanced` (TLS 1.3 + FIPS-класс TLS 1.2 при обязательном mTLS) и `legacy` (добавляет CHACHA20 для старых агентов). Смена политики проверяется PolicyEngine и блокируется, если конфигурация нарушает регламент.
+  - Сертификаты сервера/клиента читаются из PEM-файлов и поддерживают горячую замену. Любое изменение `--grpc-tls-cert`, `--grpc-tls-key` или `--grpc-tls-ca` подхватывается за ≤5 секунд без остановки процесса; отказ загрузки фиксируется в журнале и не сбрасывает действующие соединения.
 
-## Automation
-- **Playbooks:**
-  - YAML/JSON description of command/API sequences with assertions.
-  - Supports parameters, conditionals, retries, notifications, persona overrides.
-  - Executable via CLI (`shelldone play run <file>`) or через ACK `agent.plan`.
-- **Developer tooling:** `shelldone agent handshake|exec|journal` вызывает Σ-cap/ACK/Continuum эндпоинты напрямую (см. `make run-agentd`).
-- **Event hooks:** `on_process_exit`, `on_git_status`, `on_alert`, `on_agent_action`.
+#### TLS Policy Matrix
 
-## Agent UI
-- Dedicated agent status panel (progress, errors, suggested steps) подключён к Σ-json событиям.
-- Action history with undo/redo основана на Continuum snapshot.
-- “Guided mode”: agent proposes actions, user approves or rejects с persona-профилями Nova/Core/Flux.
+| Policy | Protocol Versions | Cipher Suites (приоритет) | Client Auth | Основные сценарии |
+|--------|-------------------|---------------------------|-------------|------------------|
+| `strict` | TLS 1.3 | `TLS_AES_256_GCM_SHA384`, `TLS_AES_128_GCM_SHA256`, `TLS_CHACHA20_POLY1305_SHA256` | Optional (CA отключен) | Автономные агенты на том же хосте; минимальный attack surface. |
+| `balanced` | TLS 1.3 + TLS 1.2 (ECDHE+AES-GCM) | `strict` + `TLS_ECDHE_[RSA|ECDSA]_WITH_AES_{256,128}_GCM_SHA384` | Требуется, если задан `--grpc-tls-ca` | Стандартный режим: совместимость с корпоративными mTLS-клиентами, при этом Rego требует CA hash match. |
+| `legacy` | TLS 1.3 + TLS 1.2 | `balanced` + `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` | Требуется при передаче по сети | Для старых клиентов с ограниченной аппаратной поддержкой; включается временно, требует ADR c TTL. |
 
-## MCP Compatibility
-- MCP tool registry resides in `agents/mcp/tools/`.
-- Each integration is packaged as a plugin with declared capabilities.
-- Detailed format documentation will live in `docs/agents/mcp.md`.
+Все политики зависят от глобально установленного `rustls` provider’а; попытка запуска нескольких `shelldone-agentd` с разными политиками детектируется `make verify` (lint `verify_tls_policy_consistency`).
 
-## Roadmap
-1. Define protobuf/JSON schema for the agent API.
-2. Prototype the MCP bridge and run a security threat model.
-3. Implement the server; expose CLI `shelldone agent serve` поверх Σ-json/Σ-cap.
-4. Add UI panel and action log powered by Continuum journal.
-5. Ship SDK and sample agents (auto-deploy, coding assistant, observability triage) с ACK примерами.
+#### Certificate Lifecycle & Runbook
 
-## Внешние SDK и адаптеры
+1. **Выпуск**: `shelldone agent tls bootstrap --cn agentd.local --out state/tls/` (roadmap). До появления команды используем `scripts/tls/generate.sh` и складываем PEM в каталог, указанный CLI флагами.  
+2. **Горячая ротация**: перезаписываем `cert.pem`/`key.pem`/`ca.pem` атомарно, после чего watcher выполняет debounce (200 мс) и перезапускает gRPC слушатель. SLA на активацию ≤5 с; контроль через метрику `agent.tls.reloads`.  
+3. **Валидация**: `curl https://127.0.0.1:17718 -k` должен возвращать `UNAVAILABLE`; `grpcurl --cert client.pem --key client.key --cacert ca.pem localhost:17718 list` — успешный handshake.  
+4. **Отказ**: при ошибке парсинга watcher оставляет старую конфигурацию, пишет `agent.tls.reload_errors{reason}`, а CLI `shelldone agent status --tls` (roadmap) отображает последнюю успешную метку времени.  
+5. **Rollback**: достаточно восстановить предыдущие PEM из `state/tls/backup/<timestamp>/` и наблюдать метрику `agent.tls.reloads{result="success"}`.
 
-Shelldone встраивает три внешних стека агентных SDK. Они поставляются как отдельные адаптеры, которые подключаются к единой шине `shelldone-agentd` (gRPC/MCP). Каждый адаптер реализует контракт `AgentAdapter` (инициализация, трансляция сообщений, управление сессиями) и живёт в собственном каталоге `agents/<vendor>/`.
+## Automation Surfaces
+- **Playbooks 2.0** (roadmap) — YAML с шагами `prepare/run/verify/rollback`, исполняется `shelldone play` и `agent.plan`.
+- **Batch ACK** — позволяет агенту отправлять несколько `agent.exec` с зависимостями и единым undo.
+- **Persona presets** — `persona.set` (`beginner`, `ops`, `expert`, `nova`, `core`, `flux`) подстраивает подсказки и guard flow.
+- **Guard suggestions** — при `policy_denied` Shelldone генерирует `agent.guard.suggest` с описанием remediation.
 
-Определения адаптеров хранятся в `agents/manifest.json`. Утилита `python scripts/agentd.py` умеет:
+## Agent UX Enhancements
+- `agent.status` поток (Σ-json) передает прогресс, метрики, подсказки.
+- Persona Engine публикует `persona.hints` и бюджеты для адаптивных подсказок.
+- `agent.inspect` агрегирует `fs`, `git`, `proc`, `telemetry`, экономя команды.
+- Контекст и журнал доступны через CLI (`shelldone agent context dump`, `shelldone agent journal tail`).
+- TermBridge предоставляет новую группу команд в палитре: «Open here in <Terminal>», «Send text to <Pane>», «Duplicate layout», «Sync clipboard». Команды отображаются только если `CapabilityMap` помечает соответствующие возможности.
 
-- `python scripts/agentd.py list` — вывести список доступных адаптеров;
-- `python scripts/agentd.py run <id>` — запустить адаптер и проксировать STDIN/STDOUT (ручной режим);
-- `python scripts/agentd.py smoke` — выполнить smoke-тесты (используется в `make verify`).
+## Discovery & Bootstrap
+- `shelldone agent discovery` — генерирует registry (host, порт, TLS, политики).
+- `shelldone agent profile create --persona ops` — готовит .env, TLS сертификаты, policy значения.
+- `shelldone agent tls rotate --cert <path> --key <path> [--ca <path>]` (roadmap) облегчит выпуск новых сертификатов; до появления команды достаточно перезаписать PEM-файлы — фоновый вотчер перезагрузит их автоматически.
 
+#### Context Surfaces
 
-### OpenAI Agents SDK
-- **Источник:** [openai-agents-python](https://github.com/openai/openai-agents-python) — многоагентный каркас с поддержкой Responses/Chat Completions и handoff/guardrail-механизмами.
-- **Развёртывание:**
-  - Каталог `agents/openai/` содержит `pyproject.toml`, `requirements.lock`, `bridge.py`, `README.md`.
-  - Runtime стартует как отдельный процесс (venv + `pip install -r requirements.lock`), общается с Shelldone через STDIO-коннектор `bridge.py`.
-- **Обновление:**
-  - Ручной апдейт: `pip install --upgrade openai-agents openai`, `pip freeze > requirements.lock`, затем `make verify`.
-  - В CI добавляется периодическая проверка `pip install -r requirements.lock --dry-run`.
-- **Особенности интеграции:**
-  - Используем SDK sessions для сохранения контекста терминала (SQLiteSession по умолчанию, RedisSession по желанию пользователя).
-  - Guardrails/hand-offs маппятся на policy-файлы Shelldone и наш механизм approval UI.
+| Surface | Формат | SLA | Реализация | Статус |
+|---------|--------|-----|------------|--------|
+| `/context/full` | JSON Schema (`schemas/agent_context.json`) | 80 мс p95 | HTTP GET | ✅ |
+| `context.delta` (roadmap) | JSON Patch + Merkle proof | 50 мс p95 | WebSocket stream | 🚧 task-context-delta-stream |
+| `persona.hints.delta` | JSON Lines | 100 мс p95 | Σ-json push | ✅ |
+| `agent.status` | Σ-json metrics snapshot | 1 с | SSE/WebSocket | 🟡 (metrics есть, UI в разработке) |
 
-### Claude Agent SDK
-- **Источник:** [@anthropic-ai/sdk](https://www.npmjs.com/package/@anthropic-ai/sdk) — официальный Claude Agent SDK для Node.js.
-- **Развёртывание:**
-  - Каталог `agents/claude/` содержит `package.json`, `package-lock.json`, `bridge.mjs`, `README.md`.
-  - Runtime запускается через `node bridge.mjs` (Node.js ≥ 18). STDIO-коннектор маппит команды Shelldone на Claude и хранит краткосрочную историю сессии.
-- **Обновление:**
-  - Ручной апдейт: `npm update @anthropic-ai/sdk`, затем `npm install --package-lock-only` и `npm ci`.
-  - В CI выполняем `npm ci --ignore-scripts` для проверки lock-файла.
-- **Особенности интеграции:**
-  - Адаптер транслирует git/workflow-команды и `/bug`-репорты в унифицированные операции Shelldone.
-  - Usage/feedback, отправляемые SDK в Anthropic, агрегируются и отображаются в панели наблюдаемости (можно отключить политикой).
+`context.delta` требует сохранения последовательности ревизий Continuum; реализация ведётся в `task-context-delta-stream`, зависит от Merkle snapshot API и тестов на idempotency.
+- Env vars: `SHELLDONE_AGENT_DISCOVERY`, `SHELLDONE_AGENT_PERSONA`, `SHELLDONE_AGENT_POLICY`.
+- MCP tool schema доступна через `shelldone agent tools list --format schema`.
 
-### Общие требования к адаптерам
-- Жёсткая фиксация версий и воспроизводимость: lock-файлы (`requirements.lock`, `package-lock.json`) являются частью репозитория.
-- Тестирование: `make verify` вызывает smoke-тесты `agents:<vendor>:test`, которые запускают адаптер в offline-режиме и проверяют hand-off/undo.
-- Наблюдаемость: каждый адаптер публикует метрики (`agent.bridge.latency`, `agent.bridge.errors`) в общую систему telemetry (см. `docs/architecture/observability.md`).
-- Безопасность: адаптеры читают политики (`config/policies/*.yaml`) и выставляют capabilities при старте; несоответствие политике приводит к отказу запуска.
-- Microsoft адаптер требует `MICROSOFT_AGENT_API_KEY` и предоставляет fallback-ответ для smoke-тестов (см. ADR-0006).
+## MCP Compatibility Matrix
+| Возможность | WebSocket MCP | gRPC MCP | STDIO адаптеры |
+|-------------|---------------|----------|----------------|
+| `initialize/list/call/heartbeat` | ✅ | ✅ (TLS/mTLS) | ➖ |
+| `/context/full` | ✅ | ✅ | ➖ |
+| Batch ACK (roadmap) | 🔄 | 🔄 | 🔄 |
+| Policy feedback (`rule_id`, remediation) | ✅ | ✅ | ✅ |
+| Persona presets | ✅ | ✅ | ✅ |
 
-Related milestones: `docs/ROADMAP/2025Q4.md`, section “AI & Automation”.
-- `microsoft`: выполните `npm ci` в каталоге `agents/microsoft`, предоставьте `MICROSOFT_AGENT_API_KEY` и запустите `node bridge.mjs`.
-- Все адаптеры экспортируют структурированные ошибки при отсутствии зависимостей/ключей (используется в smoke-тестах `scripts/agentd.py`).
+## Security Checklist
+- Обязательный TLS для удалённых агентов; `--grpc-tls-ca` включает строгий mTLS.
+- Σ-json auth (Noise/JWT) — в дорожной карте; временно ограничиваемся loopback + локальными токенами.
+- Policy denials логируются (`kind: "policy_denied"`), метрики `shelldone.policy.denials`/`evaluations` (Prism).
+- Sigma guard события (`sigma.guard`) хранятся в Continuum и доступны агентам через `agent.journal`.
+- Полная матрица покрытия болей и roadmap — см. `docs/architecture/pain-matrix.md` (особенно пункты #2, #6, #10, #24, #25).
+
+## Adapter Ecosystem
+- **OpenAI Agents SDK** (`agents/openai/`) — Python, STDIO мост.
+- **Claude SDK** (`agents/claude/`) — Node.js, STDIO мост.
+- **Microsoft Agent SDK** (`agents/microsoft/`) — Node.js, STDIO мост.
+- Инварианты и жизненный цикл интеграций описаны в `docs/architecture/agent-sdk-bridge.md` и реализованы доменом `AgentBinding`/`AgentBindingService`.
+- Все адаптеры фиксируют версии lock-файлами, проходят smoke-тесты (`python3 scripts/agentd.py smoke`) и экспортируют OTLP метрики (`agent.bridge.latency`, `agent.bridge.errors`).
+
+## Roadmap Highlights (Q4 2025)
+1. Streaming `context.delta` + Merkle diff.
+2. Playbooks 2.0 + CLI редактор.
+3. Persona onboarding wizard для агентов.
+4. Σ-json Noise/JWT аутентификация.
+5. Developer SDK (`shelldone-agent-api`) и recipes.
+
+## References
+- `docs/architecture/utif-sigma.md`
+- `docs/architecture/agent-governance.md`
+- `docs/architecture/persona-engine.md`
+- `docs/recipes/agents.md` (в разработке)
