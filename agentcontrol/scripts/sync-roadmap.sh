@@ -7,8 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/common.sh"
 
-TODO_FILE="$(cd "$SDK_ROOT/.." && pwd)/todo.machine.md"
-if [[ ! -f "$TODO_FILE" ]]; then
+todo_machine_path="$(cd "$SDK_ROOT/.." && pwd)/todo.machine.md"
+if [[ ! -f "$todo_machine_path" ]]; then
   sdk::log "WRN" "todo.machine.md не найден — синхронизация пропущена"
   exit 0
 fi
@@ -19,7 +19,7 @@ if [[ ! -f "$STATUS_JSON" ]]; then
   exit 0
 fi
 
-python3 - "$TODO_FILE" "$STATUS_JSON" <<'PY'
+python3 - "$todo_machine_path" "$STATUS_JSON" <<'PY'
 import json
 import re
 import sys

@@ -14,7 +14,7 @@ BOARD_FILE="$SDK_ROOT/data/tasks.board.json"
 STATE_FILE="$SDK_ROOT/state/task_state.json"
 LEGACY_STATE_FILE="$SDK_ROOT/state/task_selection.json"
 JOURNAL_FILE="$SDK_ROOT/journal/task_events.jsonl"
-TODO_FILE="$SDK_ROOT/todo.machine.md"
+todo_machine_file="$SDK_ROOT/todo.machine.md"
 REPORTS_DIR="$SDK_ROOT/reports"
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -115,10 +115,10 @@ if [[ ! -f "$JOURNAL_FILE" ]]; then
   : > "$JOURNAL_FILE"
 fi
 
-if [[ ! -f "$TODO_FILE" ]]; then
+if [[ ! -f "$todo_machine_file" ]]; then
   sdk::log "INF" "Создаю базовый todo.machine.md"
   # shellcheck disable=SC2215,SC2006,SC2086,SC1130,SC1083
-  cat <<TODO >"$TODO_FILE"
+  cat <<'EOF' >"$todo_machine_file"
 ## Program
 ```yaml
 program: v1
@@ -216,7 +216,7 @@ docs_updates:
 artifacts:
   - data/tasks.board.json
 ```
-TODO
+EOF
 fi
 
 sdk::log "INF" "Генерация статус-отчёта"

@@ -26,7 +26,8 @@ if [[ -z "${ROADMAP_SKIP_PROGRESS:-}" ]]; then
 fi
 
 if [[ ! -f "$STATUS_PATH" ]]; then
-  sdk::die "reports/status.json не найден — выполните progress.py"
+  sdk::log "INF" "reports/status.json отсутствует — выполняю progress.py"
+  "$SDK_ROOT/scripts/progress.py" || sdk::die "progress завершился с ошибкой"
 fi
 
 python3 - "$MODE" "$STATUS_PATH" <<'PY'

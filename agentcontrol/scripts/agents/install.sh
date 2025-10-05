@@ -34,7 +34,7 @@ setup_codex() {
   fi
   ensure_cmd cargo || return 1
   local build_log
-  build_log="$(mktemp -t codex-build.XXXXXX.log)"
+  build_log="$(mktemp -t codex-build).log"
   log "Собираю Codex CLI (cargo build --release -p codex-cli)"
   if ! cargo build --manifest-path "$CODEX_SRC/Cargo.toml" --release --locked -p codex-cli >"$build_log" 2>&1; then
     warn "cargo build не удалось; лог: $build_log"
@@ -78,7 +78,7 @@ setup_claude() {
   rm -rf "$CLAUDE_DIST"
   mkdir -p "$CLAUDE_DIST"
   local install_log
-  install_log="$(mktemp -t claude-install.XXXXXX.log)"
+  install_log="$(mktemp -t claude-install).log"
   log "Устанавливаю @anthropic-ai/claude-code в sandbox"
   if ! npm install --prefix "$CLAUDE_DIST" --no-save --no-package-lock @anthropic-ai/claude-code >"$install_log" 2>&1; then
     warn "npm install claude-code не удалось; лог: $install_log"

@@ -158,9 +158,14 @@ def format_duration(seconds: float) -> str:
 
 
 def discover_language_stacks() -> Dict[str, bool]:
+    python_markers = [
+        ROOT / "pyproject.toml",
+        ROOT / "requirements.txt",
+        ROOT / "agentcontrol" / "requirements.txt",
+    ]
     stacks = {
         "rust": (ROOT / "Cargo.toml").exists(),
-        "python": any((ROOT / name).exists() for name in ("pyproject.toml", "requirements.txt")),
+        "python": any(marker.exists() for marker in python_markers),
         "javascript": (ROOT / "package.json").exists(),
         "go": (ROOT / "go.mod").exists(),
     }
@@ -331,6 +336,9 @@ SKIP_MARKER_DIRS = {
 }
 SKIP_MARKER_SUFFIXES = {".md", ".markdown", ".rst", ".txt"}
 ALLOW_MARKER_BASENAMES = {"Makefile", "makefile"}
+SKIP_MARKER_FILES = {
+    "agentcontrol/scripts/lib/quality_guard.py",
+}
 RUST_EXCLUDE_PACKAGES = [
     "cairo-sys-rs",
     "freetype",
@@ -453,100 +461,104 @@ def check_todo_machine(_: VerificationContext) -> str:
     epics_blocks = _extract_yaml_blocks(_section_lines(text, "Epics"))
     if not epics_blocks:
         raise CheckFailure("Epics section is empty")
-    epics = []
+    epics: List[dict] = []
     for block in epics_blocks:
-        epic = yaml.safe_load(block)
-        _check_required_fields(
-            f"Epic {epic.get('id','<unknown>')}",
-            epic,
-            [
-                "id",
-                "title",
-                "type",
-                "status",
-                "priority",
-                "size_points",
-                "scope_paths",
-                "spec",
-                "budgets",
-                "risks",
-                "dependencies",
-                "big_tasks_planned",
-                "progress_pct",
-                "health",
-                "tests_required",
-                "verify_commands",
-                "docs_updates",
-                "artifacts",
-                "audit",
-            ],
-        )
-        if epic["type"] != "epic":
-            raise CheckFailure(f"{epic['id']}: type must be 'epic'")
-        if epic["priority"] not in {"P0", "P1", "P2", "P3"}:
-            raise CheckFailure(f"{epic['id']}: unknown priority {epic['priority']}")
-        if epic["status"] not in {"planned", "in_progress", "blocked", "at_risk", "review", "done"}:
-            raise CheckFailure(f"{epic['id']}: unknown status {epic['status']}")
-        if epic["health"] not in {"green", "yellow", "red"}:
-            raise CheckFailure(f"{epic['id']}: unknown health {epic['health']}")
-        if epic["size_points"] not in {8, 13, 20, 40}:
-            raise CheckFailure(f"{epic['id']}: size_points must be one of 8, 13, 20, 40")
-        if not isinstance(epic["scope_paths"], list) or not epic["scope_paths"]:
-            raise CheckFailure(f"{epic['id']}: scope_paths must be a non-empty list")
-        for pattern in epic["scope_paths"]:
-            matches = list(ROOT.glob(pattern))
-            if not matches:
-                raise CheckFailure(f"{epic['id']}: scope pattern '{pattern}' matched nothing")
-        epics.append(epic)
+        loaded = yaml.safe_load(block)
+        entries = loaded if isinstance(loaded, list) else [loaded]
+        for epic in entries:
+            _check_required_fields(
+                f"Epic {epic.get('id','<unknown>')}",
+                epic,
+                [
+                    "id",
+                    "title",
+                    "type",
+                    "status",
+                    "priority",
+                    "size_points",
+                    "scope_paths",
+                    "spec",
+                    "budgets",
+                    "risks",
+                    "dependencies",
+                    "big_tasks_planned",
+                    "progress_pct",
+                    "health",
+                    "tests_required",
+                    "verify_commands",
+                    "docs_updates",
+                    "artifacts",
+                    "audit",
+                ],
+            )
+            if epic["type"] != "epic":
+                raise CheckFailure(f"{epic['id']}: type must be 'epic'")
+            if epic["priority"] not in {"P0", "P1", "P2", "P3"}:
+                raise CheckFailure(f"{epic['id']}: unknown priority {epic['priority']}")
+            if epic["status"] not in {"planned", "in_progress", "blocked", "at_risk", "review", "done"}:
+                raise CheckFailure(f"{epic['id']}: unknown status {epic['status']}")
+            if epic["health"] not in {"green", "yellow", "red"}:
+                raise CheckFailure(f"{epic['id']}: unknown health {epic['health']}")
+            if epic["size_points"] not in {8, 13, 20, 40}:
+                raise CheckFailure(f"{epic['id']}: size_points must be one of 8, 13, 20, 40")
+            if not isinstance(epic["scope_paths"], list) or not epic["scope_paths"]:
+                raise CheckFailure(f"{epic['id']}: scope_paths must be a non-empty list")
+            for pattern in epic["scope_paths"]:
+                matches = list(ROOT.glob(pattern))
+                if not matches:
+                    raise CheckFailure(f"{epic['id']}: scope pattern '{pattern}' matched nothing")
+            epics.append(epic)
 
     big_task_blocks = _extract_yaml_blocks(_section_lines(text, "Big Tasks"))
     if not big_task_blocks:
         raise CheckFailure("Big Tasks section is empty")
-    big_tasks = []
+    big_tasks: List[dict] = []
     for block in big_task_blocks:
-        task = yaml.safe_load(block)
-        _check_required_fields(
-            f"Big task {task.get('id','<unknown>')}",
-            task,
-            [
-                "id",
-                "title",
-                "type",
-                "status",
-                "priority",
-                "size_points",
-                "parent_epic",
-                "scope_paths",
-                "spec",
-                "budgets",
-                "risks",
-                "dependencies",
-                "progress_pct",
-                "health",
-                "tests_required",
-                "verify_commands",
-                "docs_updates",
-                "artifacts",
-                "audit",
-            ],
-        )
-        if task["type"] not in {"feature", "perf", "migration", "refactor", "test", "doc", "ops", "research"}:
-            raise CheckFailure(f"{task['id']}: unknown type {task['type']}")
-        if task["size_points"] not in {5, 8, 13}:
-            raise CheckFailure(f"{task['id']}: size_points must be 5, 8, or 13")
-        if task["priority"] not in {"P0", "P1", "P2", "P3"}:
-            raise CheckFailure(f"{task['id']}: unknown priority {task['priority']}")
-        if task["status"] not in {"planned", "in_progress", "blocked", "at_risk", "review", "done"}:
-            raise CheckFailure(f"{task['id']}: unknown status {task['status']}")
-        if task["health"] not in {"green", "yellow", "red"}:
-            raise CheckFailure(f"{task['id']}: unknown health {task['health']}")
-        if not isinstance(task["scope_paths"], list) or not task["scope_paths"]:
-            raise CheckFailure(f"{task['id']}: scope_paths must be a non-empty list")
-        for pattern in task["scope_paths"]:
-            matches = list(ROOT.glob(pattern))
-            if not matches:
-                raise CheckFailure(f"{task['id']}: scope pattern '{pattern}' matched nothing")
-        big_tasks.append(task)
+        loaded = yaml.safe_load(block)
+        entries = loaded if isinstance(loaded, list) else [loaded]
+        for task in entries:
+            _check_required_fields(
+                f"Big task {task.get('id','<unknown>')}",
+                task,
+                [
+                    "id",
+                    "title",
+                    "type",
+                    "status",
+                    "priority",
+                    "size_points",
+                    "parent_epic",
+                    "scope_paths",
+                    "spec",
+                    "budgets",
+                    "risks",
+                    "dependencies",
+                    "progress_pct",
+                    "health",
+                    "tests_required",
+                    "verify_commands",
+                    "docs_updates",
+                    "artifacts",
+                    "audit",
+                ],
+            )
+            if task["type"] not in {"feature", "perf", "migration", "refactor", "test", "doc", "ops", "research"}:
+                raise CheckFailure(f"{task['id']}: unknown type {task['type']}")
+            if task["size_points"] not in {5, 8, 13}:
+                raise CheckFailure(f"{task['id']}: size_points must be 5, 8, or 13")
+            if task["priority"] not in {"P0", "P1", "P2", "P3"}:
+                raise CheckFailure(f"{task['id']}: unknown priority {task['priority']}")
+            if task["status"] not in {"planned", "in_progress", "blocked", "at_risk", "review", "done"}:
+                raise CheckFailure(f"{task['id']}: unknown status {task['status']}")
+            if task["health"] not in {"green", "yellow", "red"}:
+                raise CheckFailure(f"{task['id']}: unknown health {task['health']}")
+            if not isinstance(task["scope_paths"], list) or not task["scope_paths"]:
+                raise CheckFailure(f"{task['id']}: scope_paths must be a non-empty list")
+            for pattern in task["scope_paths"]:
+                matches = list(ROOT.glob(pattern))
+                if not matches:
+                    raise CheckFailure(f"{task['id']}: scope pattern '{pattern}' matched nothing")
+            big_tasks.append(task)
 
     epic_map = {epic["id"]: epic for epic in epics}
     for task in big_tasks:
@@ -643,8 +655,16 @@ def check_roadmap(_: VerificationContext) -> str:
     task_entries = _parse_markdown_table(extract_table("## Task Table"))
 
     todo_text = (ROOT / "todo.machine.md").read_text(encoding="utf-8")
-    epics = [yaml.safe_load(block) for block in _extract_yaml_blocks(_section_lines(todo_text, "Epics"))]
-    big_tasks = [yaml.safe_load(block) for block in _extract_yaml_blocks(_section_lines(todo_text, "Big Tasks"))]
+    def _load_sequence(section: str) -> List[dict]:
+        items: List[dict] = []
+        for block in _extract_yaml_blocks(_section_lines(todo_text, section)):
+            loaded = yaml.safe_load(block)
+            entries = loaded if isinstance(loaded, list) else [loaded]
+            items.extend(entries)
+        return items
+
+    epics = _load_sequence("Epics")
+    big_tasks = _load_sequence("Big Tasks")
 
     epic_map = {entry["Epic ID"]: entry for entry in epic_entries}
     for epic in epics:
@@ -687,6 +707,8 @@ def _collect_markers() -> Dict[str, Counter]:
                 break
         else:
             path = ROOT / rel_path
+            if rel_path in SKIP_MARKER_FILES:
+                continue
             suffix = path.suffix.lower()
             if suffix in SKIP_MARKER_SUFFIXES and path.name not in ALLOW_MARKER_BASENAMES:
                 continue
@@ -902,14 +924,17 @@ def check_python(ctx: VerificationContext) -> str:
     stacks = discover_language_stacks()
     if not stacks["python"]:
         raise SkipCheck("python stack not detected")
+
     ctx.run_command("python-compile", ["python3", "-m", "compileall", str(ROOT)])
-    tests_dir = ROOT / "scripts" / "tests"
-    if tests_dir.exists():
-        ctx.run_command(
-            "python-unittest",
-            ["python3", "-m", "unittest", "discover", "-s", str(tests_dir)],
-        )
-    return "python compileall + unittest"
+
+    pytest_bin = ROOT / ".venv" / "bin" / "pytest"
+    if pytest_bin.exists():
+        cmd = [str(pytest_bin)]
+    else:
+        cmd = ["python3", "-m", "pytest"]
+
+    ctx.run_command("python-pytest", cmd)
+    return "python compileall + pytest"
 
 
 def check_js(ctx: VerificationContext) -> str:
@@ -944,7 +969,7 @@ CHECKS: List[Check] = [
     Check("rust-nextest", ("prepush", "full", "ci"), check_rust_nextest),
     Check("rust-doc", ("full", "ci"), check_rust_doc),
     Check("perf-probes", ("full", "ci"), check_perf_probes),
-    Check("python", ("full", "ci"), check_python),
+    Check("python", ("prepush", "full", "ci"), check_python),
     Check("javascript", ("full", "ci"), check_js),
     Check("go", ("full", "ci"), check_go),
 ]

@@ -4,6 +4,12 @@
 SDK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly SDK_ROOT
 
+if [[ -z "${PYTHONPATH:-}" ]]; then
+  export PYTHONPATH="$SDK_ROOT"
+else
+  export PYTHONPATH="$SDK_ROOT:$PYTHONPATH"
+fi
+
 sdk::log() {
   local level="$1"; shift
   printf ' [%s] %s\n' "$level" "$*"

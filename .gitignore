@@ -1,5 +1,11 @@
+# repo metadata
 /.tag
 .DS_Store
+.python-version
+/.venv/
+/.pytest_cache/
+.coverage
+coverage.xml
 dhat-heap.json
 /docs/_site
 /docs/favicon.png
@@ -63,7 +69,20 @@ dhat-heap.json
 .idea/
 /winget-pkgs
 /assets/flatpak/generated-sources.json
-/__pycache__/
+**/__pycache__/
+*.pyc
 /nix/result
 # Agent adapter artefacts
 agents/claude/node_modules/
+# agentcontrol runtime artefacts
+agentcontrol/.sdk/pip-audit-cache/
+agentcontrol/.sdk/setup/
+agentcontrol/.venv/
+agentcontrol/context/
+agentcontrol/reports/
+agentcontrol/scripts/bin/
+scripts/bin/
+reports/perf/
+reports/*.json
+reports/*.sarif
+artifacts/

@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci
+.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci setup-env python-tests
 
 all: build
 
@@ -28,6 +28,17 @@ clippy lint:
 
 verify:
 	VERIFY_MODE=$(VERIFY_MODE) JSON=$(JSON) CHANGED_ONLY=$(CHANGED_ONLY) TIMEOUT_MIN=$(TIMEOUT_MIN) NET=$(NET) scripts/verify.sh
+
+setup-env:
+	@echo "[setup-env] ensuring Python toolchain available"
+	agentcontrol/scripts/setup.sh
+
+python-tests:
+	@if [ -x .venv/bin/pytest ]; then \
+		.venv/bin/pytest -q; \
+	else \
+		python3 -m pytest -q; \
+	fi
 
 verify-fast:
 	VERIFY_MODE=fast scripts/verify.sh

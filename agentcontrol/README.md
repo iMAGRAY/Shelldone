@@ -22,14 +22,20 @@ Enterprise-grade orchestration for autonomous coding agents. The toolkit ships a
    agentcall init ~/workspace/my-project
    ```
    Команда разворачивает структуру проекта, генерирует `config/commands.sh`, `agentcontrol/agentcall.yaml`, дорожную карту и отчёты.
-4. **Аутентифицируйте агентов (из корня проекта):**
+4. **Подготовьте окружение разработки:**
+   ```bash
+   cd ~/workspace/my-project
+   make setup-env
+   ```
+   Цель `setup-env` вызывает `agentcontrol/scripts/setup.sh`, устанавливает системные инструменты (shellcheck, go), создаёт `.venv/` и ставит Python-зависимости. Для локального smoke-теста запускайте `make python-tests`.
+5. **Аутентифицируйте агентов (из корня проекта):**
    ```bash
    cd ~/workspace/my-project
    agentcall agents auth
    agentcall agents status
    ```
    CLI запустит Codex/Claude login, сохранит токены в `~/.agentcontrol/state/`.
-5. **Проверка окружения:**
+6. **Проверка окружения:**
    ```bash
    agentcall verify
    ```

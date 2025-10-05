@@ -1,10 +1,21 @@
+import importlib.util
 import json
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-import scripts.status as status_cli
+
+def _load_status_module() -> object:
+    module_path = Path(__file__).resolve().parents[1] / "status.py"
+    spec = importlib.util.spec_from_file_location("status_cli", module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+status_cli = _load_status_module()
 
 
 @pytest.fixture()

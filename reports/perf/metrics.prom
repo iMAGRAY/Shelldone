@@ -1,8 +1,0 @@
-# TYPE shelldone_perf_metric gauge
-shelldone_perf_metric{probe="utif_exec",metric="latency_p95_ms",unit="ms"} 10.0
-shelldone_perf_metric{probe="utif_exec",metric="latency_p99_ms",unit="ms"} 10.0
-shelldone_perf_metric{probe="utif_exec",metric="error_rate_ratio",unit="ratio"} 0.001
-shelldone_perf_metric{probe="policy_perf",metric="allowed_latency_p95_ms",unit="ms"} 10.0
-shelldone_perf_metric{probe="policy_perf",metric="allowed_latency_p99_ms",unit="ms"} 10.0
-shelldone_perf_metric{probe="policy_perf",metric="denied_latency_p95_ms",unit="ms"} 10.0
-shelldone_perf_metric{probe="policy_perf",metric="policy_error_rate_ratio",unit="ratio"} 0.001
