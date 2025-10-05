@@ -1,7 +1,7 @@
 ## Program
 ```yaml
 program: v1
-updated_at: '2025-10-05T02:08:39.847472+00:00'
+updated_at: '2025-10-05T07:52:33.509749+00:00'
 program_id: shelldone-core
 name: Shelldone Terminal Platform
 objectives:
@@ -15,27 +15,27 @@ kpis:
   error_rate_pct: 0.2
 policies:
   task_min_points: 5
-progress_pct: 15
+progress_pct: 16
 health: yellow
 milestones:
 - id: m1
   title: QA Hardening
   due: '2025-10-31T03:00:00Z'
   status: in_progress
-  progress_pct: 57
+  progress_pct: 67
 - id: m2
   title: Plugin Platform MVP
   due: '2025-11-30T03:00:00Z'
   status: in_progress
-  progress_pct: 17
+  progress_pct: 14
 - id: m3
   title: Animation Engine GA
   due: '2025-12-20T03:00:00Z'
   status: planned
   progress_pct: 0
 phase_progress:
-  QA Hardening: 57
-  Plugin Platform MVP: 17
+  QA Hardening: 67
+  Plugin Platform MVP: 14
   Animation Engine GA: 0
 ```
 
@@ -74,7 +74,7 @@ phase_progress:
   - task-state-persistence
   - task-security-hardening
   - task-observability-pipeline
-  progress_pct: 57
+  progress_pct: 67
   health: yellow
   tests_required:
   - make verify-prepush
@@ -175,7 +175,7 @@ phase_progress:
   - task-security-agent-gov
   - task-persona-engine
   - task-agent-microsoft
-  progress_pct: 22
+  progress_pct: 16
   health: yellow
   tests_required:
   - make verify-prepush
@@ -395,7 +395,7 @@ phase_progress:
 - id: task-qa-perf-probes
   title: Performance Probes for verify
   type: perf
-  status: planned
+  status: in_progress
   priority: P1
   size_points: 5
   parent_epic: epic-qa-hardening
@@ -418,7 +418,7 @@ phase_progress:
   - Perf tooling may be unavailable in CI environments
   dependencies:
   - task-qa-orchestrator
-  progress_pct: 0
+  progress_pct: 50
   health: yellow
   tests_required:
   - make verify-full
@@ -579,7 +579,7 @@ phase_progress:
   - Agreement on safe operations required
   dependencies:
   - task-qa-orchestrator
-  progress_pct: 50
+  progress_pct: 31
   health: yellow
   tests_required:
   - make verify-prepush
@@ -1329,7 +1329,7 @@ phase_progress:
   - Command runner needs cross-platform validation (Windows quirks)
   dependencies:
   - task-termbridge-discovery
-  progress_pct: 50
+  progress_pct: 36
   health: yellow
   tests_required:
   - cargo test -p shelldone-agentd termbridge

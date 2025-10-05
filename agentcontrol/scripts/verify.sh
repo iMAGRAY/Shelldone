@@ -9,6 +9,11 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 sdk::load_commands
 
+VERIFY_STEP_TIMEOUT_SEC=${VERIFY_STEP_TIMEOUT_SEC:-900}
+VERIFY_TOTAL_TIMEOUT_SEC=${VERIFY_TOTAL_TIMEOUT_SEC:-7200}
+VERIFY_DIFF_COVER_THRESHOLD=${VERIFY_DIFF_COVER_THRESHOLD:-90}
+TOTAL_DURATION_SEC=0
+
 REPORT_DIR="$SDK_ROOT/reports"
 mkdir -p "$REPORT_DIR"
 VERIFY_JSON="$REPORT_DIR/verify.json"
@@ -36,13 +41,34 @@ print(time.time())
 PY
 )
   set +e
-  eval "$cmd" >"$log_file" 2>&1
-  local exit_code=$?
+  local exit_code timed_out=0
+  if [[ $VERIFY_STEP_TIMEOUT_SEC -gt 0 ]]; then
+    eval "$cmd" >"$log_file" 2>&1 &
+    local pid=$!
+    if ! wait_with_timeout "$pid" "$VERIFY_STEP_TIMEOUT_SEC"; then
+      timed_out=1
+      kill "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null
+    exit_code=$?
+    if [[ $timed_out -eq 1 ]]; then
+      exit_code=124
+      sdk::log "WRN" "$name: достигнут предел ${VERIFY_STEP_TIMEOUT_SEC}s"
+    fi
+  else
+    eval "$cmd" >"$log_file" 2>&1
+    exit_code=$?
+  fi
   set -e
   local duration
   duration=$(START_TS="$start_ts" python3 - <<'PY'
 import os, time
 print(f"{time.time()-float(os.environ['START_TS']):.6f}")
+PY
+)
+  TOTAL_DURATION_SEC=$(python3 - <<PY
+from decimal import Decimal
+print(Decimal("$TOTAL_DURATION_SEC") + Decimal("$duration"))
 PY
 )
   if [[ $exit_code -eq 0 ]]; then
@@ -61,6 +87,19 @@ collect_log_tail() {
   else
     printf ""
   fi
+}
+
+wait_with_timeout() {
+  local pid="$1" timeout="$2"
+  local elapsed=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( elapsed >= timeout )); then
+      return 1
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 0
 }
 
 run_step "sync-architecture" "critical" "\"$SDK_ROOT/scripts/sync-architecture.sh\""
@@ -121,6 +160,39 @@ else
   done
 fi
 
+run_diff_cover() {
+  local coverage_rel="${SDK_COVERAGE_FILE:-}"
+  if [[ -z "$coverage_rel" ]]; then
+    sdk::log "INF" "diff-cover: SDK_COVERAGE_FILE не задан — пропуск"
+    return
+  fi
+  local coverage_path="$SDK_ROOT/$coverage_rel"
+  if [[ ! -f "$coverage_path" ]]; then
+    sdk::log "WRN" "diff-cover: файл покрытия $coverage_rel не найден"
+    local log_file
+    log_file="$(mktemp)"
+    printf 'coverage file %s missing\n' "$coverage_rel" >"$log_file"
+    record_step "diff-cover" "fail" 1 "$log_file" "critical" 0
+    OVERALL_EXIT=1
+    return
+  fi
+  local compare_ref
+  if [[ -n "$BASE_COMMIT" ]]; then
+    compare_ref="$BASE_COMMIT"
+  else
+    compare_ref="$BASE_REF_DEFAULT"
+  fi
+  if [[ -z "$compare_ref" ]]; then
+    compare_ref="origin/main"
+  fi
+  local diff_cmd
+  printf -v diff_cmd '(cd %q && .venv/bin/diff-cover %q --compare-branch %q --fail-under %q)' \
+    "$SDK_ROOT" "reports/python/coverage.xml" "$compare_ref" "$VERIFY_DIFF_COVER_THRESHOLD"
+  run_step "diff-cover" "critical" "$diff_cmd"
+}
+
+run_diff_cover
+
 EXIT_ON_FAIL=${EXIT_ON_FAIL:-0}
 
 declare -a steps_json
@@ -172,6 +244,18 @@ fi
 if [[ $HAS_FINDINGS -eq 1 ]]; then
   sdk::log "WRN" "Верификация завершена с предупреждениями"
   exit 0
+fi
+
+if [[ $VERIFY_TOTAL_TIMEOUT_SEC -gt 0 ]]; then
+  total_exceeded=$(python3 - <<PY
+from decimal import Decimal
+print(1 if Decimal("$TOTAL_DURATION_SEC") > Decimal("$VERIFY_TOTAL_TIMEOUT_SEC") else 0)
+PY
+)
+  if [[ $total_exceeded -eq 1 ]]; then
+    sdk::log "WRN" "Общий watchdog: ${TOTAL_DURATION_SEC}s > ${VERIFY_TOTAL_TIMEOUT_SEC}s"
+    exit 1
+  fi
 fi
 
 sdk::log "INF" "Верификация завершена без критичных ошибок"

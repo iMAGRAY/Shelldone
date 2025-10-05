@@ -38,6 +38,7 @@ mod colorease;
 mod commands;
 mod customglyph;
 mod download;
+mod experience;
 mod frontend;
 mod glyphcache;
 mod inputmap;

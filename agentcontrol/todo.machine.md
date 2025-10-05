@@ -1,47 +1,46 @@
-version: 0.1.0
-updated_at: '2025-10-05T07:52:33.509749+00:00'
-program:
-  meta:
-    program: v1
-    updated_at: '2025-10-05T07:52:33.509749+00:00'
-    program_id: shelldone-core
-    name: Shelldone Terminal Platform
-    objectives:
-    - Maintain benchmark terminal quality with a decade-long horizon
-    - Become the base platform for plugins, themes, automation, and AI agents
-    - Deliver uncompromising performance and low latency
-    kpis:
-      uptime_pct: 99.9
-      tti_ms: 20
-      render_switch_ms: 80
-      error_rate_pct: 0.2
-    policies:
-      task_min_points: 5
-  progress:
-    health: yellow
-    progress_pct: 16
-    phase_progress:
-      QA Hardening: 67
-      Plugin Platform MVP: 14
-      Animation Engine GA: 0
-  milestones:
-  - id: m1
-    title: QA Hardening
-    due: '2025-10-31T03:00:00Z'
-    status: in_progress
-    progress_pct: 67
-  - id: m2
-    title: Plugin Platform MVP
-    due: '2025-11-30T03:00:00Z'
-    status: in_progress
-    progress_pct: 14
-  - id: m3
-    title: Animation Engine GA
-    due: '2025-12-20T03:00:00Z'
-    status: planned
-    progress_pct: 0
-systems: []
-epics:
+## Program
+```yaml
+program: v1
+updated_at: '2025-10-05T07:26:13.642821+00:00'
+program_id: shelldone-core
+name: Shelldone Terminal Platform
+objectives:
+- Maintain benchmark terminal quality with a decade-long horizon
+- Become the base platform for plugins, themes, automation, and AI agents
+- Deliver uncompromising performance and low latency
+kpis:
+  uptime_pct: 99.9
+  tti_ms: 20
+  render_switch_ms: 80
+  error_rate_pct: 0.2
+policies:
+  task_min_points: 5
+health: yellow
+progress_pct: 2
+phase_progress:
+  QA Hardening: 2
+  Plugin Platform MVP: 33
+  Animation Engine GA: 2
+milestones:
+- id: m1
+  title: QA Hardening
+  due: '2025-10-31T03:00:00Z'
+  status: in_progress
+  progress_pct: 67
+- id: m2
+  title: Plugin Platform MVP
+  due: '2025-11-30T03:00:00Z'
+  status: in_progress
+  progress_pct: 14
+- id: m3
+  title: Animation Engine GA
+  due: '2025-12-20T03:00:00Z'
+  status: in_progress
+  progress_pct: 0
+```
+
+## Epics
+```yaml
 - id: epic-qa-hardening
   title: QA Pipeline and Quality Budgets
   type: epic
@@ -68,15 +67,18 @@ epics:
   - Limited automation on rare platforms can slow verification
   - Enlarged pipeline can increase CI times if not optimised
   dependencies: []
+  docs_updates:
+  - docs/architecture/perf-budget.md
+  - docs/community/contributor-handbook.md
+  artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
   big_tasks_planned:
   - task-qa-orchestrator
   - task-qa-perf-probes
   - task-qa-marker-baseline
-  - task-state-persistence
-  - task-security-hardening
-  - task-observability-pipeline
   - task-termbridge-test-suite
-  progress_pct: 67
+  progress_pct: 0
   health: yellow
   tests_required:
   - make verify-prepush
@@ -84,19 +86,11 @@ epics:
   verify_commands:
   - make verify-prepush
   - make verify-full
-  docs_updates:
-  - docs/architecture/perf-budget.md
-  - docs/community/contributor-handbook.md
-  artifacts:
-  - artifacts/verify/
-  - artifacts/perf/
   audit:
     created_at: '2025-09-20T03:00:00Z'
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 67
 - id: epic-plugin-platform
   title: Plugin Architecture and IDE Layer
   type: epic
@@ -123,6 +117,12 @@ epics:
   - Plugin API stabilisation may take longer than expected
   dependencies:
   - epic-qa-hardening
+  docs_updates:
+  - docs/architecture/customization-and-plugins.md
+  - docs/recipes/plugins.md
+  artifacts:
+  - artifacts/plugins/
+  - docs/recipes/
   big_tasks_planned:
   - task-plugin-sdk
   - task-plugin-examples
@@ -135,19 +135,11 @@ epics:
   - cargo test -p plugins
   verify_commands:
   - make verify-full
-  docs_updates:
-  - docs/architecture/customization-and-plugins.md
-  - docs/recipes/plugins.md
-  artifacts:
-  - artifacts/plugins/
-  - docs/recipes/
   audit:
     created_at: '2025-09-22T03:00:00Z'
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
 - id: epic-ai-automation
   title: AI Integration and Agent Workflows
   type: epic
@@ -175,21 +167,6 @@ epics:
   - CLI automation must remain backward compatible
   dependencies:
   - epic-qa-hardening
-  big_tasks_planned:
-  - task-mcp-bridge
-  - task-termbridge-discovery
-  - task-termbridge-core
-  - task-agent-policy
-  - task-security-agent-gov
-  - task-persona-engine
-  - task-agent-microsoft
-  progress_pct: 16
-  health: yellow
-  tests_required:
-  - make verify-prepush
-  - cargo test -p shelldone-client
-  verify_commands:
-  - make verify-full
   docs_updates:
   - docs/architecture/ai-integration.md
   - docs/architecture/persona-engine.md
@@ -198,13 +175,26 @@ epics:
   - artifacts/agents/
   - artifacts/ux/
   - docs/ROADMAP/notes/
+  big_tasks_planned:
+  - task-mcp-bridge
+  - task-agent-policy
+  - task-security-agent-gov
+  - task-persona-engine
+  - task-agent-microsoft
+  - task-termbridge-discovery
+  - task-termbridge-core
+  progress_pct: 12
+  health: yellow
+  tests_required:
+  - make verify-prepush
+  - cargo test -p shelldone-client
+  verify_commands:
+  - make verify-full
   audit:
     created_at: '2025-09-23T03:00:00Z'
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 16
 - id: epic-animation-engine
   title: High-performance Animation Engine
   type: epic
@@ -232,6 +222,12 @@ epics:
   dependencies:
   - epic-qa-hardening
   - epic-plugin-platform
+  docs_updates:
+  - docs/architecture/animation-framework.md
+  - docs/recipes/animations.md
+  artifacts:
+  - artifacts/perf/
+  - docs/recipes/animations.md
   big_tasks_planned:
   - task-animation-core
   - task-animation-toolkit
@@ -243,19 +239,11 @@ epics:
   - cargo test -p shelldone-gui
   verify_commands:
   - make verify-full
-  docs_updates:
-  - docs/architecture/animation-framework.md
-  - docs/recipes/animations.md
-  artifacts:
-  - artifacts/perf/
-  - docs/recipes/animations.md
   audit:
     created_at: '2025-09-24T03:00:00Z'
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
 - id: epic-ide-dx
   title: IDE Functionality and DX
   type: epic
@@ -283,6 +271,12 @@ epics:
   dependencies:
   - epic-plugin-platform
   - epic-ai-automation
+  docs_updates:
+  - docs/recipes/workflows.md
+  - docs/community/contributor-handbook.md
+  artifacts:
+  - docs/recipes/
+  - artifacts/verify/
   big_tasks_planned:
   - task-ide-file-manager
   - task-state-sync-ui
@@ -292,19 +286,11 @@ epics:
   - make verify-prepush
   verify_commands:
   - make verify-full
-  docs_updates:
-  - docs/recipes/workflows.md
-  - docs/community/contributor-handbook.md
-  artifacts:
-  - docs/recipes/
-  - artifacts/verify/
   audit:
     created_at: '2025-09-25T03:00:00Z'
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
 - id: epic-platform-resilience
   title: Resilience, Security, and Operations
   type: epic
@@ -332,6 +318,15 @@ epics:
   - Coordination required with security/compliance partners
   dependencies:
   - epic-qa-hardening
+  docs_updates:
+  - docs/architecture/state-and-storage.md
+  - docs/architecture/security-and-secrets.md
+  - docs/architecture/observability.md
+  - docs/architecture/release-and-compatibility.md
+  artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
+  - qa/baselines/
   big_tasks_planned:
   - task-state-persistence
   - task-security-hardening
@@ -347,23 +342,15 @@ epics:
   - make verify-full
   - make roadmap status
   - make verify VERIFY_MODE=ci JSON=1
-  docs_updates:
-  - docs/architecture/state-and-storage.md
-  - docs/architecture/security-and-secrets.md
-  - docs/architecture/observability.md
-  - docs/architecture/release-and-compatibility.md
-  artifacts:
-  - artifacts/verify/
-  - artifacts/perf/
-  - qa/baselines/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-big_tasks:
+```
+
+## Big Tasks
+```yaml
 - id: task-qa-orchestrator
   title: make verify Orchestrator
   type: ops
@@ -389,8 +376,9 @@ big_tasks:
   risks:
   - Third-party tools can hang and stall the pipeline
   dependencies: []
-  progress_pct: 100
+  progress_pct: 0
   health: green
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -405,9 +393,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 100
-  roadmap_phase: m1
 - id: task-qa-perf-probes
   title: Performance Probes for verify
   type: perf
@@ -434,8 +419,9 @@ big_tasks:
   - Perf tooling may be unavailable in CI environments
   dependencies:
   - task-qa-orchestrator
-  progress_pct: 50
+  progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
@@ -449,9 +435,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-10-04T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 50
-  roadmap_phase: m1
 - id: task-qa-marker-baseline
   title: Forbidden Marker Control
   type: ops
@@ -466,7 +449,8 @@ big_tasks:
 
     When make verify runs
 
-    Then new marker tokens (todo, fixme, xxx, triple-question) are blocked unless baseline is updated
+    Then new marker tokens (todo, fixme, xxx, triple-question) are blocked unless
+    baseline is updated
 
     '
   budgets:
@@ -477,8 +461,9 @@ big_tasks:
   - Large vendor code drops can disturb the baseline
   dependencies:
   - task-qa-orchestrator
-  progress_pct: 100
+  progress_pct: 0
   health: green
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -491,9 +476,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-27T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 100
-  roadmap_phase: m1
 - id: task-plugin-sdk
   title: Plugin SDK and Specification
   type: feature
@@ -522,6 +504,7 @@ big_tasks:
   - task-qa-orchestrator
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -535,9 +518,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-plugin-examples
   title: Reference Plugins and Themes
   type: doc
@@ -565,6 +545,7 @@ big_tasks:
   - task-plugin-sdk
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -578,9 +559,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-mcp-bridge
   title: MCP/gRPC Bridge
   type: feature
@@ -607,8 +585,9 @@ big_tasks:
   - Agreement on safe operations required
   dependencies:
   - task-qa-orchestrator
-  progress_pct: 31
+  progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -622,9 +601,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 31
-  roadmap_phase: m2
 - id: task-agent-policy
   title: Agent Policy Documentation
   type: doc
@@ -652,6 +628,7 @@ big_tasks:
   - task-mcp-bridge
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -665,9 +642,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-animation-core
   title: Render Loop and Animation Core
   type: perf
@@ -696,6 +670,7 @@ big_tasks:
   - task-plugin-sdk
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
@@ -710,9 +685,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-animation-toolkit
   title: Effect Authoring Toolkit
   type: feature
@@ -741,6 +713,7 @@ big_tasks:
   - task-animation-core
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
@@ -754,9 +727,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-ide-file-manager
   title: File Manager and IDE UX
   type: feature
@@ -786,6 +756,7 @@ big_tasks:
   - task-mcp-bridge
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -799,9 +770,6 @@ big_tasks:
     created_by: imagray
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-state-persistence
   title: Persistent State & Recovery
   type: feature
@@ -831,6 +799,7 @@ big_tasks:
   - task-release-hardening
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - JSON=1 make roadmap status
@@ -838,20 +807,17 @@ big_tasks:
   - make verify-full
   - make roadmap status
   - JSON=1 make roadmap status
-  artifacts:
-  - artifacts/verify/
-  - artifacts/perf/
   docs_updates:
   - docs/architecture/state-and-storage.md
   - docs/recipes/state-backup.md
+  artifacts:
+  - artifacts/verify/
+  - artifacts/perf/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-security-hardening
   title: Secrets Model and Sandbox
   type: perf
@@ -882,26 +848,24 @@ big_tasks:
   - task-mcp-bridge
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - make verify VERIFY_MODE=ci JSON=1
   verify_commands:
   - make verify-full
   - make verify VERIFY_MODE=ci JSON=1
-  artifacts:
-  - artifacts/verify/
-  - qa/baselines/
   docs_updates:
   - docs/architecture/security-and-secrets.md
   - docs/security/runbook.md
+  artifacts:
+  - artifacts/verify/
+  - qa/baselines/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-observability-pipeline
   title: Observability Stack
   type: ops
@@ -931,6 +895,7 @@ big_tasks:
   - task-qa-orchestrator
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - make verify VERIFY_MODE=ci JSON=1
@@ -941,20 +906,17 @@ big_tasks:
   - make roadmap status
   - JSON=1 make roadmap status
   - make verify VERIFY_MODE=fast
-  artifacts:
-  - artifacts/perf/
-  - artifacts/verify/
   docs_updates:
   - docs/architecture/observability.md
   - docs/recipes/observability.md
+  artifacts:
+  - artifacts/perf/
+  - artifacts/verify/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-release-hardening
   title: Release Pipeline & Migrations
   type: ops
@@ -984,26 +946,24 @@ big_tasks:
   - task-observability-pipeline
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify VERIFY_MODE=prepush
   - make verify VERIFY_MODE=ci JSON=1
   verify_commands:
   - make verify VERIFY_MODE=prepush
   - make verify VERIFY_MODE=ci JSON=1
-  artifacts:
-  - artifacts/verify/
-  - release/keys/
   docs_updates:
   - docs/architecture/release-and-compatibility.md
   - docs/recipes/update-guide.md
+  artifacts:
+  - artifacts/verify/
+  - release/keys/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-security-agent-gov
   title: Agent Access Policies
   type: doc
@@ -1019,7 +979,8 @@ big_tasks:
 
     When an agent requests an approval-required action
 
-    Then the policy executes automatically, decisions are logged, and secrets remain safe
+    Then the policy executes automatically, decisions are logged, and secrets remain
+    safe
 
     '
   budgets:
@@ -1032,26 +993,24 @@ big_tasks:
   - task-security-hardening
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - make roadmap status
   verify_commands:
   - make verify-full
   - make roadmap status
-  artifacts:
-  - qa/baselines/
-  - artifacts/verify/
   docs_updates:
   - docs/architecture/security-and-secrets.md
   - docs/architecture/ai-integration.md
+  artifacts:
+  - qa/baselines/
+  - artifacts/verify/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-observability-reports
   title: Plugin Observability Reporting
   type: doc
@@ -1079,24 +1038,22 @@ big_tasks:
   - task-observability-pipeline
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
   - make verify-full
-  artifacts:
-  - artifacts/perf/
-  - artifacts/verify/
   docs_updates:
   - docs/architecture/customization-and-plugins.md
   - docs/architecture/observability.md
+  artifacts:
+  - artifacts/perf/
+  - artifacts/verify/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-observability-visual
   title: Performance Visualisation
   type: feature
@@ -1124,23 +1081,21 @@ big_tasks:
   - task-observability-pipeline
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
   - make verify-full
-  artifacts:
-  - artifacts/perf/
   docs_updates:
   - docs/architecture/animation-framework.md
   - docs/architecture/observability.md
+  artifacts:
+  - artifacts/perf/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-state-sync-ui
   title: State Sync UI
   type: feature
@@ -1168,23 +1123,21 @@ big_tasks:
   - task-state-persistence
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   verify_commands:
   - make verify-full
-  artifacts:
-  - artifacts/verify/
   docs_updates:
   - docs/architecture/state-and-storage.md
   - docs/recipes/workflows.md
+  artifacts:
+  - artifacts/verify/
   audit:
     created_at: '2025-09-26T03:00:00Z'
     created_by: gpt-5-codex
     updated_at: '2025-09-26T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-utif-sigma-foundation
   title: UTIF-Σ Foundations
   type: ops
@@ -1215,6 +1168,7 @@ big_tasks:
   - task-qa-orchestrator
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - k6 run perf/utif_exec.js
@@ -1232,9 +1186,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-03T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m3
 - id: task-persona-engine
   title: Persona Engine
   type: feature
@@ -1264,6 +1215,7 @@ big_tasks:
   - task-utif-sigma-foundation
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-full
   - cargo test -p shelldone-gui -- persona scenarios
@@ -1280,9 +1232,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-03T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-agent-microsoft
   title: Microsoft Agent SDK Adapter
   type: feature
@@ -1312,6 +1261,7 @@ big_tasks:
   - task-mcp-bridge
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - python3 scripts/agentd.py smoke
   verify_commands:
@@ -1327,9 +1277,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-03T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-marketplace-hooks
   title: Capability Marketplace Hooks
   type: feature
@@ -1361,6 +1308,7 @@ big_tasks:
   - task-utif-sigma-foundation
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - make verify-prepush
   verify_commands:
@@ -1376,9 +1324,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-03T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m2
 - id: task-termbridge-discovery
   title: TermBridge Discovery Registry
   type: feature
@@ -1395,7 +1340,8 @@ big_tasks:
 
     When TermBridge boots or receives MCP updates
 
-    Then terminal endpoints are discovered, validated against policy, and exposed to command runners without drift
+    Then terminal endpoints are discovered, validated against policy, and exposed
+    to command runners without drift
 
     '
   budgets:
@@ -1407,8 +1353,9 @@ big_tasks:
   - Policy misconfiguration leaking unmanaged terminals
   dependencies:
   - task-mcp-bridge
-  progress_pct: 33
+  progress_pct: 25
   health: yellow
+  acceptance: []
   tests_required:
   - cargo test -p shelldone-agentd termbridge::discovery
   - cargo test -p shelldone-agentd --test e2e_mcp_grpc
@@ -1424,9 +1371,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-04T22:28:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 33
-  roadmap_phase: m2
 - id: task-termbridge-core
   title: TermBridge Core Orchestrator
   type: feature
@@ -1444,7 +1388,8 @@ big_tasks:
 
     When wezterm spawn/focus/send_text are invoked via HTTP or persona flows
 
-    Then bindings persist, CLI runs through the command runner, and policy/telemetry capture outcomes deterministically
+    Then bindings persist, CLI runs through the command runner, and policy/telemetry
+    capture outcomes deterministically
 
     '
   budgets:
@@ -1456,8 +1401,9 @@ big_tasks:
   - Command runner needs cross-platform validation (Windows quirks)
   dependencies:
   - task-termbridge-discovery
-  progress_pct: 36
+  progress_pct: 50
   health: yellow
+  acceptance: []
   tests_required:
   - cargo test -p shelldone-agentd termbridge
   - cargo test -p shelldone-agentd --test e2e_ack
@@ -1474,9 +1420,6 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-04T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 36
-  roadmap_phase: m2
 - id: task-termbridge-test-suite
   title: TermBridge CLI Matrix
   type: ops
@@ -1505,6 +1448,7 @@ big_tasks:
   - task-termbridge-core
   progress_pct: 0
   health: yellow
+  acceptance: []
   tests_required:
   - scripts/tests/termbridge_matrix.py --dry-run
   verify_commands:
@@ -1519,116 +1463,4 @@ big_tasks:
     created_by: gpt-5-codex
     updated_at: '2025-10-04T03:00:00Z'
     updated_by: gpt-5-codex
-  metrics:
-    progress_pct: 0
-  roadmap_phase: m1
-tasks:
-- id: task-termbridge-discovery-registry
-  title: TermBridge Registry Service
-  type: feature
-  status: in_progress
-  priority: P0
-  size_points: 5
-  big_task: task-termbridge-discovery
-  parent_epic: epic-ai-automation
-  scope_paths:
-  - shelldone-agentd/src/adapters/termbridge/registry.rs
-  - shelldone-agentd/src/adapters/termbridge/mod.rs
-  - docs/architecture/termbridge.md
-  spec: 'Given MCP advertised terminals
-
-    When registry sync runs
-
-    Then terminals become available with validated policies and telemetry IDs'
-  dependencies:
-  - task-mcp-bridge
-  progress_pct: 60
-  health: yellow
-  tests_required:
-  - cargo test -p shelldone-agentd termbridge::registry
-  verify_commands:
-  - make verify-prepush
-  docs_updates:
-  - docs/architecture/termbridge.md
-  artifacts:
-  - artifacts/verify/
-  audit:
-    created_at: '2025-10-04T22:45:00Z'
-    created_by: gpt-5-codex
-    updated_at: '2025-10-04T22:45:00Z'
-    updated_by: gpt-5-codex
-  owner: platform-core
-  system: control-plane
-  roadmap_phase: m2
-- id: task-termbridge-discovery-mcp-sync
-  title: TermBridge MCP Sync Watcher
-  type: feature
-  status: planned
-  priority: P1
-  size_points: 5
-  big_task: task-termbridge-discovery
-  parent_epic: epic-ai-automation
-  scope_paths:
-  - shelldone-agentd/src/adapters/mcp/grpc.rs
-  - shelldone-agentd/src/adapters/termbridge/terminals/**
-  spec: 'Given MCP capabilities updates
-
-    When TermBridge receives a delta
-
-    Then new terminals register/unregister without restarting the mux'
-  dependencies:
-  - task-termbridge-discovery-registry
-  progress_pct: 0
-  health: planned
-  tests_required:
-  - cargo test -p shelldone-agentd --test e2e_mcp_grpc
-  verify_commands:
-  - make verify-prepush
-  docs_updates:
-  - docs/architecture/termbridge.md
-  artifacts:
-  - artifacts/verify/
-  audit:
-    created_at: '2025-10-04T22:45:00Z'
-    created_by: gpt-5-codex
-    updated_at: '2025-10-04T22:45:00Z'
-    updated_by: gpt-5-codex
-  owner: platform-core
-  system: control-plane
-  roadmap_phase: m2
-- id: task-termbridge-core-telemetry
-  title: TermBridge Telemetry Integration
-  type: ops
-  status: in_progress
-  priority: P1
-  size_points: 5
-  big_task: task-termbridge-core
-  parent_epic: epic-ai-automation
-  scope_paths:
-  - shelldone-agentd/src/app/termbridge/telemetry.rs
-  - docs/architecture/observability.md
-  spec: 'Given TermBridge command execution
-
-    When traffic flows through mux
-
-    Then telemetry emits span + metrics with tenant/terminal labels'
-  dependencies:
-  - task-termbridge-discovery-registry
-  progress_pct: 40
-  health: yellow
-  tests_required:
-  - cargo test -p shelldone-agentd termbridge::telemetry
-  verify_commands:
-  - make verify-prepush
-  docs_updates:
-  - docs/architecture/observability.md
-  artifacts:
-  - artifacts/telemetry/
-  audit:
-    created_at: '2025-10-04T22:45:00Z'
-    created_by: gpt-5-codex
-    updated_at: '2025-10-04T22:45:00Z'
-    updated_by: gpt-5-codex
-  owner: observability-guild
-  system: control-plane
-  roadmap_phase: m2
+```

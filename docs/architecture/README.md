@@ -25,6 +25,7 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 - `docs/architecture/release-and-compatibility.md` — release engineering, auto-update, migrations, and API compatibility.
 - `docs/architecture/pain-matrix.md` — приоритизированные pain-points с привязкой к задачам (`task-*`).
 - `docs/architecture/termbridge.md` — единый оркестратор терминалов, capability map schema, consent workflow и UX/obserability контуры.
+- ADR-0007 (`docs/architecture/adr/0007-experience-hub-ui.md`) — Experience Hub god-mode overlay и bounded context `experience`.
 
 ## Roadmap
 Quarterly phases and milestones are defined in `docs/ROADMAP/2025Q4.md`; supporting notes live in `docs/ROADMAP/notes/`.

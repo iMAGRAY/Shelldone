@@ -1,4 +1,5 @@
-use super::model::{EventRecord, ExecRequest, ExecResult, UndoRequest, UndoResult};
+use super::approvals::{ApprovalRegistry, NewApprovalRequest, PendingApproval};
+use super::model::{EventRecord, ExecArgs, ExecRequest, ExecResult, UndoRequest, UndoResult};
 use crate::continuum::{ContinuumSnapshot, ContinuumStore};
 use crate::policy_engine::{AckPolicyInput, PolicyDecision, PolicyEngine};
 use crate::ports::ack::command_runner::CommandRunner;
@@ -44,6 +45,7 @@ pub struct AckService<R: CommandRunner> {
     journal_path: Arc<PathBuf>,
     command_runner: Arc<R>,
     metrics: Option<Arc<PrismMetrics>>,
+    approvals: Arc<ApprovalRegistry>,
 }
 
 impl<R: CommandRunner> AckService<R> {
@@ -53,6 +55,7 @@ impl<R: CommandRunner> AckService<R> {
         journal_path: PathBuf,
         command_runner: Arc<R>,
         metrics: Option<Arc<PrismMetrics>>,
+        approvals: Arc<ApprovalRegistry>,
     ) -> Self {
         Self {
             policy_engine,
@@ -60,6 +63,7 @@ impl<R: CommandRunner> AckService<R> {
             journal_path: Arc::new(journal_path),
             command_runner,
             metrics,
+            approvals,
         }
     }
 
@@ -76,6 +80,14 @@ impl<R: CommandRunner> AckService<R> {
         let decision = self.evaluate_policy(&policy_input)?;
         if !decision.is_allowed() {
             self.record_policy_metrics("agent.exec", false, request.persona.as_deref());
+            if Self::requires_approval(&decision.deny_reasons) {
+                if let Err(err) = self
+                    .record_approval_request("agent.exec", &request, &decision.deny_reasons)
+                    .await
+                {
+                    warn!("Failed to record approval request: {err:#}");
+                }
+            }
             let reason = decision.deny_reasons.join("; ");
             self.log_policy_denial("agent.exec", &reason);
             return Err(AckError::PolicyDenied { reason });
@@ -178,6 +190,26 @@ impl<R: CommandRunner> AckService<R> {
         let decision = self.evaluate_policy(&policy_input)?;
         if !decision.is_allowed() {
             self.record_policy_metrics("agent.undo", false, request.persona.as_deref());
+            if Self::requires_approval(&decision.deny_reasons) {
+                if let Ok(args) = ExecArgs::try_new("agent.undo".to_string(), None, None, None) {
+                    let exec_request = ExecRequest {
+                        command_id: Some(request.snapshot_id.clone()),
+                        persona: request.persona.clone(),
+                        args,
+                        spectral_tag: request.spectral_tag.clone(),
+                    };
+                    if let Err(err) = self
+                        .record_approval_request(
+                            "agent.undo",
+                            &exec_request,
+                            &decision.deny_reasons,
+                        )
+                        .await
+                    {
+                        warn!("Failed to record approval request: {err:#}");
+                    }
+                }
+            }
             let reason = decision.deny_reasons.join("; ");
             self.log_policy_denial("agent.undo", &reason);
             return Err(AckError::PolicyDenied { reason });
@@ -280,6 +312,72 @@ impl<R: CommandRunner> AckService<R> {
     fn log_policy_denial(&self, command: &str, reason: &str) {
         warn!("Policy denied {command}: {reason}");
     }
+
+    fn requires_approval(reasons: &[String]) -> bool {
+        reasons
+            .iter()
+            .any(|reason| reason.to_ascii_lowercase().contains("approval required"))
+    }
+
+    async fn record_approval_request(
+        &self,
+        origin: &str,
+        request: &ExecRequest,
+        reasons: &[String],
+    ) -> anyhow::Result<PendingApproval> {
+        let approval = self.approvals.record_request(NewApprovalRequest {
+            command: request.args.cmd.clone(),
+            persona: request.persona.clone(),
+            reason: reasons.join("; "),
+            spectral_tag: request.spectral_tag.clone(),
+        })?;
+
+        let event = EventRecord::new(
+            "approval.requested",
+            approval.persona.clone(),
+            json!({
+                "approval_id": approval.id,
+                "command": approval.command,
+                "reason": approval.reason,
+                "status": "pending",
+                "origin_command": origin,
+            }),
+            Some(approval.id.clone()),
+            Some("approval".to_string()),
+            None,
+        );
+
+        self.append_event(&event).await?;
+        Ok(approval)
+    }
+
+    pub async fn grant_approval(&self, approval_id: &str) -> AckResult<PendingApproval> {
+        let approval = self
+            .approvals
+            .mark_granted(approval_id)
+            .map_err(|err| AckError::Internal(err.to_string()))?
+            .ok_or_else(|| AckError::Invalid(format!("approval {approval_id} not found")))?;
+
+        let event = EventRecord::new(
+            "approval.granted",
+            approval.persona.clone(),
+            json!({
+                "approval_id": approval.id,
+                "command": approval.command,
+                "reason": approval.reason,
+                "status": "granted",
+            }),
+            Some(approval.id.clone()),
+            Some("approval".to_string()),
+            None,
+        );
+
+        self.append_event(&event)
+            .await
+            .map_err(|err| AckError::Internal(err.to_string()))?;
+
+        Ok(approval)
+    }
 }
 
 #[async_trait]
@@ -314,6 +412,7 @@ mod tests {
         let tmp = tmp_root.into_path();
         let journal_path = tmp.join("journal.jsonl");
         let policy = PolicyEngine::new(None).unwrap();
+        let approvals = Arc::new(ApprovalRegistry::new(&tmp).unwrap());
         AckService::new(
             Arc::new(Mutex::new(policy)),
             Arc::new(tokio::sync::Mutex::new(ContinuumStore::new(
@@ -323,6 +422,7 @@ mod tests {
             journal_path.as_path().into(),
             Arc::new(ShellCommandRunner::new()),
             None,
+            approvals,
         )
     }
 

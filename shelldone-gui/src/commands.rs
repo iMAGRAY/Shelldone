@@ -790,6 +790,14 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["Help"],
             icon: Some("cod_debug"),
         },
+        ShowExperienceHub => CommandDef {
+            brief: "Open Experience Hub".into(),
+            doc: "Displays the Experience Hub god-mode UI overlay.".into(),
+            keys: vec![(Modifiers::SUPER, "g".into())],
+            args: &[ArgType::Window],
+            menubar: &["View"],
+            icon: Some("cod_dashboard"),
+        },
         InputSelector(_) => CommandDef {
             brief: "Prompt the user to choose from a list".into(),
             doc: "Activates the selector overlay and wait for input".into(),
@@ -2120,6 +2128,7 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
         ActivateLastTab,
         ShowLauncher,
         ShowTabNavigator,
+        ShowExperienceHub,
         // ----------------- Help
         OpenUri("https://shelldone.org/".to_string()),
         OpenUri("https://github.com/shelldone/shelldone/discussions/".to_string()),

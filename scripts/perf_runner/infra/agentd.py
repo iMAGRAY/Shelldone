@@ -9,7 +9,7 @@ from urllib import error as urllib_error, request as urllib_request
 
 
 def wait_for_agentd(listen: str, timeout: float = 30.0) -> None:
-    url = f"http://{listen}/health"
+    url = f"http://{listen}/healthz"
     deadline = time.time() + timeout
     last_error: Optional[Exception] = None
     while time.time() < deadline:

@@ -71,6 +71,7 @@ dhat-heap.json
 /assets/flatpak/generated-sources.json
 **/__pycache__/
 *.pyc
+.log
 /nix/result
 # Agent adapter artefacts
 agents/claude/node_modules/

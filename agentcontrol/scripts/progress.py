@@ -6,7 +6,7 @@ import argparse
 import sys
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import yaml
 
@@ -16,6 +16,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from agentcontrol.app.progress import ProgressProjectionService
+from agentcontrol.domain.progress import ProgramProgressAggregate
+
+
+def _snapshot() -> Tuple[ProgressProjectionService, ProgramProgressAggregate]:
+    service = ProgressProjectionService.default(str(PROJECT_ROOT))
+    aggregate = service.compute()
+    return service, aggregate
 
 
 def _extract_section(text: str, section: str) -> Tuple[Dict[str, object] | list[dict], Tuple[int, int]]:
@@ -171,8 +178,7 @@ def _render_summary(manifest: dict) -> str:
 
 
 def run(dry_run: bool = False) -> None:
-    service = ProgressProjectionService.default(str(PROJECT_ROOT))
-    aggregate = service.compute()
+    service, aggregate = _snapshot()
 
     manifest_projection = service.build_manifest_projection()
     manifest_changed = manifest_projection != service.current_manifest()
@@ -217,6 +223,106 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     run(dry_run=args.dry_run)
     return 0
+
+
+def load_manifest() -> dict:
+    """Return manifest projection with computed metrics (read-only)."""
+    service, _ = _snapshot()
+    return service.build_manifest_projection()
+
+
+def calculate_progress(manifest: dict | None = None) -> Tuple[dict, List[dict], List[dict], Dict[str, int]]:
+    """Expose structured progress metrics for agent tooling."""
+    service, aggregate = _snapshot()
+    if manifest is None:
+        manifest = service.current_manifest()
+
+    program = {
+        "name": aggregate.name,
+        "computed_pct": aggregate.computed_progress.value,
+        "manual_pct": aggregate.manual_progress.value,
+        "health": aggregate.health,
+        "generated_at": aggregate.generated_at.isoformat(),
+    }
+
+    epics: List[dict] = [
+        {
+            "id": epic.epic_id,
+            "title": epic.title,
+            "status": epic.status,
+            "progress_pct": epic.computed.value,
+            "manual_pct": epic.manual.value,
+            "size_points": float(epic.size_points),
+        }
+        for epic in aggregate.epics
+    ]
+
+    big_tasks: List[dict] = [
+        {
+            "id": big.big_task_id,
+            "title": big.title,
+            "parent_epic": big.parent_epic,
+            "status": big.status,
+            "progress_pct": big.computed.value,
+            "manual_pct": big.manual.value,
+            "size_points": float(big.size_points),
+        }
+        for big in aggregate.big_tasks
+    ]
+
+    phase_progress = {title: value.value for title, value in aggregate.phase_progress.items()}
+    return program, epics, big_tasks, phase_progress
+
+
+def render_progress_tables(
+    program: dict,
+    epics: List[dict],
+    big_tasks: List[dict],
+    manifest: dict | None = None,
+) -> str:
+    projection = manifest or load_manifest()
+    return _render_summary(projection)
+
+
+def collect_progress_state() -> dict:
+    """Return a concise snapshot for agent orchestration."""
+    service, aggregate = _snapshot()
+    board = service.task_board()
+    return {
+        "program": {
+            "name": aggregate.name,
+            "progress_pct": aggregate.computed_progress.value,
+            "manual_progress_pct": aggregate.manual_progress.value,
+            "health": aggregate.health,
+            "generated_at": aggregate.generated_at.isoformat(),
+        },
+        "phase_progress": {title: value.value for title, value in aggregate.phase_progress.items()},
+        "epics": [
+            {
+                "id": epic.epic_id,
+                "title": epic.title,
+                "status": epic.status,
+                "progress_pct": epic.computed.value,
+            }
+            for epic in aggregate.epics
+        ],
+        "big_tasks": [
+            {
+                "id": big.big_task_id,
+                "title": big.title,
+                "parent_epic": big.parent_epic,
+                "status": big.status,
+                "progress_pct": big.computed.value,
+            }
+            for big in aggregate.big_tasks
+        ],
+        "board": {
+            "counts": service.board_counts(),
+            "updated_at": board.get("updated_at"),
+            "version": board.get("version"),
+        },
+        "warnings": list(aggregate.warnings),
+    }
 
 
 if __name__ == "__main__":

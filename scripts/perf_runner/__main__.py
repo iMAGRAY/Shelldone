@@ -14,7 +14,7 @@ from .domain.probe import ProbeSpec, ProbeTrialResult
 from .domain.value_objects import MetricValue
 from .infra.agentd import start_agentd, stop_agentd, wait_for_agentd
 from .ports.runner import ProbeExecutionError, ProbeRunnerPort
-from .specs import build_policy_spec, build_utif_exec_spec, default_specs
+from .specs import build_policy_spec, build_utif_exec_spec, build_experience_hub_spec, default_specs
 from .profiles import apply_env_overrides, get_profile
 from .reporting import render_prometheus_metrics
 
@@ -79,6 +79,8 @@ def _resolve_specs(
             specs.append(build_utif_exec_spec(trials, warmup_seconds, env=env))
         elif name == "policy_perf":
             specs.append(build_policy_spec(trials, policy_warmup_seconds, env=env))
+        elif name == "experience_hub":
+            specs.append(build_experience_hub_spec(trials, warmup_seconds, env=env))
         else:  # pragma: no cover - argparse restricts choices
             raise ValueError(f"Unknown probe {name}")
     return specs
@@ -133,7 +135,7 @@ def run_cli(argv: Optional[Iterable[str]] = None) -> int:
     run_parser.add_argument("--agentd-timeout", type=float, default=30.0)
     run_parser.add_argument("--summary-path", type=Path, default=None, help="Optional path for additional summary export")
     run_parser.add_argument("--prom-path", type=Path, default=None, help="Optional OpenMetrics export path")
-    run_parser.add_argument("--probe", dest="probes", action="append", choices=["utif_exec", "policy_perf"], help="Run only the specified probe(s)")
+    run_parser.add_argument("--probe", dest="probes", action="append", choices=["utif_exec", "policy_perf", "experience_hub"], help="Run only the specified probe(s)")
     run_parser.add_argument("--no-agentd", action="store_true", help="Do not start shelldone-agentd")
 
     argv_list = list(argv) if argv is not None else None

@@ -71,6 +71,14 @@ Blends allowed/denied policy decisions (50/50 split) to track governance overhea
 
 Both scripts honour the environment variables listed below when executed via `k6 run` or through the verify pipeline.
 
+### `experience_hub.js`
+Measures latency for the Experience Hub telemetry fetches (`/context/full` and `/approvals/pending`).
+
+**Scenario defaults**
+- Rate: 80 req/s (`SHELLDONE_PERF_EXPERIENCE_RATE` or `SHELLDONE_PERF_RATE`)
+- Duration: 30s (`SHELLDONE_PERF_EXPERIENCE_DURATION` or `SHELLDONE_PERF_DURATION`)
+- Warm-up offset: inherits `SHELLDONE_PERF_EXPERIENCE_WARMUP_SEC` (fallback to `SHELLDONE_PERF_WARMUP_SEC`).
+
 ## Environment Overrides
 
 | Variable | Default | Applies to | Notes |
@@ -86,6 +94,12 @@ Both scripts honour the environment variables listed below when executed via `k6
 | `SHELLDONE_PERF_POLICY_VUS` | 30 | policy_perf | Overrides VUs for policy mix. |
 | `SHELLDONE_PERF_POLICY_MAX_VUS` | 60 | policy_perf | Overrides max VUs for policy mix. |
 | `SHELLDONE_PERF_POLICY_WARMUP_SEC` | inherit | policy_perf | Warm-up for policy probe only. |
+| `SHELLDONE_PERF_EXPERIENCE_RATE` | 80 | experience_hub | Requests per second for telemetry probe. |
+| `SHELLDONE_PERF_EXPERIENCE_DURATION` | 30s | experience_hub | Overrides duration for telemetry probe. |
+| `SHELLDONE_PERF_EXPERIENCE_VUS` | 30 | experience_hub | Pre-allocated virtual users for telemetry probe. |
+| `SHELLDONE_PERF_EXPERIENCE_MAX_VUS` | 60 | experience_hub | Maximum virtual users for telemetry probe. |
+| `SHELLDONE_PERF_EXPERIENCE_WARMUP_SEC` | inherit | experience_hub | Warm-up for Experience Hub probe. |
+| `SHELLDONE_AGENTD_HOST` | http://127.0.0.1:17717 | experience_hub | Base URL for agentd telemetry endpoints. |
 
 ## Local Usage
 ```bash

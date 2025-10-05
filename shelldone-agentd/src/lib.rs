@@ -19,6 +19,7 @@ use adapters::termbridge::{
     KonsoleAdapter, SystemCommandExecutor, TilixAdapter, WezTermAdapter, WindowsTerminalAdapter,
 };
 use anyhow::{anyhow, Context, Result as AnyResult};
+use app::ack::approvals::{ApprovalRegistry, ApprovalStatus, PendingApproval};
 use app::ack::model::{EventRecord, ExecArgs, ExecRequest, UndoRequest};
 use app::ack::service::{AckError, AckService};
 use app::agents::AgentBindingService;
@@ -101,6 +102,7 @@ struct AppState {
     termbridge_service: Arc<TermBridgeServiceType>,
     clipboard_service: Arc<ClipboardBridgeServiceType>,
     policy_engine: Arc<Mutex<PolicyEngine>>,
+    approvals: Arc<ApprovalRegistry>,
     listen: SocketAddr,
     grpc_listen: SocketAddr,
     grpc_tls_policy: CipherPolicy,
@@ -133,6 +135,7 @@ impl AppState {
                 snapshot_dir,
             )
         }));
+        let approvals = Arc::new(ApprovalRegistry::new(&state_dir)?);
         let command_runner = Arc::new(ShellCommandRunner::new());
         let ack_service = Arc::new(AckService::new(
             policy_engine.clone(),
@@ -140,6 +143,7 @@ impl AppState {
             journal_path.clone(),
             command_runner,
             metrics.clone(),
+            approvals.clone(),
         ));
 
         let session_store = state_dir.join("mcp_sessions.json");
@@ -198,6 +202,7 @@ impl AppState {
             started_at: Instant::now(),
             metrics,
             tls_status: Arc::new(RwLock::new(TlsStatusReport::disabled())),
+            approvals,
         })
     }
 
@@ -220,6 +225,7 @@ impl AppState {
             journal_path.clone(),
             state_dir.join("snapshots"),
         )));
+        let approvals = Arc::new(ApprovalRegistry::new(&state_dir)?);
         let command_runner = Arc::new(ShellCommandRunner::new());
         let ack_service = Arc::new(AckService::new(
             policy_engine.clone(),
@@ -227,6 +233,7 @@ impl AppState {
             journal_path,
             command_runner,
             None,
+            approvals.clone(),
         ));
 
         let session_store = state_dir.join("mcp_sessions.json");
@@ -254,6 +261,7 @@ impl AppState {
             started_at: Instant::now(),
             metrics: None,
             tls_status: Arc::new(RwLock::new(TlsStatusReport::disabled())),
+            approvals,
         })
     }
 
@@ -293,6 +301,10 @@ impl AppState {
 
     fn clipboard(&self) -> Arc<ClipboardBridgeServiceType> {
         self.clipboard_service.clone()
+    }
+
+    fn approvals(&self) -> Arc<ApprovalRegistry> {
+        self.approvals.clone()
     }
 
     fn tls_status(&self) -> Arc<RwLock<TlsStatusReport>> {
@@ -1476,6 +1488,8 @@ pub async fn run(settings: Settings) -> anyhow::Result<()> {
         .route("/ack/exec", post(agent_exec))
         .route("/journal/event", post(journal_event))
         .route("/ack/undo", post(agent_undo))
+        .route("/approvals/pending", get(list_pending_approvals))
+        .route("/approvals/grant", post(grant_approval))
         .route("/mcp", get(mcp_ws_upgrade))
         .with_state(state.clone());
 
@@ -2671,6 +2685,71 @@ async fn journal_event(
         .map_err(|err| ack_error_to_api("journal", err))?;
 
     Ok(Json(event))
+}
+
+#[derive(Debug, Serialize)]
+struct PendingApprovalsResponse {
+    approvals: Vec<PendingApprovalDto>,
+}
+
+#[derive(Debug, Serialize)]
+struct PendingApprovalDto {
+    id: String,
+    command: String,
+    persona: Option<String>,
+    reason: String,
+    requested_at: String,
+    resolved_at: Option<String>,
+    status: String,
+}
+
+impl From<PendingApproval> for PendingApprovalDto {
+    fn from(approval: PendingApproval) -> Self {
+        Self {
+            id: approval.id,
+            command: approval.command,
+            persona: approval.persona,
+            reason: approval.reason,
+            requested_at: approval.requested_at.to_rfc3339(),
+            resolved_at: approval.resolved_at.map(|ts| ts.to_rfc3339()),
+            status: match approval.status {
+                ApprovalStatus::Pending => "pending".to_string(),
+                ApprovalStatus::Granted => "granted".to_string(),
+                ApprovalStatus::Rejected => "rejected".to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ApprovalGrantPayload {
+    approval_id: String,
+}
+
+async fn list_pending_approvals(
+    State(state): State<AppState>,
+) -> Result<Json<PendingApprovalsResponse>, ApiError> {
+    let approvals = state
+        .approvals()
+        .list_pending()
+        .into_iter()
+        .map(PendingApprovalDto::from)
+        .collect();
+
+    Ok(Json(PendingApprovalsResponse { approvals }))
+}
+
+async fn grant_approval(
+    State(state): State<AppState>,
+    Json(payload): Json<ApprovalGrantPayload>,
+) -> Result<Json<PendingApprovalDto>, ApiError> {
+    let approval = state
+        .ack()
+        .grant_approval(&payload.approval_id)
+        .await
+        .map_err(|err| ack_error_to_api("approval.grant", err))?;
+
+    Ok(Json(PendingApprovalDto::from(approval)))
 }
 
 #[derive(Debug, Serialize)]

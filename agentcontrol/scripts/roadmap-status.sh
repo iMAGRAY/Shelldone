@@ -17,7 +17,6 @@ case "$MODE" in
     ;;
 esac
 
-PROJECT_ROOT="$(cd "$SDK_ROOT/.." && pwd)"
 STATUS_PATH="$SDK_ROOT/reports/status.json"
 
 if [[ -z "${ROADMAP_SKIP_PROGRESS:-}" ]]; then

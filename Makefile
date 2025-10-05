@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci setup-env python-tests
+.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif perf-experience roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci setup-env python-tests health-check
 
 all: build
 
@@ -39,6 +39,9 @@ python-tests:
 	else \
 		python3 -m pytest -q; \
 	fi
+
+health-check:
+	python3 scripts/project_health_check.py
 
 verify-fast:
 	VERIFY_MODE=fast scripts/verify.sh
@@ -82,6 +85,9 @@ run-agentd:
 
 perf-utif:
 	python3 -m perf_runner run --probe utif_exec
+
+perf-experience:
+	python3 -m perf_runner run --probe experience_hub
 
 # E2E and performance testing targets
 test-e2e:

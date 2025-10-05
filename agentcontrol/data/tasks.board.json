@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "updated_at": "2025-10-04T23:25:33+00:00",
+  "updated_at": "2025-10-05T03:17:46+00:00",
   "tasks": [
     {
       "id": "task-qa-orchestrator",
@@ -28,7 +28,7 @@
       "id": "task-qa-perf-probes",
       "title": "Performance Probes for verify",
       "epic": "epic-qa-hardening",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "owner": "unassigned",
       "success_criteria": [],
@@ -44,7 +44,7 @@
       "system": null,
       "roadmap_phase": "m1",
       "metrics": {
-        "progress_pct": 0,
+        "progress_pct": 10,
         "health": "yellow"
       }
     },
@@ -162,6 +162,35 @@
       "size_points": 5,
       "big_task": "task-agent-policy",
       "system": null,
+      "roadmap_phase": "m2",
+      "metrics": {
+        "progress_pct": 0,
+        "health": "yellow"
+      }
+    },
+    {
+      "id": "task-mcp-bridge-contract-tests",
+      "title": "MCP Bridge Contract Tests",
+      "epic": "epic-ai-automation",
+      "status": "planned",
+      "priority": "P0",
+      "owner": "automation-guild",
+      "success_criteria": [
+        "Handshake/grpc-stream scenarios covered by contract tests",
+        "CI suite fails on breaking MCP schema changes"
+      ],
+      "failure_criteria": [
+        "Manual QA required to detect schema mismatch"
+      ],
+      "blockers": [],
+      "dependencies": [
+        "task-mcp-bridge"
+      ],
+      "conflicts": [],
+      "comments": [],
+      "size_points": 5,
+      "big_task": "task-mcp-bridge",
+      "system": "automation",
       "roadmap_phase": "m2",
       "metrics": {
         "progress_pct": 0,
@@ -655,6 +684,35 @@
       "comments": [],
       "size_points": 5,
       "big_task": "task-termbridge-discovery",
+      "system": "control-plane",
+      "roadmap_phase": "m2",
+      "metrics": {
+        "progress_pct": 0,
+        "health": "yellow"
+      }
+    },
+    {
+      "id": "task-termbridge-backpressure",
+      "title": "TermBridge Backpressure & Failsafe",
+      "epic": "epic-ai-automation",
+      "status": "planned",
+      "priority": "P0",
+      "owner": "platform-core",
+      "success_criteria": [
+        "Flooded command queues throttle to ≤1s latency",
+        "Failsafe drops recover automatically without manual restart"
+      ],
+      "failure_criteria": [
+        "Terminals wedge on overload without recovery"
+      ],
+      "blockers": [],
+      "dependencies": [
+        "task-termbridge-core"
+      ],
+      "conflicts": [],
+      "comments": [],
+      "size_points": 5,
+      "big_task": "task-termbridge-core",
       "system": "control-plane",
       "roadmap_phase": "m2",
       "metrics": {
