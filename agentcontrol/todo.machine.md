@@ -1,7 +1,7 @@
 ## Program
 ```yaml
 program: v1
-updated_at: '2025-10-05T07:26:13.642821+00:00'
+updated_at: '2025-10-05T09:04:42.931623+00:00'
 program_id: shelldone-core
 name: Shelldone Terminal Platform
 objectives:

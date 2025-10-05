@@ -7,7 +7,7 @@ pub enum AgentFrameStatus {
     Disabled,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentFrame {
     pub id: String,
     pub label: String,
@@ -18,7 +18,7 @@ pub struct AgentFrame {
     pub registered_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApprovalFrame {
     pub id: String,
     pub command: String,
@@ -27,14 +27,14 @@ pub struct ApprovalFrame {
     pub requested_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PersonaFrame {
     pub name: String,
     pub intent_hint: Option<String>,
     pub tone_hint: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TelemetrySnapshot {
     pub generated_at: Option<DateTime<Utc>>,
     pub persona: Option<PersonaFrame>,

@@ -131,8 +131,13 @@ Capability Map хранится в `TermBridgeState` (domain aggregate), пуб�
 ### Capability Detection Flow
 1. TermBridge запускает discovery: сканирует известных терминалов, проверяет наличие сокетов/CLI.
 2. Для каждого кандидата adapter возвращает `CapabilityObservation` (подтверждённые/требующие opt-in/unsupported).
-3. Формируется `CapabilityMap` → сохраняется в `TermBridgeStateRepository` (persisted snapshot + in-memory cache) и публикуется через `/status`, `/context/full`, discovery JSON.
+3. Формируется `CapabilityMap` → сохраняется в `TermBridgeStateRepository` (persisted snapshot + in-memory cache, файл `state/termbridge/capabilities.json`) и публикуется через `/status`, `/context/full`, discovery JSON.
 4. Persona engine использует map для подсказок (Beginner → показать TL;DR карточку).
+
+### Discovery Drift Control
+- Фоновый `TermBridgeDiscovery` пересканирует адаптеры каждые 30 с и по MCP событиям (`mcp.session.established`, `mcp.session.closed`).
+- Новые терминалы попадают в capability map < 30 с, устаревшие записи удаляются ≤ 60 с.
+- Все обновления логируются как `termbridge.capability.update` и доступны Experience Hub / Sigma.
 
 ### Discovery Registry Service
 - **Domain aggregate.** `TerminalRegistry` управляет версией Capability Map и списком терминалов. Он фиксирует события `TerminalDiscovered`, `TerminalRemoved`, `TerminalBlocked` и синхронизируется с Continuum для идемпотентности.

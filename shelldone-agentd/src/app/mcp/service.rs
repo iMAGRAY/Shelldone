@@ -1,5 +1,6 @@
 use crate::app::ack::model::{ExecArgs, ExecRequest, ExecResult};
 use crate::app::ack::service::{AckError, AckPort};
+use crate::app::termbridge::TermBridgeDiscoveryHandle;
 use crate::domain::mcp::{
     CapabilityName, McpEventEnvelope, McpSession, PersonaProfile, SessionId, ToolName,
 };
@@ -15,6 +16,7 @@ where
 {
     sessions: Arc<R>,
     ack: Arc<A>,
+    discovery: Option<TermBridgeDiscoveryHandle>,
 }
 
 #[derive(Debug, Error)]
@@ -34,8 +36,16 @@ where
     A: AckPort,
     R: McpSessionRepository,
 {
-    pub fn new(sessions: Arc<R>, ack: Arc<A>) -> Self {
-        Self { sessions, ack }
+    pub fn new(
+        sessions: Arc<R>,
+        ack: Arc<A>,
+        discovery: Option<TermBridgeDiscoveryHandle>,
+    ) -> Self {
+        Self {
+            sessions,
+            ack,
+            discovery,
+        }
     }
 
     pub async fn initialize_session(
@@ -58,6 +68,7 @@ where
             .map_err(McpBridgeError::Protocol)?;
         self.sessions.insert(session.clone()).await;
         self.log_event(&session, envelope).await?;
+        self.notify_discovery("mcp.session.established");
         Ok(session)
     }
 
@@ -99,7 +110,9 @@ where
     ) -> Result<(), McpBridgeError> {
         let envelope = session.close(reason).map_err(McpBridgeError::Protocol)?;
         self.sessions.update(session.clone()).await;
-        self.log_event(session, envelope).await
+        self.log_event(session, envelope).await?;
+        self.notify_discovery("mcp.session.closed");
+        Ok(())
     }
 
     pub async fn call_tool(
@@ -195,6 +208,12 @@ where
             .map_err(McpBridgeError::from)?;
         Ok(())
     }
+
+    fn notify_discovery(&self, reason: &'static str) {
+        if let Some(handle) = &self.discovery {
+            handle.notify_refresh(reason);
+        }
+    }
 }
 
 fn parse_exec_args(value: Value) -> Result<ExecArgs, McpBridgeError> {
@@ -240,6 +259,7 @@ mod tests {
     use super::*;
     use crate::adapters::ack::command_runner::ShellCommandRunner;
     use crate::adapters::mcp::repo_mem::InMemoryMcpSessionRepository;
+    use crate::app::ack::approvals::ApprovalRegistry;
     use crate::app::ack::service::AckService;
     use crate::continuum::ContinuumStore;
     use crate::policy_engine::PolicyEngine;
@@ -259,15 +279,17 @@ mod tests {
             journal_path.clone(),
             tmp.path().join("snapshots"),
         )));
+        let approvals = Arc::new(ApprovalRegistry::new(tmp.path()).unwrap());
         let ack = Arc::new(AckService::new(
             policy,
             continuum,
             journal_path,
             Arc::new(ShellCommandRunner::new()),
             None,
+            approvals,
         ));
         let repo = Arc::new(InMemoryMcpSessionRepository::new());
-        let bridge = Arc::new(McpBridgeService::new(repo, ack));
+        let bridge = Arc::new(McpBridgeService::new(repo, ack, None));
         (bridge, tmp)
     }
 

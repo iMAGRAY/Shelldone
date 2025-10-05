@@ -102,15 +102,17 @@ where
             .collect::<Vec<_>>();
 
         let mut state = TermBridgeState::new();
-        state.update_capabilities(records);
+        let changed = state.update_capabilities(records);
 
-        self.state_repo
-            .save(state.clone())
-            .await
-            .map_err(|e| TermBridgeServiceError::internal(e.to_string()))?;
-        {
-            let mut cache = self.cache.write().await;
-            *cache = Some(state.clone());
+        if changed {
+            self.state_repo
+                .save(state.clone())
+                .await
+                .map_err(|e| TermBridgeServiceError::internal(e.to_string()))?;
+            {
+                let mut cache = self.cache.write().await;
+                *cache = Some(state.clone());
+            }
         }
 
         if let Some(metrics) = &self.metrics {

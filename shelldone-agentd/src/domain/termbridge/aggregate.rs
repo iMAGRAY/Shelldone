@@ -87,9 +87,19 @@ impl TermBridgeState {
         self.records.clone()
     }
 
-    pub fn update_capabilities(&mut self, records: Vec<CapabilityRecord>) {
-        self.records = records;
+    pub fn update_capabilities(&mut self, records: Vec<CapabilityRecord>) -> bool {
+        use std::collections::BTreeMap;
+
+        let mut dedup_map: BTreeMap<String, CapabilityRecord> = BTreeMap::new();
+        for record in records {
+            dedup_map.insert(record.terminal.as_str().to_string(), record);
+        }
+        let mut sanitized: Vec<CapabilityRecord> = dedup_map.into_values().collect();
+        sanitized.sort_by(|a, b| a.terminal.as_str().cmp(b.terminal.as_str()));
+        let changed = sanitized != self.records;
+        self.records = sanitized;
         self.discovered_at = Some(Utc::now());
+        changed
     }
 }
 
@@ -121,9 +131,35 @@ mod tests {
             TerminalCapabilities::builder().spawn(true).build(),
             Vec::new(),
         )];
-        state.update_capabilities(records.clone());
+        assert!(state.update_capabilities(records.clone()));
         assert!(state.discovered_at().is_some());
         assert_eq!(state.capabilities(), records);
+    }
+
+    #[test]
+    fn update_capabilities_deduplicates_and_reports_changes() {
+        let mut state = TermBridgeState::new();
+        let wezterm = CapabilityRecord::new(
+            TerminalId::new("wezterm"),
+            "WezTerm",
+            false,
+            TerminalCapabilities::builder().send_text(true).build(),
+            Vec::new(),
+        );
+        let kitty = CapabilityRecord::new(
+            TerminalId::new("kitty"),
+            "Kitty",
+            false,
+            TerminalCapabilities::builder().spawn(true).build(),
+            Vec::new(),
+        );
+        assert!(state.update_capabilities(vec![wezterm.clone(), kitty.clone(), wezterm.clone()]));
+        let caps = state.capabilities();
+        assert_eq!(caps.len(), 2);
+        assert_eq!(caps[0].terminal.as_str(), "kitty");
+        assert_eq!(caps[1].terminal.as_str(), "wezterm");
+        assert!(!state.update_capabilities(vec![kitty.clone(), wezterm.clone()]));
+        assert!(state.update_capabilities(vec![kitty]));
     }
 
     #[test]

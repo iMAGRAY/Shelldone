@@ -14,9 +14,9 @@ use adapters::mcp::grpc::GrpcBridge;
 use adapters::mcp::repo_file::FileMcpSessionRepository;
 use adapters::mcp::tls::{load_tls_snapshot, snapshots_equal, TlsPaths, TlsSnapshot};
 use adapters::termbridge::{
-    default_clipboard_backends, AlacrittyAdapter, CommandExecutor, ITerm2Adapter,
-    InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository, KittyAdapter,
-    KonsoleAdapter, SystemCommandExecutor, TilixAdapter, WezTermAdapter, WindowsTerminalAdapter,
+    default_clipboard_backends, AlacrittyAdapter, CommandExecutor, FileTermBridgeStateRepository,
+    ITerm2Adapter, InMemoryTermBridgeBindingRepository, KittyAdapter, KonsoleAdapter,
+    SystemCommandExecutor, TilixAdapter, WezTermAdapter, WindowsTerminalAdapter,
 };
 use anyhow::{anyhow, Context, Result as AnyResult};
 use app::ack::approvals::{ApprovalRegistry, ApprovalStatus, PendingApproval};
@@ -24,7 +24,10 @@ use app::ack::model::{EventRecord, ExecArgs, ExecRequest, UndoRequest};
 use app::ack::service::{AckError, AckService};
 use app::agents::AgentBindingService;
 use app::mcp::service::{McpBridgeError, McpBridgeService};
-use app::termbridge::{ClipboardBridgeService, TermBridgeService, TermBridgeServiceError};
+use app::termbridge::{
+    spawn_discovery_task, ClipboardBridgeService, TermBridgeDiscoveryHandle, TermBridgeService,
+    TermBridgeServiceError,
+};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -69,7 +72,7 @@ use tracing::{info, warn};
 
 type AgentBridgeService = AgentBindingService<InMemoryAgentBindingRepository>;
 type TermBridgeServiceType =
-    TermBridgeService<InMemoryTermBridgeStateRepository, InMemoryTermBridgeBindingRepository>;
+    TermBridgeService<FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository>;
 type ClipboardBridgeServiceType = ClipboardBridgeService;
 
 const DEFAULT_SIGMA_SPOOL_MAX_BYTES: u64 = 1_048_576;
@@ -100,6 +103,7 @@ struct AppState {
     mcp_service: Arc<McpBridgeService<AckService<ShellCommandRunner>, FileMcpSessionRepository>>,
     agent_service: Arc<AgentBridgeService>,
     termbridge_service: Arc<TermBridgeServiceType>,
+    termbridge_discovery: TermBridgeDiscoveryHandle,
     clipboard_service: Arc<ClipboardBridgeServiceType>,
     policy_engine: Arc<Mutex<PolicyEngine>>,
     approvals: Arc<ApprovalRegistry>,
@@ -147,15 +151,17 @@ impl AppState {
         ));
 
         let session_store = state_dir.join("mcp_sessions.json");
-        let repo = FileMcpSessionRepository::new(session_store)
-            .context("initializing MCP session store")?;
-
-        let mcp_service = Arc::new(McpBridgeService::new(Arc::new(repo), ack_service.clone()));
+        let repo = Arc::new(
+            FileMcpSessionRepository::new(session_store)
+                .context("initializing MCP session store")?,
+        );
 
         let agent_repo = Arc::new(InMemoryAgentBindingRepository::new());
         let agent_service = Arc::new(AgentBindingService::new(agent_repo));
 
-        let termbridge_state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
+        let termbridge_state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            state_dir.join("termbridge").join("capabilities.json"),
+        ));
         let termbridge_binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
         let termbridge_adapters: Vec<Arc<dyn TerminalControlPort>> = vec![
             Arc::new(KittyAdapter::new()),
@@ -171,6 +177,15 @@ impl AppState {
             termbridge_binding_repo,
             termbridge_adapters,
             metrics.clone(),
+        ));
+        let discovery_handle =
+            spawn_discovery_task(termbridge_service.clone(), metrics.clone(), None);
+        discovery_handle.notify_refresh("bootstrap");
+
+        let mcp_service = Arc::new(McpBridgeService::new(
+            repo,
+            ack_service.clone(),
+            Some(discovery_handle.clone()),
         ));
 
         let clipboard_executor: Arc<dyn CommandExecutor> = Arc::new(SystemCommandExecutor);
@@ -193,6 +208,7 @@ impl AppState {
             mcp_service,
             agent_service,
             termbridge_service,
+            termbridge_discovery: discovery_handle,
             clipboard_service,
             policy_engine,
             listen,
@@ -237,8 +253,17 @@ impl AppState {
         ));
 
         let session_store = state_dir.join("mcp_sessions.json");
-        let repo = FileMcpSessionRepository::new(session_store)?;
-        let mcp_service = Arc::new(McpBridgeService::new(Arc::new(repo), ack_service.clone()));
+        let repo = Arc::new(FileMcpSessionRepository::new(session_store)?);
+        let discovery_handle = spawn_discovery_task(
+            termbridge_service.clone(),
+            None,
+            Some(Duration::from_secs(86400)),
+        );
+        let mcp_service = Arc::new(McpBridgeService::new(
+            repo,
+            ack_service.clone(),
+            Some(discovery_handle.clone()),
+        ));
 
         let agent_repo = Arc::new(InMemoryAgentBindingRepository::new());
         let agent_service = Arc::new(AgentBindingService::new(agent_repo));
@@ -252,6 +277,7 @@ impl AppState {
             mcp_service,
             agent_service,
             termbridge_service,
+            termbridge_discovery: discovery_handle,
             clipboard_service,
             policy_engine,
             listen: SocketAddr::from(([127, 0, 0, 1], 0)),
@@ -297,6 +323,10 @@ impl AppState {
 
     fn termbridge(&self) -> Arc<TermBridgeServiceType> {
         self.termbridge_service.clone()
+    }
+
+    fn termbridge_discovery(&self) -> TermBridgeDiscoveryHandle {
+        self.termbridge_discovery.clone()
     }
 
     fn clipboard(&self) -> Arc<ClipboardBridgeServiceType> {
@@ -1809,6 +1839,8 @@ async fn termbridge_spawn(
         .await
         .map_err(|err| ApiError::internal("journal_write", err))?;
 
+    state.termbridge_discovery().notify_refresh("binding_spawn");
+
     Ok(Json(TermBridgeBindingSummary::from(binding)))
 }
 
@@ -3039,13 +3071,15 @@ mod tests {
 
     #[tokio::test]
     async fn termbridge_cwd_endpoint_updates_binding_and_journal() {
-        use crate::adapters::termbridge::repo_mem::{
-            InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository,
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
         };
 
         let temp = TempDir::new().unwrap();
         let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
-        let state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
         let termbridge_service = Arc::new(TermBridgeService::new(
             state_repo,
             binding_repo.clone(),
@@ -3130,13 +3164,15 @@ mod tests {
 
     #[tokio::test]
     async fn termbridge_cwd_endpoint_returns_not_found() {
-        use crate::adapters::termbridge::repo_mem::{
-            InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository,
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
         };
 
         let temp = TempDir::new().unwrap();
         let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
-        let state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
         let termbridge_service = Arc::new(TermBridgeService::new(
             state_repo,
             binding_repo,
@@ -3173,13 +3209,15 @@ mod tests {
 
     #[tokio::test]
     async fn termbridge_focus_endpoint_focuses_binding_and_journal() {
-        use crate::adapters::termbridge::repo_mem::{
-            InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository,
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
         };
 
         let temp = TempDir::new().unwrap();
         let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
-        let state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
         let calls = Arc::new(Mutex::new(Vec::new()));
         let adapter = Arc::new(FocusAdapter::new(calls.clone()));
 

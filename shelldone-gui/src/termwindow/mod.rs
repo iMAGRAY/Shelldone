@@ -2,14 +2,8 @@
 use super::renderstate::*;
 use super::utilsprites::RenderMetrics;
 use crate::colorease::ColorEase;
-use crate::experience::adapters::AgentdTelemetryPort;
-use crate::experience::domain::value_object::{ExperienceAgentState, ExperienceIntent};
-use crate::experience::ports::{
-    AgentFrame, AgentFrameStatus, ExperienceTelemetryPort, PersonaFrame, TelemetrySnapshot,
-};
-use crate::experience::{
-    AgentSignal, ApprovalSignal, ExperienceOrchestrator, ExperienceSignal, PersonaSignal,
-};
+use crate::experience::ports::TelemetrySnapshot;
+use crate::experience::{build_hub_state_from_snapshot, experience_hub_service};
 use crate::frontend::{front_end, try_front_end};
 use crate::inputmap::InputMap;
 use crate::overlay::{
@@ -37,7 +31,6 @@ use crate::termwindow::webgpu::WebGpuState;
 use ::shelldone_term::input::{ClickPosition, MouseButton as TMB};
 use ::window::*;
 use anyhow::{anyhow, ensure, Context};
-use chrono::Utc;
 use config::keyassignment::{
     Confirmation, KeyAssignment, LauncherActionArgs, PaneDirection, Pattern, PromptInputLine,
     QuickSelectArguments, RotationDirection, SpawnCommand, SplitSize,
@@ -79,10 +72,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use termwiz::hyperlink::Hyperlink;
 use termwiz::surface::SequenceNo;
-
-lazy_static::lazy_static! {
-    static ref AGENTD_TELEMETRY: AgentdTelemetryPort = AgentdTelemetryPort::new();
-}
 
 pub mod background;
 pub mod box_model;
@@ -2570,275 +2559,33 @@ impl TermWindow {
         let tab_count = window.len();
         let activity_count = mux::activity::Activity::count();
 
-        let telemetry_snapshot = match AGENTD_TELEMETRY.snapshot() {
-            Ok(snapshot) => snapshot,
+        let service = experience_hub_service();
+        let hub_state = match service.sync_hub_state(&workspace_name, tab_count, activity_count) {
+            Ok(state) => state,
             Err(err) => {
                 log::debug!("Experience telemetry snapshot failed: {err:#}");
-                TelemetrySnapshot::default()
+                match build_hub_state_from_snapshot(
+                    TelemetrySnapshot::default(),
+                    &workspace_name,
+                    tab_count,
+                    activity_count,
+                ) {
+                    Ok(state) => state,
+                    Err(err) => {
+                        log::error!("Failed to prepare Experience Hub: {err:#}");
+                        return;
+                    }
+                }
             }
         };
 
-        let telemetry_active = telemetry_snapshot
-            .agents
-            .iter()
-            .filter(|agent| matches!(agent.status, AgentFrameStatus::Active))
-            .count();
-        let active_automations = activity_count.max(telemetry_active);
-
-        let approvals = self.build_approval_signals(&telemetry_snapshot);
-        let pending_approvals = approvals.len();
-
-        let persona = self.map_persona_signal(
-            &workspace_name,
-            tab_count,
-            active_automations,
-            telemetry_snapshot.persona.as_ref(),
-        );
-
-        let agents = if telemetry_snapshot.agents.is_empty() {
-            self.fallback_agent_signals(active_automations, pending_approvals)
-        } else {
-            self.build_agent_signals_from_snapshot(&telemetry_snapshot, pending_approvals)
-        };
-
-        let mut orchestrator = ExperienceOrchestrator::new();
-        let view_model = match orchestrator.sync(ExperienceSignal {
-            workspace_name,
-            persona: Some(persona),
-            agents,
-            tab_count,
-            pending_approvals,
-            active_automations,
-            approvals,
-        }) {
-            Ok(model) => std::sync::Arc::new(model),
-            Err(err) => {
-                log::error!("Failed to prepare Experience Hub: {err:#}");
-                return;
-            }
-        };
-
+        let view_model = std::sync::Arc::new(hub_state.view_model);
         let view_model_clone = std::sync::Arc::clone(&view_model);
         let (overlay, future) = start_overlay(self, &tab, move |_tab_id, term| {
             crate::overlay::show_experience_hub(term, view_model_clone.clone())
         });
         self.assign_overlay(tab.tab_id(), overlay);
         promise::spawn::spawn(future).detach();
-    }
-
-    fn map_persona_signal(
-        &self,
-        workspace_name: &str,
-        tab_count: usize,
-        active_automations: usize,
-        telemetry_persona: Option<&PersonaFrame>,
-    ) -> PersonaSignal {
-        if let Some(frame) = telemetry_persona {
-            return self.persona_from_frame(frame, workspace_name, tab_count, active_automations);
-        }
-        let workspace_lc = workspace_name.to_ascii_lowercase();
-        let intent = if active_automations > 0 {
-            ExperienceIntent::Automate
-        } else if workspace_lc.contains("recover") || workspace_lc.contains("restore") {
-            ExperienceIntent::Recover
-        } else if tab_count > 4 {
-            ExperienceIntent::Explore
-        } else {
-            ExperienceIntent::Focus
-        };
-
-        let tone = match intent {
-            ExperienceIntent::Automate => "strategic calm",
-            ExperienceIntent::Explore => "playful precision",
-            ExperienceIntent::Focus => "laser-focused clarity",
-            ExperienceIntent::Recover => "grounded restoration",
-        };
-
-        let persona_name = match workspace_lc.as_str() {
-            "ops" | "production" => "Guardian",
-            "ai" | "agents" => "Flux",
-            name if name.contains("recover") => "Healer",
-            _ => "Nova",
-        };
-
-        PersonaSignal {
-            name: persona_name.to_string(),
-            intent,
-            tone: tone.to_string(),
-        }
-    }
-
-    fn persona_from_frame(
-        &self,
-        frame: &PersonaFrame,
-        workspace_name: &str,
-        tab_count: usize,
-        active_automations: usize,
-    ) -> PersonaSignal {
-        let name = if frame.name.trim().is_empty() {
-            self.map_persona_signal(workspace_name, tab_count, active_automations, None)
-                .name
-        } else {
-            frame.name.clone()
-        };
-        let intent = match frame
-            .intent_hint
-            .as_deref()
-            .map(|hint| hint.to_ascii_lowercase())
-            .as_deref()
-        {
-            Some("automate") | Some("flux") => ExperienceIntent::Automate,
-            Some("recover") => ExperienceIntent::Recover,
-            Some("explore") => ExperienceIntent::Explore,
-            Some("focus") => ExperienceIntent::Focus,
-            _ => {
-                self.map_persona_signal(workspace_name, tab_count, active_automations, None)
-                    .intent
-            }
-        };
-        let tone = frame.tone_hint.clone().unwrap_or_else(|| match intent {
-            ExperienceIntent::Automate => "strategic calm".to_string(),
-            ExperienceIntent::Explore => "playful precision".to_string(),
-            ExperienceIntent::Focus => "laser-focused clarity".to_string(),
-            ExperienceIntent::Recover => "grounded restoration".to_string(),
-        });
-        PersonaSignal { name, intent, tone }
-    }
-
-    fn build_agent_signals_from_snapshot(
-        &self,
-        snapshot: &TelemetrySnapshot,
-        pending_approvals: usize,
-    ) -> Vec<AgentSignal> {
-        let snapshot_age = snapshot
-            .generated_at
-            .map(|ts| Utc::now().signed_duration_since(ts));
-
-        snapshot
-            .agents
-            .iter()
-            .map(|frame| {
-                let state = match frame.status {
-                    AgentFrameStatus::Active => ExperienceAgentState::Running,
-                    AgentFrameStatus::Registered => {
-                        if pending_approvals > 0 {
-                            ExperienceAgentState::WaitingApproval
-                        } else {
-                            ExperienceAgentState::Idle
-                        }
-                    }
-                    AgentFrameStatus::Disabled => ExperienceAgentState::Error,
-                };
-                let confidence =
-                    self.confidence_from_agent_frame(frame, state, snapshot_age.clone());
-                AgentSignal {
-                    id: frame.id.clone(),
-                    label: frame.label.clone(),
-                    state,
-                    confidence,
-                }
-            })
-            .collect()
-    }
-
-    fn build_approval_signals(&self, snapshot: &TelemetrySnapshot) -> Vec<ApprovalSignal> {
-        let mut approvals: Vec<_> = snapshot
-            .approvals
-            .iter()
-            .map(|approval| ApprovalSignal {
-                id: approval.id.clone(),
-                command: approval.command.clone(),
-                persona: approval.persona.clone(),
-                reason: approval.reason.clone(),
-                requested_at: approval.requested_at,
-            })
-            .collect();
-        approvals.sort_by_key(|approval| approval.requested_at);
-        approvals
-    }
-
-    fn confidence_from_agent_frame(
-        &self,
-        frame: &AgentFrame,
-        state: ExperienceAgentState,
-        snapshot_age: Option<chrono::Duration>,
-    ) -> f32 {
-        let mut confidence = match state {
-            ExperienceAgentState::Running => {
-                let base = 0.86;
-                if let Some(hb) = frame.last_heartbeat_at {
-                    let age = Utc::now().signed_duration_since(hb);
-                    if age > chrono::Duration::minutes(15) {
-                        0.45
-                    } else if age > chrono::Duration::minutes(5) {
-                        0.62
-                    } else {
-                        base
-                    }
-                } else {
-                    base * 0.85
-                }
-            }
-            ExperienceAgentState::Idle | ExperienceAgentState::WaitingApproval => {
-                let age = Utc::now().signed_duration_since(frame.registered_at);
-                if age < chrono::Duration::minutes(2) {
-                    0.6
-                } else if age > chrono::Duration::hours(1) {
-                    0.48
-                } else {
-                    0.52
-                }
-            }
-            ExperienceAgentState::Error => 0.25,
-        };
-
-        if let Some(age) = snapshot_age {
-            if age > chrono::Duration::minutes(10) {
-                confidence *= 0.85;
-            }
-        }
-
-        confidence
-    }
-    fn fallback_agent_signals(
-        &self,
-        active_automations: usize,
-        pending_approvals: usize,
-    ) -> Vec<AgentSignal> {
-        let mut agents = Vec::new();
-        let nova_confidence = if active_automations > 0 { 0.82 } else { 0.58 };
-        agents.push(AgentSignal {
-            id: "nova".to_string(),
-            label: "Nova".to_string(),
-            state: if active_automations > 0 {
-                ExperienceAgentState::Running
-            } else {
-                ExperienceAgentState::Idle
-            },
-            confidence: nova_confidence,
-        });
-
-        let guardian_state = if pending_approvals > (active_automations.saturating_add(1) * 2) {
-            ExperienceAgentState::Error
-        } else if pending_approvals > 0 {
-            ExperienceAgentState::WaitingApproval
-        } else {
-            ExperienceAgentState::Idle
-        };
-        agents.push(AgentSignal {
-            id: "guardian".to_string(),
-            label: "Guardian".to_string(),
-            state: guardian_state,
-            confidence: if matches!(guardian_state, ExperienceAgentState::Error) {
-                0.35
-            } else if pending_approvals > 0 {
-                0.66
-            } else {
-                0.52
-            },
-        });
-
-        agents
     }
 
     fn show_tab_navigator(&mut self) {

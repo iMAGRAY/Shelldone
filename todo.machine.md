@@ -1,7 +1,7 @@
 ## Program
 ```yaml
 program: v1
-updated_at: '2025-10-05T07:52:33.509749+00:00'
+updated_at: '2025-10-05T09:07:41.821350+00:00'
 program_id: shelldone-core
 name: Shelldone Terminal Platform
 objectives:
@@ -22,20 +22,21 @@ milestones:
   title: QA Hardening
   due: '2025-10-31T03:00:00Z'
   status: in_progress
-  progress_pct: 67
+  progress_pct: 16
 - id: m2
   title: Plugin Platform MVP
   due: '2025-11-30T03:00:00Z'
   status: in_progress
-  progress_pct: 14
+  progress_pct: 16
 - id: m3
   title: Animation Engine GA
   due: '2025-12-20T03:00:00Z'
   status: planned
-  progress_pct: 0
+  progress_pct: 16
 phase_progress:
   QA Hardening: 67
   Plugin Platform MVP: 14
+  Animation Engine GA: 0
   Animation Engine GA: 0
 ```
 

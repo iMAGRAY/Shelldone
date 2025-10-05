@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 #[derive(Default)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub struct InMemoryTermBridgeStateRepository {
     state: RwLock<Option<TermBridgeState>>,
 }

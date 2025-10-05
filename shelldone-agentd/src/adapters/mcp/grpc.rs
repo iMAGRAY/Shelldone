@@ -202,6 +202,7 @@ mod tests {
     use super::*;
     use crate::adapters::ack::command_runner::ShellCommandRunner;
     use crate::adapters::mcp::repo_mem::InMemoryMcpSessionRepository;
+    use crate::app::ack::approvals::ApprovalRegistry;
     use crate::app::ack::service::AckService;
     use crate::continuum::ContinuumStore;
     use crate::policy_engine::PolicyEngine;
@@ -220,16 +221,19 @@ mod tests {
             journal_path.clone(),
             tmp.path().join("snapshots"),
         )));
+        let approvals = Arc::new(ApprovalRegistry::new(tmp.path()).unwrap());
         let ack = Arc::new(AckService::new(
             Arc::new(Mutex::new(policy)),
             continuum,
             journal_path,
             Arc::new(ShellCommandRunner::new()),
             None,
+            approvals,
         ));
         Arc::new(McpBridgeService::new(
             Arc::new(InMemoryMcpSessionRepository::new()),
             ack,
+            None,
         ))
     }
 
