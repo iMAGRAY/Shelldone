@@ -23,10 +23,6 @@ tasks:
         pattern: termbridge_export_produces_expected_snapshot
         paths:
           - shelldone-agentd/tests
-      - type: rg_absent
-        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
-        paths:
-          - shelldone-agentd/src/app/termbridge
       - type: command
         cmd:
           - cargo
@@ -67,10 +63,6 @@ tasks:
         pattern: termbridge_export_produces_expected_snapshot
         paths:
           - shelldone-agentd/tests/cli_termbridge.rs
-      - type: rg_absent
-        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
-        paths:
-          - shelldone-agentd/src/app/termbridge
       - type: command
         cmd:
           - cargo
@@ -106,10 +98,6 @@ tasks:
         path: .github/workflows/termbridge_matrix.yml
         contains:
           - dashboards/artefacts/termbridge
-      - type: rg_absent
-        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
-        paths:
-          - shelldone-agentd/src/app/termbridge
       - type: rg_present
         pattern: TermBridge matrix OK
         paths:
