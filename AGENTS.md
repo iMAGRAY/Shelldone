@@ -3,6 +3,7 @@
 ## Непреложные правила
 - Единственный владелец и ответственный за все изменения: **imagray** `<magraytlinov@gmail.com>`.
 - Все автоматизированные агенты и разработчики действуют под идентичностью `imagray` / `magraytlinov@gmail.com` во всех системах (git, Linear, CI, релизы, артефакты); другие аккаунты запрещены.
+- Полномочия на `git commit` и `git push` закреплены за владельцем (`imagray`); выполняй их немедленно после прохождения Flagship-пайплайнов, либо фиксируй блокер в Linear при невозможности.
 
 ## Where to Find Knowledge
 - Architecture: `docs/architecture/README.md`
