@@ -113,9 +113,16 @@ def _load_yaml_blocks(blocks: Iterable[str]) -> List[Dict[str, object]]:
     items: List[Dict[str, object]] = []
     for raw in blocks:
         data = yaml.safe_load(raw)  # type: ignore[arg-type]
-        if not isinstance(data, dict):
-            raise RoadmapError("Expected YAML block to contain a mapping")
-        items.append(data)
+        if isinstance(data, dict):
+            items.append(data)
+            continue
+        if isinstance(data, list):
+            for entry in data:
+                if not isinstance(entry, dict):
+                    raise RoadmapError("Expected list entries to be mappings")
+                items.append(entry)
+            continue
+        raise RoadmapError("Expected YAML block to contain a mapping or list of mappings")
     return items
 
 
