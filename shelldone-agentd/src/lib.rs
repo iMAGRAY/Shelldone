@@ -15,8 +15,9 @@ use adapters::mcp::repo_file::FileMcpSessionRepository;
 use adapters::mcp::tls::{load_tls_snapshot, snapshots_equal, TlsPaths, TlsSnapshot};
 use adapters::termbridge::{
     default_clipboard_backends, AlacrittyAdapter, CommandExecutor, FileTermBridgeStateRepository,
-    ITerm2Adapter, InMemoryTermBridgeBindingRepository, KittyAdapter, KonsoleAdapter,
-    SystemCommandExecutor, TilixAdapter, WezTermAdapter, WindowsTerminalAdapter,
+    ITerm2Adapter, InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository,
+    KittyAdapter, KonsoleAdapter, SystemCommandExecutor, TilixAdapter, WezTermAdapter,
+    WindowsTerminalAdapter,
 };
 use anyhow::{anyhow, Context, Result as AnyResult};
 use app::ack::approvals::{ApprovalRegistry, ApprovalStatus, PendingApproval};
@@ -24,13 +25,14 @@ use app::ack::model::{EventRecord, ExecArgs, ExecRequest, UndoRequest};
 use app::ack::service::{AckError, AckService};
 use app::agents::AgentBindingService;
 use app::mcp::service::{McpBridgeError, McpBridgeService};
+use app::termbridge::service::{TermBridgeDiscoveryOutcome, TermBridgeSyncPort};
 use app::termbridge::{
-    spawn_discovery_task, ClipboardBridgeService, TermBridgeDiscoveryHandle, TermBridgeService,
-    TermBridgeServiceError,
+    spawn_discovery_task, ClipboardBridgeService, TermBridgeDiscoveryDiff,
+    TermBridgeDiscoveryHandle, TermBridgeService, TermBridgeServiceConfig, TermBridgeServiceError,
 };
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -53,7 +55,8 @@ use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use policy_engine::{PolicyEngine, TermBridgePolicyInput};
 use ports::termbridge::{
     ClipboardBackend, ClipboardError, ClipboardReadRequest, ClipboardServiceError,
-    ClipboardWriteRequest, SpawnRequest, TermBridgeCommandRequest, TerminalControlPort,
+    ClipboardWriteRequest, ConsentRepository, DuplicateOptions, DuplicateStrategy,
+    FileConsentRepository, SpawnRequest, TermBridgeCommandRequest, TerminalControlPort,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -62,13 +65,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::{env, thread};
+use subtle::ConstantTimeEq;
 use tokio::fs;
 use tokio::net::TcpListener;
 use tokio::signal::ctrl_c;
 use tokio::sync::{broadcast, mpsc, watch, RwLock};
 use tokio::time::{Duration, Instant};
 use tonic::transport::Server;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 type AgentBridgeService = AgentBindingService<InMemoryAgentBindingRepository>;
 type TermBridgeServiceType =
@@ -97,6 +101,8 @@ const DEFAULT_AGENT_BINDINGS: &[(&str, &str, &str, &[&str])] = &[
     ),
 ];
 
+const TERMBRIDGE_DISCOVERY_TOKEN_ENV: &str = "SHELLDONE_TERMBRIDGE_DISCOVERY_TOKEN";
+
 #[derive(Clone)]
 struct AppState {
     ack_service: Arc<AckService<ShellCommandRunner>>,
@@ -104,8 +110,11 @@ struct AppState {
     agent_service: Arc<AgentBridgeService>,
     termbridge_service: Arc<TermBridgeServiceType>,
     termbridge_discovery: TermBridgeDiscoveryHandle,
+    discovery_cache: Arc<RwLock<Option<CachedDiscovery>>>,
+    discovery_cache_ttl: Duration,
     clipboard_service: Arc<ClipboardBridgeServiceType>,
     policy_engine: Arc<Mutex<PolicyEngine>>,
+    consent_repo: Arc<dyn ConsentRepository>,
     approvals: Arc<ApprovalRegistry>,
     listen: SocketAddr,
     grpc_listen: SocketAddr,
@@ -114,6 +123,12 @@ struct AppState {
     started_at: Instant,
     metrics: Option<Arc<telemetry::PrismMetrics>>,
     tls_status: Arc<RwLock<TlsStatusReport>>,
+}
+
+#[derive(Clone)]
+struct CachedDiscovery {
+    captured_at: Instant,
+    response: TermBridgeCapabilitiesResponse,
 }
 
 impl AppState {
@@ -172,19 +187,23 @@ impl AppState {
             Arc::new(TilixAdapter::new()),
             Arc::new(ITerm2Adapter::new()),
         ];
+        let termbridge_config = TermBridgeServiceConfig::from_env();
         let termbridge_service = Arc::new(TermBridgeService::new(
             termbridge_state_repo,
             termbridge_binding_repo,
             termbridge_adapters,
             metrics.clone(),
+            termbridge_config.clone(),
         ));
         let discovery_handle =
             spawn_discovery_task(termbridge_service.clone(), metrics.clone(), None);
         discovery_handle.notify_refresh("bootstrap");
 
+        let termbridge_sync: Arc<dyn TermBridgeSyncPort + Send + Sync> = termbridge_service.clone();
         let mcp_service = Arc::new(McpBridgeService::new(
             repo,
             ack_service.clone(),
+            Some(termbridge_sync),
             Some(discovery_handle.clone()),
         ));
 
@@ -203,18 +222,26 @@ impl AppState {
             None,
         ));
 
+        let discovery_cache_ttl = discovery_cache_ttl_from_env();
+
+        let consent_repo: Arc<dyn ConsentRepository> =
+            Arc::new(FileConsentRepository::new(&state_dir));
+
         Ok(Self {
             ack_service,
             mcp_service,
             agent_service,
             termbridge_service,
             termbridge_discovery: discovery_handle,
+            discovery_cache: Arc::new(RwLock::new(None)),
+            discovery_cache_ttl,
             clipboard_service,
             policy_engine,
+            consent_repo,
             listen,
             grpc_listen,
             grpc_tls_policy,
-            state_dir,
+            state_dir: state_dir.clone(),
             started_at: Instant::now(),
             metrics,
             tls_status: Arc::new(RwLock::new(TlsStatusReport::disabled())),
@@ -257,11 +284,13 @@ impl AppState {
         let discovery_handle = spawn_discovery_task(
             termbridge_service.clone(),
             None,
-            Some(Duration::from_secs(86400)),
+            Some(Duration::from_secs(3600)),
         );
+        let termbridge_sync: Arc<dyn TermBridgeSyncPort + Send + Sync> = termbridge_service.clone();
         let mcp_service = Arc::new(McpBridgeService::new(
             repo,
             ack_service.clone(),
+            Some(termbridge_sync),
             Some(discovery_handle.clone()),
         ));
 
@@ -278,15 +307,18 @@ impl AppState {
             agent_service,
             termbridge_service,
             termbridge_discovery: discovery_handle,
+            discovery_cache: Arc::new(RwLock::new(None)),
+            discovery_cache_ttl: discovery_cache_ttl_from_env(),
             clipboard_service,
             policy_engine,
             listen: SocketAddr::from(([127, 0, 0, 1], 0)),
             grpc_listen: SocketAddr::from(([127, 0, 0, 1], 0)),
             grpc_tls_policy: CipherPolicy::Balanced,
-            state_dir,
+            state_dir: state_dir.clone(),
             started_at: Instant::now(),
             metrics: None,
             tls_status: Arc::new(RwLock::new(TlsStatusReport::disabled())),
+            consent_repo: Arc::new(FileConsentRepository::new(&state_dir)),
             approvals,
         })
     }
@@ -329,6 +361,14 @@ impl AppState {
         self.termbridge_discovery.clone()
     }
 
+    fn discovery_cache(&self) -> Arc<RwLock<Option<CachedDiscovery>>> {
+        self.discovery_cache.clone()
+    }
+
+    fn discovery_cache_ttl(&self) -> Duration {
+        self.discovery_cache_ttl
+    }
+
     fn clipboard(&self) -> Arc<ClipboardBridgeServiceType> {
         self.clipboard_service.clone()
     }
@@ -339,6 +379,10 @@ impl AppState {
 
     fn tls_status(&self) -> Arc<RwLock<TlsStatusReport>> {
         self.tls_status.clone()
+    }
+
+    fn consent(&self) -> Arc<dyn ConsentRepository> {
+        self.consent_repo.clone()
     }
 
     fn listen(&self) -> SocketAddr {
@@ -445,6 +489,7 @@ struct TermBridgeTerminalStatus {
     terminal: String,
     display_name: String,
     requires_opt_in: bool,
+    source: String,
     capabilities: TerminalCapabilitiesDto,
     notes: Vec<String>,
 }
@@ -454,6 +499,8 @@ struct TerminalCapabilitiesDto {
     spawn: bool,
     split: bool,
     focus: bool,
+    duplicate: bool,
+    close: bool,
     send_text: bool,
     clipboard_write: bool,
     clipboard_read: bool,
@@ -531,12 +578,186 @@ impl TermBridgeStatus {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixSnapshot {
+    pub version: u32,
+    pub generated_at: String,
+    pub discovered_at: Option<String>,
+    pub discovery_ms: f64,
+    pub changed: bool,
+    pub diff: TermBridgeMatrixDiff,
+    pub totals: TermBridgeMatrixTotals,
+    pub terminals: Vec<TermBridgeMatrixTerminal>,
+    pub clipboard_backends: Vec<TermBridgeMatrixClipboardBackend>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixDiff {
+    pub added: Vec<String>,
+    pub updated: Vec<String>,
+    pub removed: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixTotals {
+    pub terminals: usize,
+    pub clipboard_backends: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixTerminal {
+    pub terminal: String,
+    pub display_name: String,
+    pub requires_opt_in: bool,
+    pub source: String,
+    pub capabilities: TermBridgeMatrixCapabilities,
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixCapabilities {
+    pub spawn: bool,
+    pub split: bool,
+    pub focus: bool,
+    pub duplicate: bool,
+    pub close: bool,
+    pub send_text: bool,
+    pub clipboard_write: bool,
+    pub clipboard_read: bool,
+    pub cwd_sync: bool,
+    pub bracketed_paste: bool,
+    pub max_clipboard_kb: Option<u32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermBridgeMatrixClipboardBackend {
+    pub id: String,
+    pub channels: Vec<String>,
+    pub can_read: bool,
+    pub can_write: bool,
+    pub notes: Vec<String>,
+}
+
+impl From<CapabilityRecord> for TermBridgeMatrixTerminal {
+    fn from(record: CapabilityRecord) -> Self {
+        let capabilities = TermBridgeMatrixCapabilities::from(record.capabilities);
+        Self {
+            terminal: record.terminal.as_str().to_string(),
+            display_name: record.display_name,
+            requires_opt_in: record.requires_opt_in,
+            source: record.source.as_str().to_string(),
+            capabilities,
+            notes: record.notes,
+        }
+    }
+}
+
+impl From<TerminalCapabilities> for TermBridgeMatrixCapabilities {
+    fn from(value: TerminalCapabilities) -> Self {
+        Self {
+            spawn: value.spawn,
+            split: value.split,
+            focus: value.focus,
+            duplicate: value.duplicate,
+            close: value.close,
+            send_text: value.send_text,
+            clipboard_write: value.clipboard_write,
+            clipboard_read: value.clipboard_read,
+            cwd_sync: value.cwd_sync,
+            bracketed_paste: value.bracketed_paste,
+            max_clipboard_kb: value.max_clipboard_kb,
+        }
+    }
+}
+
+impl From<ClipboardBackendDescriptor> for TermBridgeMatrixClipboardBackend {
+    fn from(descriptor: ClipboardBackendDescriptor) -> Self {
+        let channels = descriptor
+            .channels
+            .into_iter()
+            .map(|channel| channel.as_str().to_string())
+            .collect();
+        Self {
+            id: descriptor.id,
+            channels,
+            can_read: descriptor.can_read,
+            can_write: descriptor.can_write,
+            notes: descriptor.notes,
+        }
+    }
+}
+
+impl From<TermBridgeDiscoveryDiff> for TermBridgeMatrixDiff {
+    fn from(diff: TermBridgeDiscoveryDiff) -> Self {
+        let added = diff
+            .added
+            .into_iter()
+            .map(|record| record.terminal.as_str().to_string())
+            .collect();
+        let updated = diff
+            .updated
+            .into_iter()
+            .map(|record| record.terminal.as_str().to_string())
+            .collect();
+        let removed = diff
+            .removed
+            .into_iter()
+            .map(|record| record.terminal.as_str().to_string())
+            .collect();
+        Self {
+            added,
+            updated,
+            removed,
+        }
+    }
+}
+
+impl TermBridgeMatrixSnapshot {
+    fn from_outcome(
+        outcome: TermBridgeDiscoveryOutcome,
+        clipboard: Vec<ClipboardBackendDescriptor>,
+        discovery_ms: f64,
+    ) -> Self {
+        let TermBridgeDiscoveryOutcome {
+            state,
+            diff,
+            changed,
+        } = outcome;
+        let discovered_at = state.discovered_at().map(|ts| ts.to_rfc3339());
+        let terminals = state
+            .capabilities()
+            .into_iter()
+            .map(TermBridgeMatrixTerminal::from)
+            .collect::<Vec<_>>();
+        let clipboard_backends = clipboard
+            .into_iter()
+            .map(TermBridgeMatrixClipboardBackend::from)
+            .collect::<Vec<_>>();
+        let totals = TermBridgeMatrixTotals {
+            terminals: terminals.len(),
+            clipboard_backends: clipboard_backends.len(),
+        };
+        Self {
+            version: 1,
+            generated_at: Utc::now().to_rfc3339(),
+            discovered_at,
+            discovery_ms,
+            changed,
+            diff: TermBridgeMatrixDiff::from(diff),
+            totals,
+            terminals,
+            clipboard_backends,
+        }
+    }
+}
+
 impl From<CapabilityRecord> for TermBridgeTerminalStatus {
     fn from(record: CapabilityRecord) -> Self {
         Self {
             terminal: record.terminal.to_string(),
             display_name: record.display_name,
             requires_opt_in: record.requires_opt_in,
+            source: record.source.as_str().to_string(),
             notes: record.notes,
             capabilities: TerminalCapabilitiesDto::from(record.capabilities),
         }
@@ -566,6 +787,8 @@ impl From<TerminalCapabilities> for TerminalCapabilitiesDto {
             spawn: value.spawn,
             split: value.split,
             focus: value.focus,
+            duplicate: value.duplicate,
+            close: value.close,
             send_text: value.send_text,
             clipboard_write: value.clipboard_write,
             clipboard_read: value.clipboard_read,
@@ -619,11 +842,64 @@ impl From<AgentBinding> for AgentBindingSummary {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
+struct TermBridgeDiscoveryDiffDto {
+    added: Vec<TermBridgeTerminalStatus>,
+    updated: Vec<TermBridgeTerminalStatus>,
+    removed: Vec<TermBridgeTerminalStatus>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct TermBridgeCapabilitiesResponse {
     last_discovery_at: Option<String>,
     terminals: Vec<TermBridgeTerminalStatus>,
     clipboard_backends: Vec<ClipboardBackendStatusDto>,
+    changed: bool,
+    diff: TermBridgeDiscoveryDiffDto,
+}
+
+impl TermBridgeCapabilitiesResponse {
+    fn from_status(
+        status: TermBridgeStatus,
+        changed: bool,
+        diff: TermBridgeDiscoveryDiffDto,
+    ) -> Self {
+        let TermBridgeStatus {
+            last_discovery_at,
+            terminals,
+            clipboard_backends,
+            ..
+        } = status;
+        Self {
+            last_discovery_at,
+            terminals,
+            clipboard_backends,
+            changed,
+            diff,
+        }
+    }
+}
+
+impl From<TermBridgeDiscoveryDiff> for TermBridgeDiscoveryDiffDto {
+    fn from(diff: TermBridgeDiscoveryDiff) -> Self {
+        Self {
+            added: diff
+                .added
+                .into_iter()
+                .map(TermBridgeTerminalStatus::from)
+                .collect(),
+            updated: diff
+                .updated
+                .into_iter()
+                .map(TermBridgeTerminalStatus::from)
+                .collect(),
+            removed: diff
+                .removed
+                .into_iter()
+                .map(TermBridgeTerminalStatus::from)
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -703,6 +979,20 @@ struct TermBridgeCwdUpdateRequest {
 
 #[derive(Debug, Deserialize)]
 struct TermBridgeFocusRequest {
+    binding_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TermBridgeDuplicateRequest {
+    binding_id: String,
+    #[serde(default)]
+    strategy: Option<DuplicateStrategy>,
+    command: Option<String>,
+    cwd: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TermBridgeCloseRequest {
     binding_id: String,
 }
 
@@ -1195,6 +1485,77 @@ impl Default for Settings {
     }
 }
 
+pub async fn export_termbridge_snapshot(
+    settings: Settings,
+    output_path: impl AsRef<Path>,
+    timeout: Duration,
+    emit_otlp: bool,
+) -> AnyResult<TermBridgeMatrixSnapshot> {
+    let output_path = output_path.as_ref().to_path_buf();
+    let (metrics, provider) = if emit_otlp {
+        let (provider, metrics) =
+            telemetry::init_prism(settings.otlp_endpoint.clone(), "shelldone-agentd")?;
+        (Some(Arc::new(metrics)), Some(provider))
+    } else {
+        (None, None)
+    };
+
+    let termbridge_state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
+    let termbridge_binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+    let termbridge_adapters: Vec<Arc<dyn TerminalControlPort>> = vec![
+        Arc::new(KittyAdapter::new()),
+        Arc::new(WezTermAdapter::new()),
+        Arc::new(WindowsTerminalAdapter::new()),
+        Arc::new(AlacrittyAdapter::new()),
+        Arc::new(KonsoleAdapter::new()),
+        Arc::new(TilixAdapter::new()),
+        Arc::new(ITerm2Adapter::new()),
+    ];
+    let termbridge_config = TermBridgeServiceConfig::from_env();
+    let termbridge_service = Arc::new(TermBridgeService::new(
+        termbridge_state_repo,
+        termbridge_binding_repo,
+        termbridge_adapters,
+        metrics.clone(),
+        termbridge_config,
+    ));
+
+    let clipboard_executor: Arc<dyn CommandExecutor> = Arc::new(SystemCommandExecutor);
+    let clipboard_backends_raw = default_clipboard_backends(Arc::clone(&clipboard_executor));
+    let clipboard_backends: Vec<Arc<dyn ClipboardBackend>> = clipboard_backends_raw
+        .into_iter()
+        .map(|backend| backend as Arc<dyn ClipboardBackend>)
+        .collect();
+    let clipboard_service = ClipboardBridgeService::new(clipboard_backends, metrics.clone(), None);
+
+    let started = Instant::now();
+    let outcome = tokio::time::timeout(timeout, termbridge_service.discover("matrix"))
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "termbridge discovery timed out after {} ms",
+                timeout.as_millis()
+            )
+        })??;
+    let discovery_ms = started.elapsed().as_secs_f64() * 1000.0;
+
+    let clipboard_backends = clipboard_service.list_backends();
+    let snapshot =
+        TermBridgeMatrixSnapshot::from_outcome(outcome, clipboard_backends, discovery_ms);
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).await?;
+    }
+    let payload = serde_json::to_vec_pretty(&snapshot)?;
+    fs::write(&output_path, payload).await?;
+
+    if let Some(provider) = provider {
+        telemetry::shutdown_prism(provider)?;
+    }
+
+    Ok(snapshot)
+}
+
 pub async fn run(settings: Settings) -> anyhow::Result<()> {
     // Initialize Prism OTLP telemetry if endpoint provided
     let (metrics, provider) = if let Some(ref endpoint) = settings.otlp_endpoint {
@@ -1503,9 +1864,16 @@ pub async fn run(settings: Settings) -> anyhow::Result<()> {
         .route("/termbridge/discover", post(termbridge_discover))
         .route("/termbridge/bindings", get(termbridge_bindings))
         .route("/termbridge/spawn", post(termbridge_spawn))
+        .route("/termbridge/duplicate", post(termbridge_duplicate))
+        .route("/termbridge/close", post(termbridge_close))
         .route("/termbridge/send-text", post(termbridge_send_text))
         .route("/termbridge/focus", post(termbridge_focus))
         .route("/termbridge/cwd", post(termbridge_update_cwd))
+        .route("/termbridge/consent/grant", post(termbridge_consent_grant))
+        .route(
+            "/termbridge/consent/revoke",
+            post(termbridge_consent_revoke),
+        )
         .route(
             "/termbridge/clipboard/write",
             post(termbridge_clipboard_write),
@@ -1642,6 +2010,15 @@ async fn health() -> impl IntoResponse {
     }))
 }
 
+fn discovery_cache_ttl_from_env() -> Duration {
+    std::env::var("SHELLDONE_TERMBRIDGE_DISCOVER_CACHE_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .filter(|ttl| *ttl > Duration::from_millis(0))
+        .unwrap_or_else(|| Duration::from_millis(1_000))
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct HandshakeRequest {
     version: Option<u32>,
@@ -1685,6 +2062,64 @@ async fn handshake(
     Ok(Json(response))
 }
 
+#[derive(Deserialize)]
+struct TermBridgeConsentRequest {
+    terminal: String,
+}
+
+#[derive(Serialize)]
+struct TermBridgeConsentResult {
+    success: bool,
+}
+
+async fn termbridge_consent_grant(
+    State(state): State<AppState>,
+    Json(req): Json<TermBridgeConsentRequest>,
+) -> Result<Json<TermBridgeConsentResult>, ApiError> {
+    let terminal = TerminalId::new(req.terminal.clone());
+    state
+        .consent()
+        .grant(&terminal)
+        .map_err(|err| ApiError::internal("consent_grant", err))?;
+    let event = EventRecord::new(
+        "termbridge.consent",
+        None,
+        json!({ "action": "grant", "terminal": req.terminal }),
+        None,
+        Some("termbridge::consent".to_string()),
+        None,
+    );
+    state
+        .append_event(&event)
+        .await
+        .map_err(|err| ApiError::internal("journal_write", err))?;
+    Ok(Json(TermBridgeConsentResult { success: true }))
+}
+
+async fn termbridge_consent_revoke(
+    State(state): State<AppState>,
+    Json(req): Json<TermBridgeConsentRequest>,
+) -> Result<Json<TermBridgeConsentResult>, ApiError> {
+    let terminal = TerminalId::new(req.terminal.clone());
+    state
+        .consent()
+        .revoke(&terminal)
+        .map_err(|err| ApiError::internal("consent_revoke", err))?;
+    let event = EventRecord::new(
+        "termbridge.consent",
+        None,
+        json!({ "action": "revoke", "terminal": req.terminal }),
+        None,
+        Some("termbridge::consent".to_string()),
+        None,
+    );
+    state
+        .append_event(&event)
+        .await
+        .map_err(|err| ApiError::internal("journal_write", err))?;
+    Ok(Json(TermBridgeConsentResult { success: true }))
+}
+
 async fn termbridge_capabilities(
     State(state): State<AppState>,
 ) -> Result<Json<TermBridgeCapabilitiesResponse>, ApiError> {
@@ -1695,28 +2130,102 @@ async fn termbridge_capabilities(
         .map_err(|err| termbridge_service_error("termbridge_snapshot", err))?;
     let clipboard_backends: Vec<ClipboardBackendDescriptor> = state.clipboard().list_backends();
     let status = TermBridgeStatus::from_state(snapshot, clipboard_backends);
-    Ok(Json(TermBridgeCapabilitiesResponse {
-        last_discovery_at: status.last_discovery_at.clone(),
-        terminals: status.terminals,
-        clipboard_backends: status.clipboard_backends,
-    }))
+    Ok(Json(TermBridgeCapabilitiesResponse::from_status(
+        status,
+        false,
+        TermBridgeDiscoveryDiffDto::default(),
+    )))
+}
+
+fn read_discovery_token() -> Option<String> {
+    env::var(TERMBRIDGE_DISCOVERY_TOKEN_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn ensure_discovery_authorized(headers: &HeaderMap) -> Result<(), ApiError> {
+    let Some(expected_token) = read_discovery_token() else {
+        return Ok(());
+    };
+
+    let auth_header = headers.get(header::AUTHORIZATION).ok_or_else(|| {
+        ApiError::unauthorized(
+            "missing_discovery_token",
+            "Authorization: Bearer <token> required when SHELLDONE_TERMBRIDGE_DISCOVERY_TOKEN set",
+        )
+    })?;
+
+    let auth_str = auth_header.to_str().map_err(|_| {
+        ApiError::unauthorized(
+            "invalid_discovery_token",
+            "Authorization header is not valid UTF-8",
+        )
+    })?;
+
+    let token = auth_str
+        .strip_prefix("Bearer ")
+        .or_else(|| auth_str.strip_prefix("bearer "))
+        .map(str::trim)
+        .ok_or_else(|| {
+            ApiError::unauthorized(
+                "invalid_discovery_token",
+                "Authorization header must use Bearer scheme",
+            )
+        })?;
+
+    let expected_bytes = expected_token.as_bytes();
+    let provided_bytes = token.as_bytes();
+    if expected_bytes.len() != provided_bytes.len()
+        || expected_bytes.ct_eq(provided_bytes).unwrap_u8() == 0
+    {
+        return Err(ApiError::unauthorized(
+            "invalid_discovery_token",
+            "Bearer token mismatch",
+        ));
+    }
+
+    Ok(())
 }
 
 async fn termbridge_discover(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<TermBridgeCapabilitiesResponse>, ApiError> {
-    let snapshot = state
+    ensure_discovery_authorized(&headers)?;
+
+    let ttl = state.discovery_cache_ttl();
+    let cache = state.discovery_cache();
+    if ttl > Duration::from_millis(0) {
+        if let Some(entry) = cache.read().await.clone() {
+            if entry.captured_at.elapsed() <= ttl {
+                return Ok(Json(entry.response));
+            }
+        }
+    }
+
+    let outcome = state
         .termbridge()
-        .discover()
+        .discover("manual")
         .await
         .map_err(|err| termbridge_service_error("termbridge_discover", err))?;
     let clipboard_backends = state.clipboard().list_backends();
-    let status = TermBridgeStatus::from_state(snapshot, clipboard_backends);
-    Ok(Json(TermBridgeCapabilitiesResponse {
-        last_discovery_at: status.last_discovery_at.clone(),
-        terminals: status.terminals,
-        clipboard_backends: status.clipboard_backends,
-    }))
+    let status = TermBridgeStatus::from_state(outcome.state, clipboard_backends);
+    let response = TermBridgeCapabilitiesResponse::from_status(
+        status,
+        outcome.changed,
+        TermBridgeDiscoveryDiffDto::from(outcome.diff),
+    );
+
+    if ttl > Duration::from_millis(0) {
+        let mut guard = cache.write().await;
+        *guard = Some(CachedDiscovery {
+            captured_at: Instant::now(),
+            response: response.clone(),
+        });
+    }
+
+    Ok(Json(response))
 }
 
 async fn termbridge_bindings(
@@ -1755,6 +2264,10 @@ async fn termbridge_spawn(
         env: env_map,
     };
     let persona = env::var("SHELLDONE_PERSONA").ok().filter(|v| !v.is_empty());
+    let consent =
+        ensure_consent_or_forbid(&state, req.terminal.as_str(), "spawn", persona.as_deref())
+            .await?;
+
     let policy_input = TermBridgePolicyInput {
         action: "spawn".to_string(),
         persona: persona.clone(),
@@ -1764,6 +2277,8 @@ async fn termbridge_spawn(
         channel: None,
         bytes: None,
         cwd: None,
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
     };
 
     let decision = {
@@ -1844,6 +2359,147 @@ async fn termbridge_spawn(
     Ok(Json(TermBridgeBindingSummary::from(binding)))
 }
 
+async fn termbridge_duplicate(
+    State(state): State<AppState>,
+    Json(req): Json<TermBridgeDuplicateRequest>,
+) -> Result<Json<TermBridgeBindingSummary>, ApiError> {
+    let binding_id = TerminalBindingId::parse(&req.binding_id)
+        .map_err(|err| ApiError::invalid("invalid_binding_id", err))?;
+    let persona = env::var("SHELLDONE_PERSONA").ok().filter(|v| !v.is_empty());
+
+    let binding = state
+        .termbridge()
+        .get_binding(&binding_id)
+        .await
+        .map_err(|err| termbridge_service_error("termbridge_get_binding", err))?
+        .ok_or_else(|| ApiError::invalid("binding_not_found", "binding not found"))?;
+
+    let strategy = req.strategy.unwrap_or_default();
+    let options = DuplicateOptions {
+        strategy: strategy.clone(),
+        command: req.command.clone(),
+        cwd: req.cwd.clone(),
+        ..Default::default()
+    };
+
+    let consent = ensure_consent_or_forbid(
+        &state,
+        binding.terminal.as_str(),
+        "duplicate",
+        persona.as_deref(),
+    )
+    .await?;
+
+    let policy_input = TermBridgePolicyInput {
+        action: "duplicate".to_string(),
+        persona: persona.clone(),
+        terminal: Some(binding.terminal.as_str().to_string()),
+        command: req.command.clone(),
+        backend: None,
+        channel: None,
+        bytes: None,
+        cwd: req.cwd.clone(),
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
+    };
+
+    let decision = {
+        let engine = state.policy_engine();
+        let guard = engine
+            .lock()
+            .map_err(|e| ApiError::internal("policy_lock", anyhow!(e.to_string())))?;
+        guard
+            .evaluate_termbridge(&policy_input)
+            .map_err(|err| ApiError::internal("policy_eval", err))?
+    };
+
+    if let Some(metrics) = state.metrics() {
+        metrics.record_policy_evaluation(decision.is_allowed());
+        if !decision.is_allowed() {
+            metrics.record_policy_denial("termbridge.duplicate", persona.as_deref());
+        }
+    }
+
+    if !decision.is_allowed() {
+        warn!(
+            "Policy denied termbridge.duplicate binding={} terminal={} reasons={:?}",
+            binding.id,
+            binding.terminal.as_str(),
+            decision.deny_reasons
+        );
+        let strategy_label = serde_json::to_value(&strategy)
+            .ok()
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "horizontal_split".to_string());
+        let denial_payload = json!({
+            "action": "duplicate",
+            "binding_id": binding.id.to_string(),
+            "terminal": binding.terminal.as_str(),
+            "strategy": strategy_label,
+            "command": req.command,
+            "cwd": req.cwd,
+            "allowed": false,
+            "reasons": decision.deny_reasons,
+        });
+        state
+            .append_event(&EventRecord::new(
+                "termbridge.duplicate.denied",
+                persona.clone(),
+                denial_payload,
+                None,
+                Some("termbridge::policy".to_string()),
+                None,
+            ))
+            .await
+            .map_err(|err| ApiError::internal("journal_write", err))?;
+        return Err(ApiError::forbidden(
+            "policy_denied",
+            decision.deny_reasons.join("; "),
+        ));
+    }
+
+    let strategy_label = serde_json::to_value(&options.strategy)
+        .ok()
+        .and_then(|value| value.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "horizontal_split".to_string());
+
+    let new_binding = state
+        .termbridge()
+        .duplicate(&binding_id, options.clone())
+        .await
+        .map_err(|err| termbridge_service_error("termbridge_duplicate", err))?;
+
+    let new_labels = serde_json::to_value(&new_binding.labels).unwrap_or(Value::Null);
+    let event_payload = json!({
+        "action": "duplicate",
+        "binding_id": binding.id.to_string(),
+        "terminal": binding.terminal.as_str(),
+        "strategy": strategy_label,
+        "new_binding_id": new_binding.id.to_string(),
+        "new_token": new_binding.token,
+        "ipc_endpoint": new_binding.ipc_endpoint,
+        "command": req.command,
+        "labels": new_labels,
+    });
+    state
+        .append_event(&EventRecord::new(
+            "termbridge.duplicate",
+            persona,
+            event_payload,
+            None,
+            Some("termbridge::action".to_string()),
+            None,
+        ))
+        .await
+        .map_err(|err| ApiError::internal("journal_write", err))?;
+
+    state
+        .termbridge_discovery()
+        .notify_refresh("binding_duplicate");
+
+    Ok(Json(TermBridgeBindingSummary::from(new_binding)))
+}
+
 async fn termbridge_send_text(
     State(state): State<AppState>,
     Json(req): Json<TermBridgeSendTextRequest>,
@@ -1860,6 +2516,14 @@ async fn termbridge_send_text(
         .ok_or_else(|| ApiError::invalid("binding_not_found", "binding not found"))?;
 
     let payload_len = req.payload.len();
+    let consent = ensure_consent_or_forbid(
+        &state,
+        binding.terminal.as_str(),
+        "send_text",
+        persona.as_deref(),
+    )
+    .await?;
+
     let policy_input = TermBridgePolicyInput {
         action: "send_text".to_string(),
         persona: persona.clone(),
@@ -1869,6 +2533,8 @@ async fn termbridge_send_text(
         channel: None,
         bytes: Some(payload_len),
         cwd: None,
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
     };
 
     let decision = {
@@ -1976,6 +2642,14 @@ async fn termbridge_focus(
         .map_err(|err| termbridge_service_error("termbridge_get_binding", err))?
         .ok_or_else(|| ApiError::invalid("binding_not_found", "binding not found"))?;
 
+    let consent = ensure_consent_or_forbid(
+        &state,
+        binding.terminal.as_str(),
+        "focus",
+        persona.as_deref(),
+    )
+    .await?;
+
     let policy_input = TermBridgePolicyInput {
         action: "focus".to_string(),
         persona: persona.clone(),
@@ -1985,6 +2659,8 @@ async fn termbridge_focus(
         channel: None,
         bytes: None,
         cwd: None,
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
     };
 
     let decision = {
@@ -2067,6 +2743,124 @@ async fn termbridge_focus(
     })))
 }
 
+async fn termbridge_close(
+    State(state): State<AppState>,
+    Json(req): Json<TermBridgeCloseRequest>,
+) -> Result<Json<TermBridgeBindingSummary>, ApiError> {
+    let binding_id = TerminalBindingId::parse(&req.binding_id)
+        .map_err(|err| ApiError::invalid("invalid_binding_id", err))?;
+    let persona = env::var("SHELLDONE_PERSONA").ok().filter(|v| !v.is_empty());
+
+    let binding = state
+        .termbridge()
+        .get_binding(&binding_id)
+        .await
+        .map_err(|err| termbridge_service_error("termbridge_get_binding", err))?
+        .ok_or_else(|| ApiError::invalid("binding_not_found", "binding not found"))?;
+
+    let consent = ensure_consent_or_forbid(
+        &state,
+        binding.terminal.as_str(),
+        "close",
+        persona.as_deref(),
+    )
+    .await?;
+
+    let policy_input = TermBridgePolicyInput {
+        action: "close".to_string(),
+        persona: persona.clone(),
+        terminal: Some(binding.terminal.as_str().to_string()),
+        command: None,
+        backend: None,
+        channel: None,
+        bytes: None,
+        cwd: None,
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
+    };
+
+    let decision = {
+        let engine = state.policy_engine();
+        let guard = engine
+            .lock()
+            .map_err(|e| ApiError::internal("policy_lock", anyhow!(e.to_string())))?;
+        guard
+            .evaluate_termbridge(&policy_input)
+            .map_err(|err| ApiError::internal("policy_eval", err))?
+    };
+
+    if let Some(metrics) = state.metrics() {
+        metrics.record_policy_evaluation(decision.is_allowed());
+        if !decision.is_allowed() {
+            metrics.record_policy_denial("termbridge.close", persona.as_deref());
+        }
+    }
+
+    if !decision.is_allowed() {
+        warn!(
+            "Policy denied termbridge.close binding={} terminal={} reasons={:?}",
+            binding.id,
+            binding.terminal.as_str(),
+            decision.deny_reasons
+        );
+        let labels = serde_json::to_value(&binding.labels).unwrap_or(Value::Null);
+        let denial_payload = json!({
+            "action": "close",
+            "binding_id": binding.id.to_string(),
+            "terminal": binding.terminal.as_str(),
+            "labels": labels,
+            "allowed": false,
+            "reasons": decision.deny_reasons,
+        });
+        state
+            .append_event(&EventRecord::new(
+                "termbridge.close.denied",
+                persona.clone(),
+                denial_payload,
+                None,
+                Some("termbridge::policy".to_string()),
+                None,
+            ))
+            .await
+            .map_err(|err| ApiError::internal("journal_write", err))?;
+        return Err(ApiError::forbidden(
+            "policy_denied",
+            decision.deny_reasons.join("; "),
+        ));
+    }
+
+    let closed = state
+        .termbridge()
+        .close(&binding_id)
+        .await
+        .map_err(|err| termbridge_service_error("termbridge_close", err))?;
+
+    let labels = serde_json::to_value(&closed.labels).unwrap_or(Value::Null);
+    let event_payload = json!({
+        "action": "close",
+        "binding_id": closed.id.to_string(),
+        "terminal": closed.terminal.as_str(),
+        "token": closed.token,
+        "ipc_endpoint": closed.ipc_endpoint,
+        "labels": labels,
+    });
+    state
+        .append_event(&EventRecord::new(
+            "termbridge.close",
+            persona,
+            event_payload,
+            None,
+            Some("termbridge::action".to_string()),
+            None,
+        ))
+        .await
+        .map_err(|err| ApiError::internal("journal_write", err))?;
+
+    state.termbridge_discovery().notify_refresh("binding_close");
+
+    Ok(Json(TermBridgeBindingSummary::from(closed)))
+}
+
 async fn termbridge_update_cwd(
     State(state): State<AppState>,
     Json(req): Json<TermBridgeCwdUpdateRequest>,
@@ -2085,6 +2879,14 @@ async fn termbridge_update_cwd(
         .ok_or_else(|| ApiError::not_found("binding_not_found", "binding not found"))?;
     let previous_cwd = existing_binding.cwd().map(|value| value.to_string());
 
+    let consent = ensure_consent_or_forbid(
+        &state,
+        existing_binding.terminal.as_str(),
+        "cwd.update",
+        persona.as_deref(),
+    )
+    .await?;
+
     let policy_input = TermBridgePolicyInput {
         action: "cwd.update".to_string(),
         persona: persona.clone(),
@@ -2094,6 +2896,8 @@ async fn termbridge_update_cwd(
         channel: None,
         bytes: None,
         cwd: Some(cwd.as_str().to_string()),
+        requires_opt_in: Some(consent.requires_opt_in),
+        consent_granted: Some(consent.consent_granted),
     };
 
     let decision = {
@@ -2236,6 +3040,8 @@ async fn termbridge_clipboard_write(
         channel: Some(channel.as_str().to_string()),
         bytes: Some(payload_len),
         cwd: None,
+        requires_opt_in: Some(false),
+        consent_granted: Some(false),
     };
 
     let decision = {
@@ -2357,6 +3163,8 @@ async fn termbridge_clipboard_read(
         channel: Some(channel.as_str().to_string()),
         bytes: None,
         cwd: None,
+        requires_opt_in: Some(false),
+        consent_granted: Some(false),
     };
 
     let decision = {
@@ -2827,9 +3635,29 @@ impl ApiError {
         }
     }
 
+    fn unauthorized(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            body: ErrorBody {
+                code,
+                message: message.into(),
+            },
+        }
+    }
+
     fn unsupported(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_IMPLEMENTED,
+            body: ErrorBody {
+                code,
+                message: message.into(),
+            },
+        }
+    }
+
+    fn too_many_requests(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
             body: ErrorBody {
                 code,
                 message: message.into(),
@@ -2860,6 +3688,7 @@ impl IntoResponse for ApiError {
 fn termbridge_service_error(code: &'static str, err: TermBridgeServiceError) -> ApiError {
     match err {
         TermBridgeServiceError::Internal(message) => {
+            error!(%code, %message, "termbridge service internal error");
             ApiError::internal(code, anyhow::anyhow!(message))
         }
         TermBridgeServiceError::NotFound(message) => ApiError::not_found(code, message),
@@ -2872,6 +3701,13 @@ fn termbridge_service_error(code: &'static str, err: TermBridgeServiceError) -> 
             format!(
                 "terminal {} does not support {}: {}",
                 terminal, action, reason
+            ),
+        ),
+        TermBridgeServiceError::Overloaded { action, terminal } => ApiError::too_many_requests(
+            code,
+            format!(
+                "termbridge overloaded for action={} terminal={}",
+                action, terminal
             ),
         ),
     }
@@ -2911,14 +3747,86 @@ fn clipboard_service_error(code: &'static str, err: ClipboardServiceError) -> Ap
     }
 }
 
+// Consent check context for TermBridge actions
+#[derive(Clone, Copy)]
+struct ConsentCtx {
+    requires_opt_in: bool,
+    consent_granted: bool,
+}
+
+/// Resolve consent status for a given terminal and reject early if missing.
+async fn ensure_consent_or_forbid(
+    state: &AppState,
+    terminal: &str,
+    action: &str,
+    persona: Option<&str>,
+) -> Result<ConsentCtx, ApiError> {
+    // Determine whether this terminal requires opt-in
+    let snapshot = state
+        .termbridge()
+        .snapshot()
+        .await
+        .map_err(|err| termbridge_service_error("termbridge_snapshot", err))?;
+    let requires_opt_in = snapshot
+        .capabilities()
+        .into_iter()
+        .find(|rec| rec.terminal.as_str() == terminal)
+        .map(|rec| rec.requires_opt_in)
+        .unwrap_or(false);
+
+    // Resolve consent repository decision
+    let consent_granted = match state.consent().load() {
+        Ok(set) => set.contains(terminal),
+        Err(_) => false,
+    };
+
+    if requires_opt_in && !consent_granted {
+        if let Some(metrics) = state.metrics() {
+            metrics.record_policy_denial(&format!("termbridge.{}", action), persona);
+            metrics.record_termbridge_consent_denied(action, terminal);
+        }
+        let denial_payload = json!({
+            "action": action,
+            "terminal": terminal,
+            "allowed": false,
+            "reasons": ["consent_required"],
+        });
+        state
+            .append_event(&EventRecord::new(
+                &format!("termbridge.{}.denied", action),
+                persona.map(|s| s.to_string()),
+                denial_payload,
+                None,
+                Some("termbridge::consent".to_string()),
+                None,
+            ))
+            .await
+            .map_err(|err| ApiError::internal("journal_write", err))?;
+        return Err(ApiError::forbidden(
+            "consent_required",
+            "Terminal requires explicit consent",
+        ));
+    }
+
+    Ok(ConsentCtx {
+        requires_opt_in,
+        consent_granted,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::termbridge::{
+        FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
+    };
+    use crate::app::termbridge::TermBridgeDiscoveryDiff;
     use crate::domain::termbridge::{
-        TerminalBinding, TerminalBindingId, TerminalCapabilities, TerminalId,
+        CapabilityRecord, TerminalBinding, TerminalBindingId, TerminalCapabilities, TerminalId,
     };
     use crate::ports::termbridge::{
-        CapabilityObservation, TermBridgeError, TerminalBindingRepository, TerminalControlPort,
+        CapabilityObservation, DuplicateOptions, DuplicateStrategy, SpawnRequest, TermBridgeError,
+        TerminalBindingRepository, TerminalControlPort,
     };
     use async_trait::async_trait;
     use axum::body::Body;
@@ -2929,10 +3837,220 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
     use std::net::SocketAddr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
     use tower::ServiceExt;
+
+    static TEST_MUTEX: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
+        once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
+
+    fn make_capability(terminal: &str, requires_opt_in: bool) -> CapabilityRecord {
+        CapabilityRecord::new(
+            TerminalId::new(terminal),
+            terminal,
+            requires_opt_in,
+            TerminalCapabilities::builder().send_text(true).build(),
+            Vec::new(),
+        )
+    }
+
+    #[test]
+    fn diff_dto_conversion_retains_opt_in_flags() {
+        let diff = TermBridgeDiscoveryDiff {
+            added: vec![make_capability("wezterm", true)],
+            updated: vec![make_capability("kitty", false)],
+            removed: vec![make_capability("alacritty", false)],
+        };
+
+        let dto = TermBridgeDiscoveryDiffDto::from(diff);
+        assert_eq!(dto.added.len(), 1);
+        assert!(dto.added[0].requires_opt_in);
+        assert_eq!(dto.updated.len(), 1);
+        assert!(!dto.updated[0].requires_opt_in);
+        assert_eq!(dto.removed.len(), 1);
+    }
+
+    #[test]
+    fn capabilities_response_marks_changed_flag() {
+        let mut state = TermBridgeState::new();
+        state.update_capabilities(vec![make_capability("wezterm", false)]);
+        let status = TermBridgeStatus::from_state(state, Vec::new());
+        let response = TermBridgeCapabilitiesResponse::from_status(
+            status,
+            true,
+            TermBridgeDiscoveryDiffDto::default(),
+        );
+        assert!(response.changed);
+    }
+
+    #[tokio::test]
+    async fn termbridge_discover_uses_cache_within_ttl() {
+        use axum::http::Request;
+
+        let _guard = TEST_MUTEX.lock().await;
+        std::env::set_var("SHELLDONE_TERMBRIDGE_DISCOVER_CACHE_MS", "5000");
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let counter = Arc::new(AtomicUsize::new(0));
+        let adapter = CountingAdapter::new("wezterm", counter.clone());
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo,
+            vec![Arc::new(adapter)],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state = AppState::for_termbridge_test(termbridge_service, temp.path().to_path_buf())
+            .expect("test state");
+        assert_eq!(state.discovery_cache_ttl(), Duration::from_millis(5_000));
+        state.termbridge_discovery().shutdown().await;
+
+        let app = Router::new()
+            .route("/termbridge/discover", post(termbridge_discover))
+            .with_state(state.clone());
+
+        let before_first = counter.load(Ordering::SeqCst);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/discover")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(counter.load(Ordering::SeqCst), before_first + 1);
+
+        {
+            let cache = state.discovery_cache();
+            let guard = cache.read().await;
+            assert!(guard.is_some(), "discovery cache should be populated");
+        }
+
+        let before_second = counter.load(Ordering::SeqCst);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/discover")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(counter.load(Ordering::SeqCst), before_second);
+
+        std::env::remove_var("SHELLDONE_TERMBRIDGE_DISCOVER_CACHE_MS");
+    }
+
+    #[tokio::test]
+    async fn termbridge_discover_requires_token_when_configured() {
+        use axum::http::Request;
+
+        let _guard = TEST_MUTEX.lock().await;
+        std::env::set_var("SHELLDONE_TERMBRIDGE_DISCOVER_CACHE_MS", "0");
+        std::env::set_var(TERMBRIDGE_DISCOVERY_TOKEN_ENV, "secret-token");
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let adapter = CountingAdapter::new("wezterm", Arc::new(AtomicUsize::new(0)));
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo,
+            vec![Arc::new(adapter)],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state = AppState::for_termbridge_test(termbridge_service, temp.path().to_path_buf())
+            .expect("test state");
+
+        let app = Router::new()
+            .route("/termbridge/discover", post(termbridge_discover))
+            .with_state(state);
+
+        let unauthorized = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/discover")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+        let authorized = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/discover")
+                    .header("Authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(authorized.status(), StatusCode::OK);
+
+        std::env::remove_var("SHELLDONE_TERMBRIDGE_DISCOVER_CACHE_MS");
+        std::env::remove_var(TERMBRIDGE_DISCOVERY_TOKEN_ENV);
+    }
+
+    struct CountingAdapter {
+        terminal: TerminalId,
+        counter: Arc<AtomicUsize>,
+    }
+
+    impl CountingAdapter {
+        fn new(terminal: &str, counter: Arc<AtomicUsize>) -> Self {
+            Self {
+                terminal: TerminalId::new(terminal),
+                counter,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TerminalControlPort for CountingAdapter {
+        fn terminal_id(&self) -> TerminalId {
+            self.terminal.clone()
+        }
+
+        async fn detect(&self) -> CapabilityObservation {
+            self.counter.fetch_add(1, Ordering::SeqCst);
+            CapabilityObservation::new(
+                self.terminal.as_str(),
+                TerminalCapabilities::builder()
+                    .spawn(true)
+                    .focus(true)
+                    .send_text(true)
+                    .build(),
+                false,
+                Vec::new(),
+            )
+        }
+    }
 
     struct FocusAdapter {
         calls: Arc<Mutex<Vec<TerminalBindingId>>>,
@@ -2965,6 +4083,154 @@ mod tests {
 
         async fn focus(&self, binding: &TerminalBinding) -> Result<(), TermBridgeError> {
             self.calls.lock().unwrap().push(binding.id.clone());
+            Ok(())
+        }
+    }
+
+    struct SpawnSendAdapter {
+        spawn_calls: Arc<Mutex<Vec<SpawnRequest>>>,
+        send_calls: Arc<Mutex<Vec<(TerminalBindingId, String, bool)>>>,
+    }
+
+    impl SpawnSendAdapter {
+        fn new(
+            spawn_calls: Arc<Mutex<Vec<SpawnRequest>>>,
+            send_calls: Arc<Mutex<Vec<(TerminalBindingId, String, bool)>>>,
+        ) -> Self {
+            Self {
+                spawn_calls,
+                send_calls,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TerminalControlPort for SpawnSendAdapter {
+        fn terminal_id(&self) -> TerminalId {
+            TerminalId::new("wezterm")
+        }
+
+        async fn detect(&self) -> CapabilityObservation {
+            CapabilityObservation::new(
+                "WezTerm",
+                TerminalCapabilities::builder()
+                    .spawn(true)
+                    .split(true)
+                    .focus(true)
+                    .duplicate(false)
+                    .close(false)
+                    .send_text(true)
+                    .build(),
+                false,
+                Vec::new(),
+            )
+        }
+
+        async fn spawn(&self, request: &SpawnRequest) -> Result<TerminalBinding, TermBridgeError> {
+            let index = {
+                let mut calls = self.spawn_calls.lock().unwrap();
+                calls.push(request.clone());
+                calls.len()
+            };
+            let mut labels: HashMap<String, String> = HashMap::new();
+            if let Some(command) = &request.command {
+                labels.insert("command".to_string(), command.clone());
+            }
+            if let Some(cwd) = &request.cwd {
+                labels.insert("cwd".to_string(), cwd.clone());
+            }
+            for (key, value) in &request.env {
+                labels.insert(format!("env:{key}"), value.clone());
+            }
+            Ok(TerminalBinding::new(
+                request.terminal.clone(),
+                format!("spawn-test-{index}"),
+                labels,
+                None,
+            ))
+        }
+
+        async fn send_text(
+            &self,
+            binding: &TerminalBinding,
+            payload: &str,
+            as_bracketed: bool,
+        ) -> Result<(), TermBridgeError> {
+            self.send_calls.lock().unwrap().push((
+                binding.id.clone(),
+                payload.to_string(),
+                as_bracketed,
+            ));
+            Ok(())
+        }
+    }
+
+    struct DuplicateCloseAdapter {
+        duplicate_calls: Arc<Mutex<Vec<(TerminalBindingId, DuplicateOptions)>>>,
+        close_calls: Arc<Mutex<Vec<TerminalBindingId>>>,
+    }
+
+    impl DuplicateCloseAdapter {
+        fn new(
+            duplicate_calls: Arc<Mutex<Vec<(TerminalBindingId, DuplicateOptions)>>>,
+            close_calls: Arc<Mutex<Vec<TerminalBindingId>>>,
+        ) -> Self {
+            Self {
+                duplicate_calls,
+                close_calls,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TerminalControlPort for DuplicateCloseAdapter {
+        fn terminal_id(&self) -> TerminalId {
+            TerminalId::new("wezterm")
+        }
+
+        async fn detect(&self) -> CapabilityObservation {
+            CapabilityObservation::new(
+                "WezTerm",
+                TerminalCapabilities::builder()
+                    .spawn(true)
+                    .split(true)
+                    .focus(true)
+                    .duplicate(true)
+                    .close(true)
+                    .send_text(true)
+                    .build(),
+                false,
+                Vec::new(),
+            )
+        }
+
+        async fn duplicate(
+            &self,
+            binding: &TerminalBinding,
+            options: &DuplicateOptions,
+        ) -> Result<TerminalBinding, TermBridgeError> {
+            self.duplicate_calls
+                .lock()
+                .unwrap()
+                .push((binding.id.clone(), options.clone()));
+
+            let mut labels = HashMap::new();
+            labels.insert("pane_id".to_string(), format!("dup-{}", binding.id));
+            if let Some(command) = &options.command {
+                labels.insert("command".to_string(), command.clone());
+            }
+            let ipc_endpoint = Some(format!("wezterm://pane/dup-{}", binding.id));
+            let new_binding = TerminalBinding::new(
+                binding.terminal.clone(),
+                format!("dup-{}", binding.token),
+                labels,
+                ipc_endpoint,
+            );
+            Ok(new_binding)
+        }
+
+        async fn close(&self, binding: &TerminalBinding) -> Result<(), TermBridgeError> {
+            self.close_calls.lock().unwrap().push(binding.id.clone());
             Ok(())
         }
     }
@@ -3085,6 +4351,7 @@ mod tests {
             binding_repo.clone(),
             Vec::new(),
             None,
+            TermBridgeServiceConfig::default(),
         ));
 
         let state =
@@ -3178,6 +4445,7 @@ mod tests {
             binding_repo,
             Vec::new(),
             None,
+            TermBridgeServiceConfig::default(),
         ));
 
         let state = AppState::for_termbridge_test(termbridge_service, temp.path().to_path_buf())
@@ -3226,6 +4494,7 @@ mod tests {
             binding_repo.clone(),
             vec![adapter],
             None,
+            TermBridgeServiceConfig::default(),
         ));
 
         let state =
@@ -3276,10 +4545,11 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body["status"], "accepted");
 
-        let recorded_calls = calls.lock().unwrap();
-        assert_eq!(recorded_calls.len(), 1);
-        assert_eq!(recorded_calls[0], binding_id);
-        drop(recorded_calls);
+        {
+            let recorded_calls = calls.lock().unwrap();
+            assert_eq!(recorded_calls.len(), 1);
+            assert_eq!(recorded_calls[0], binding_id);
+        }
 
         let journal_path = state.state_dir().join("journal").join("continuum.log");
         let mut attempts = 0;
@@ -3287,6 +4557,415 @@ mod tests {
             if journal_path.exists() {
                 let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
                 if journal.contains("termbridge.focus") {
+                    break;
+                }
+            }
+            attempts += 1;
+            assert!(attempts < 20, "journal entry not observed");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn termbridge_spawn_endpoint_creates_binding_and_journal() {
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
+        };
+
+        let _guard = TEST_MUTEX.lock().await;
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let send_calls = Arc::new(Mutex::new(Vec::new()));
+        let adapter = Arc::new(SpawnSendAdapter::new(
+            spawn_calls.clone(),
+            send_calls.clone(),
+        ));
+
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo.clone(),
+            vec![adapter],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state =
+            AppState::for_termbridge_test(termbridge_service.clone(), temp.path().to_path_buf())
+                .expect("test state");
+
+        let app = Router::new()
+            .route("/termbridge/spawn", post(termbridge_spawn))
+            .with_state(state.clone());
+
+        let payload = json!({
+            "terminal": "wezterm",
+            "command": "ls",
+            "cwd": "/tmp",
+            "env": {"FOO": "BAR"}
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/spawn")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response
+            .into_body()
+            .into_data_stream()
+            .try_fold(Vec::new(), |mut acc, chunk| async move {
+                acc.extend_from_slice(&chunk);
+                Ok(acc)
+            })
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["terminal"].as_str(), Some("wezterm"));
+
+        let stored_bindings = termbridge_service.list_bindings().await.unwrap();
+        assert_eq!(stored_bindings.len(), 1);
+
+        {
+            let calls = spawn_calls.lock().unwrap();
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].command.as_deref(), Some("ls"));
+            assert_eq!(calls[0].cwd.as_deref(), Some("/tmp"));
+            assert_eq!(calls[0].env.get("FOO"), Some(&"BAR".to_string()));
+        }
+
+        assert!(send_calls.lock().unwrap().is_empty());
+
+        let journal_path = state.state_dir().join("journal").join("continuum.log");
+        let mut attempts = 0;
+        loop {
+            if journal_path.exists() {
+                let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
+                if journal.contains("termbridge.spawn") {
+                    break;
+                }
+            }
+            attempts += 1;
+            assert!(attempts < 20, "spawn journal entry not observed");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn termbridge_send_text_endpoint_records_payload() {
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
+        };
+
+        let _guard = TEST_MUTEX.lock().await;
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let send_calls = Arc::new(Mutex::new(Vec::new()));
+        let adapter = Arc::new(SpawnSendAdapter::new(
+            spawn_calls.clone(),
+            send_calls.clone(),
+        ));
+
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo.clone(),
+            vec![adapter],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state =
+            AppState::for_termbridge_test(termbridge_service.clone(), temp.path().to_path_buf())
+                .expect("test state");
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "pane-send".to_string());
+        let binding = TerminalBinding::new(TerminalId::new("wezterm"), "token-send", labels, None);
+        let binding_id = binding.id.clone();
+        binding_repo.save(binding).await.unwrap();
+
+        let app = Router::new()
+            .route("/termbridge/send-text", post(termbridge_send_text))
+            .with_state(state.clone());
+
+        let payload = json!({
+            "binding_id": binding_id.to_string(),
+            "payload": "echo hello",
+            "bracketed_paste": true
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/send-text")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        {
+            let calls = send_calls.lock().unwrap();
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].0, binding_id);
+            assert_eq!(calls[0].1, "echo hello");
+            assert!(calls[0].2);
+        }
+
+        let journal_path = state.state_dir().join("journal").join("continuum.log");
+        let mut attempts = 0;
+        loop {
+            if journal_path.exists() {
+                let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
+                if journal.contains("termbridge.send_text") {
+                    break;
+                }
+            }
+            attempts += 1;
+            assert!(attempts < 20, "send_text journal entry not observed");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn termbridge_duplicate_endpoint_creates_binding_and_journal() {
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
+        };
+
+        let _guard = TEST_MUTEX.lock().await;
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let duplicate_calls: Arc<Mutex<Vec<(TerminalBindingId, DuplicateOptions)>>> =
+            Arc::new(Mutex::new(Vec::new()));
+        let close_calls: Arc<Mutex<Vec<TerminalBindingId>>> = Arc::new(Mutex::new(Vec::new()));
+        let adapter = Arc::new(DuplicateCloseAdapter::new(
+            duplicate_calls.clone(),
+            close_calls.clone(),
+        ));
+
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo.clone(),
+            vec![adapter],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state =
+            AppState::for_termbridge_test(termbridge_service.clone(), temp.path().to_path_buf())
+                .expect("test state");
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "pane-dup-base".to_string());
+        let binding = TerminalBinding::new(
+            TerminalId::new("wezterm"),
+            "token-dup-base",
+            labels,
+            Some("wezterm://pane/pane-dup-base".into()),
+        );
+        let binding_id = binding.id.clone();
+        binding_repo.save(binding).await.unwrap();
+
+        let app = Router::new()
+            .route("/termbridge/duplicate", post(termbridge_duplicate))
+            .with_state(state.clone());
+
+        let payload = json!({
+            "binding_id": binding_id.to_string(),
+            "strategy": "horizontal_split",
+            "command": "htop",
+            "cwd": "/workspace"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/duplicate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response
+            .into_body()
+            .into_data_stream()
+            .try_fold(Vec::new(), |mut acc, chunk| async move {
+                acc.extend_from_slice(&chunk);
+                Ok(acc)
+            })
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let new_binding_id = TerminalBindingId::parse(body["id"].as_str().unwrap()).unwrap();
+        assert_ne!(new_binding_id, binding_id);
+        assert_eq!(body["labels"]["command"].as_str(), Some("htop"));
+
+        {
+            let calls = duplicate_calls.lock().unwrap();
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].0, binding_id);
+            assert_eq!(calls[0].1.command.as_deref(), Some("htop"));
+            assert_eq!(calls[0].1.cwd.as_deref(), Some("/workspace"));
+            assert_eq!(calls[0].1.strategy, DuplicateStrategy::HorizontalSplit);
+        }
+
+        let stored_bindings = termbridge_service.list_bindings().await.unwrap();
+        assert_eq!(stored_bindings.len(), 2);
+        let created_binding = termbridge_service
+            .get_binding(&new_binding_id)
+            .await
+            .unwrap()
+            .expect("new binding");
+        assert_eq!(
+            created_binding.labels.get("command"),
+            Some(&"htop".to_string())
+        );
+
+        let journal_path = state.state_dir().join("journal").join("continuum.log");
+        let mut attempts = 0;
+        loop {
+            if journal_path.exists() {
+                let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
+                if journal.contains("termbridge.duplicate") {
+                    break;
+                }
+            }
+            attempts += 1;
+            assert!(attempts < 20, "journal entry not observed");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        assert!(close_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn termbridge_close_endpoint_removes_binding_and_journal() {
+        use crate::adapters::termbridge::{
+            FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
+        };
+
+        let _guard = TEST_MUTEX.lock().await;
+
+        let temp = TempDir::new().unwrap();
+        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
+        let state_repo = Arc::new(FileTermBridgeStateRepository::new(
+            temp.path().join("termbridge_state.json"),
+        ));
+        let duplicate_calls: Arc<Mutex<Vec<(TerminalBindingId, DuplicateOptions)>>> =
+            Arc::new(Mutex::new(Vec::new()));
+        let close_calls: Arc<Mutex<Vec<TerminalBindingId>>> = Arc::new(Mutex::new(Vec::new()));
+        let adapter = Arc::new(DuplicateCloseAdapter::new(
+            duplicate_calls.clone(),
+            close_calls.clone(),
+        ));
+
+        let termbridge_service = Arc::new(TermBridgeService::new(
+            state_repo,
+            binding_repo.clone(),
+            vec![adapter],
+            None,
+            TermBridgeServiceConfig::default(),
+        ));
+
+        let state =
+            AppState::for_termbridge_test(termbridge_service.clone(), temp.path().to_path_buf())
+                .expect("test state");
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "pane-close".to_string());
+        let binding = TerminalBinding::new(
+            TerminalId::new("wezterm"),
+            "token-close",
+            labels,
+            Some("wezterm://pane/pane-close".into()),
+        );
+        let binding_id = binding.id.clone();
+        binding_repo.save(binding).await.unwrap();
+
+        let app = Router::new()
+            .route("/termbridge/close", post(termbridge_close))
+            .with_state(state.clone());
+
+        let payload = json!({
+            "binding_id": binding_id.to_string(),
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/termbridge/close")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response
+            .into_body()
+            .into_data_stream()
+            .try_fold(Vec::new(), |mut acc, chunk| async move {
+                acc.extend_from_slice(&chunk);
+                Ok(acc)
+            })
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            TerminalBindingId::parse(body["id"].as_str().unwrap()).unwrap(),
+            binding_id
+        );
+
+        {
+            let closes = close_calls.lock().unwrap();
+            assert_eq!(closes.len(), 1);
+            assert_eq!(closes[0], binding_id);
+        }
+
+        assert!(duplicate_calls.lock().unwrap().is_empty());
+
+        let stored_binding = termbridge_service.get_binding(&binding_id).await.unwrap();
+        assert!(stored_binding.is_none(), "binding should be removed");
+
+        let journal_path = state.state_dir().join("journal").join("continuum.log");
+        let mut attempts = 0;
+        loop {
+            if journal_path.exists() {
+                let journal = tokio::fs::read_to_string(&journal_path).await.unwrap();
+                if journal.contains("termbridge.close") {
                     break;
                 }
             }
@@ -3595,6 +5274,11 @@ fn map_mcp_error(err: McpBridgeError) -> JsonRpcError {
         },
         McpBridgeError::Internal(message) => JsonRpcError {
             code: -32603,
+            message,
+            data: None,
+        },
+        McpBridgeError::Forbidden(message) => JsonRpcError {
+            code: -32604,
             message,
             data: None,
         },

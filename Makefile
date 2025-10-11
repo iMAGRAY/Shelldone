@@ -1,5 +1,5 @@
 PKG_CONFIG_PATH ?= /usr/lib/x86_64-linux-gnu/pkgconfig
-.PHONY: all fmt build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif perf-experience roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci setup-env python-tests health-check
+.PHONY: all fmt fmt-check build check test docs servedocs dev shelldone verify verify-fast verify-prepush verify-full verify-ci agents-smoke run-agentd perf-utif perf-experience roadmap status roadmap-status ship clippy lint test-e2e test-e2e-verbose perf-policy perf-baseline perf-ci ci setup-env python-tests health-check review linear-create-issue create_issue termbridge-telemetry-smoke
 
 all: build
 
@@ -23,6 +23,9 @@ build:
 fmt:
 	cargo +nightly fmt
 
+fmt-check:
+	cargo +nightly fmt --all -- --check
+
 clippy lint:
 	cargo clippy --workspace --all-targets
 
@@ -31,7 +34,11 @@ verify:
 
 setup-env:
 	@echo "[setup-env] ensuring Python toolchain available"
-	agentcontrol/scripts/setup.sh
+	@if [ -x scripts/setup.sh ]; then \
+		bash scripts/setup.sh; \
+	else \
+		echo "[setup-env] no repo-local setup script; skipping"; \
+	fi
 
 python-tests:
 	@if [ -x .venv/bin/pytest ]; then \
@@ -71,6 +78,25 @@ dev:
 shelldone:
 	cargo run --release --bin shelldone-gui
 
+linear-create-issue:
+	@if [ -z "$(TEAM)" ]; then echo "TEAM=<Linear team UUID or global ID> is required"; exit 2; fi
+	@if [ -z "$(TITLE)" ]; then echo 'TITLE="Issue title" is required'; exit 2; fi
+	LINEAR_API_KEY=$${LINEAR_API_KEY:?LINEAR_API_KEY must be set} \
+	python3 scripts/tools/create_linear_issue.py \
+		--team "$(TEAM)" \
+		--title "$(TITLE)" \
+		$(if $(DESCRIPTION),--description "$(DESCRIPTION)",) \
+		$(if $(DESCRIPTION_FILE),--description-file "$(DESCRIPTION_FILE)",) \
+		$(if $(PROJECT),--project "$(PROJECT)",) \
+		$(if $(STATE),--state "$(STATE)",) \
+		$(if $(ASSIGNEE),--assignee "$(ASSIGNEE)",) \
+		$(if $(LABELS),--labels "$(LABELS)",)
+
+create_issue: linear-create-issue
+
+termbridge-telemetry-smoke:
+	python3 scripts/tests/termbridge_otlp_smoke.py $(if $(ARTIFACT_DIR),--artifacts-dir "$(ARTIFACT_DIR)",)
+
 docs:
 	ci/build-docs.sh
 
@@ -108,3 +134,6 @@ perf-ci:
 
 ci: verify-ci test-e2e perf-ci
 	@echo "Full CI pipeline complete"
+
+review:
+	bash scripts/review.sh
