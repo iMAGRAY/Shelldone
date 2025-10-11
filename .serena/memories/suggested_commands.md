@@ -1,0 +1,14 @@
+## Базовые команды
+- `make dev` — собрать и запустить GUI для смоук-теста.
+- `make verify` (`VERIFY_MODE=fast|prepush|full|ci`) — форматирование, clippy, tests, nextest, QA baseline.
+- `make review` — полный flagship-пайплайн (fmt-check → clippy → nextest → race → dup → complexity → contracts → sbom).
+- `make ship` — релизный гейт (проксирует `make verify`).
+- `make roadmap` (`JSON=1`, `STRICT=0`) — сверка статуса и roadmap.
+- `python3 scripts/status.py` — агрегированный статус задач.
+- `python3 scripts/project_health_check.py --json` — быстрый health-check конфигурации.
+- `cargo nextest run` — unit/integration тесты.
+- `cargo clippy --workspace --all-targets -- -D warnings` — ручной линт.
+- `python3 -m perf_runner run --probe <name>` — запуск перф сценариев (`utif_exec`, `experience_hub`, `policy_perf`, `baseline`).
+- `make servedocs` — предпросмотр документации (MkDocs).
+- `scripts/tests/termbridge_matrix.py` — матрица для TermBridge.
+- `bash scripts/review.sh` — вспомогательный сценарий review.

@@ -134,6 +134,117 @@ def build_experience_hub_spec(
     )
 
 
+def build_termbridge_discovery_spec(
+    trials: int,
+    warmup_seconds: int,
+    *,
+    env: dict | None = None,
+) -> ProbeSpec:
+    env = env or os.environ
+    script = ProbeScript(ROOT / "scripts/perf/termbridge_discovery.js")
+    duration_default = env.get("SHELLDONE_PERF_DURATION", "30s")
+    extra_env = {
+        "SHELLDONE_PERF_DURATION": env.get(
+            "SHELLDONE_PERF_TERMBRIDGE_DURATION", duration_default
+        ),
+        "SHELLDONE_PERF_RATE": env.get(
+            "SHELLDONE_PERF_TERMBRIDGE_RATE", env.get("SHELLDONE_PERF_RATE", "80")
+        ),
+        "SHELLDONE_PERF_VUS": env.get(
+            "SHELLDONE_PERF_TERMBRIDGE_VUS", env.get("SHELLDONE_PERF_VUS", "20")
+        ),
+        "SHELLDONE_PERF_MAX_VUS": env.get(
+            "SHELLDONE_PERF_TERMBRIDGE_MAX_VUS", env.get("SHELLDONE_PERF_MAX_VUS", "40")
+        ),
+        "SHELLDONE_PERF_WARMUP_SEC": env.get(
+            "SHELLDONE_PERF_TERMBRIDGE_WARMUP_SEC",
+            env.get("SHELLDONE_PERF_WARMUP_SEC", "0"),
+        ),
+    }
+    return ProbeSpec(
+        probe_id="termbridge_discovery",
+        label="TermBridge discovery registry sync",
+        script=script,
+        metrics=[
+            MetricDefinition(
+                "termbridge_discovery_latency", "p(95)", "discovery_latency_p95_ms", "ms"
+            ),
+            MetricDefinition(
+                "termbridge_discovery_latency", "p(99)", "discovery_latency_p99_ms", "ms"
+            ),
+            MetricDefinition(
+                "termbridge_discovery_errors", "rate", "discovery_error_rate_ratio", "ratio"
+            ),
+        ],
+        budgets=[
+            MetricBudget("discovery_latency_p95_ms", "<=", 200.0, "ms"),
+            MetricBudget("discovery_latency_p99_ms", "<=", 300.0, "ms"),
+            MetricBudget("discovery_error_rate_ratio", "<", 0.005, "ratio"),
+        ],
+        trials=trials,
+        warmup_seconds=warmup_seconds,
+        summary_prefix="termbridge_discovery",
+        extra_env=extra_env,
+    )
+
+def build_termbridge_consent_spec(
+    trials: int,
+    warmup_seconds: int,
+    *,
+    env: dict | None = None,
+) -> ProbeSpec:
+    env = env or os.environ
+    script = ProbeScript(ROOT / "scripts/perf/termbridge_consent.js")
+    duration_default = env.get("SHELLDONE_PERF_DURATION", "30s")
+    extra_env = {
+        "SHELLDONE_PERF_DURATION": env.get(
+            "SHELLDONE_PERF_CONSENT_DURATION", duration_default
+        ),
+        "SHELLDONE_PERF_RATE": env.get(
+            "SHELLDONE_PERF_CONSENT_RATE", env.get("SHELLDONE_PERF_RATE", "80")
+        ),
+        "SHELLDONE_PERF_VUS": env.get(
+            "SHELLDONE_PERF_CONSENT_VUS", env.get("SHELLDONE_PERF_VUS", "20")
+        ),
+        "SHELLDONE_PERF_MAX_VUS": env.get(
+            "SHELLDONE_PERF_CONSENT_MAX_VUS", env.get("SHELLDONE_PERF_MAX_VUS", "40")
+        ),
+        "SHELLDONE_PERF_WARMUP_SEC": env.get(
+            "SHELLDONE_PERF_CONSENT_WARMUP_SEC",
+            env.get("SHELLDONE_PERF_WARMUP_SEC", "0"),
+        ),
+        # Optional: force a specific terminal id
+        "SHELLDONE_PERF_CONSENT_TERMINAL": env.get(
+            "SHELLDONE_PERF_CONSENT_TERMINAL", ""
+        ),
+    }
+    return ProbeSpec(
+        probe_id="termbridge_consent",
+        label="TermBridge consent grant/revoke",
+        script=script,
+        metrics=[
+            MetricDefinition(
+                "termbridge_consent_latency", "p(95)", "consent_latency_p95_ms", "ms"
+            ),
+            MetricDefinition(
+                "termbridge_consent_latency", "p(99)", "consent_latency_p99_ms", "ms"
+            ),
+            MetricDefinition(
+                "termbridge_consent_errors", "rate", "consent_error_rate_ratio", "ratio"
+            ),
+        ],
+        budgets=[
+            MetricBudget("consent_latency_p95_ms", "<=", 50.0, "ms"),
+            MetricBudget("consent_latency_p99_ms", "<=", 100.0, "ms"),
+            MetricBudget("consent_error_rate_ratio", "<", 0.005, "ratio"),
+        ],
+        trials=trials,
+        warmup_seconds=warmup_seconds,
+        summary_prefix="termbridge_consent",
+        extra_env=extra_env,
+    )
+
+
 def default_specs(
     trials: int,
     warmup_seconds: int,
@@ -143,6 +254,8 @@ def default_specs(
 ) -> List[ProbeSpec]:
     return [
         build_utif_exec_spec(trials, warmup_seconds, env=env),
+        build_termbridge_discovery_spec(trials, warmup_seconds, env=env),
+        build_termbridge_consent_spec(trials, warmup_seconds, env=env),
         build_policy_spec(trials, policy_warmup_seconds, env=env),
         build_experience_hub_spec(trials, warmup_seconds, env=env),
     ]

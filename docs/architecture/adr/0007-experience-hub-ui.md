@@ -9,7 +9,7 @@
 - **Consequences:**
   - Требуются дальнейшие интеграции с фактическими approval pipelines (TTL TEMP/EXPHUB/7d).
   - Необходимо расширить telemetry (`agent_activity`) и perf-baselines `experience_hub.wgsl` (follow-up task `task-experience-telemetry`).
-- **Rollback Plan:** git tag `codex/2025-10-05-pre-experience-hub`; удалить `shelldone-gui/src/experience/**`, команду `ShowExperienceHub`, и re-run `agentcall verify`.
-- **Testing:** Юнит-тесты на агрегат, адаптер; `agentcall verify` с diff coverage ≥ 90%.
-- **Owners:** Experience squad · Animation/Persona chapter.
+- **Rollback Plan:** git tag `codex/2025-10-05-pre-experience-hub`; удалить `shelldone-gui/src/experience/**`, команду `ShowExperienceHub`, и re-run `python3 scripts/verify.py`.
+- **Testing:** Юнит-тесты на агрегат, адаптер; `python3 scripts/verify.py` с diff coverage ≥ 90%.
+- **Owners:** imagray `<magraytlinov@gmail.com>` (support: Experience squad · Animation/Persona chapter).
 - **Dependencies:** ADR-0003 (Persona Engine), ADR-0004 (Capability Marketplace).

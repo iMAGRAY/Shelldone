@@ -4,7 +4,7 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 
 ## Core Principles
 - **Performance first.** Every component must stay within the CPU/GPU/memory budgets defined in `docs/architecture/perf-budget.md`.
-- **Quality by default.** All changes must pass `make verify` (see `docs/community/contributor-handbook.md` for modes and expectations).
+- **Quality by default.** All changes must pass `python3 scripts/verify.py` (see `docs/community/contributor-handbook.md` for modes and expectations).
 - **Open extension points.** New functionality is implemented through plugin APIs and documented across `docs/architecture/`.
 - **Native AI support.** People and agents share one control protocol; automation is a first-class citizen.
 
@@ -26,8 +26,9 @@ This document outlines the target architecture for Shelldone. Detailed specifica
 - `docs/architecture/pain-matrix.md` — приоритизированные pain-points с привязкой к задачам (`task-*`).
 - `docs/architecture/termbridge.md` — единый оркестратор терминалов, capability map schema, consent workflow и UX/obserability контуры.
 - ADR-0007 (`docs/architecture/adr/0007-experience-hub-ui.md`) — Experience Hub god-mode overlay и bounded context `experience`.
+ - `docs/architecture/rtf.md` — Ready-to-Field (RTF) гейт для эксплуатационной готовности (расширяет RFT из манифеста).
 
 ## Roadmap
-Quarterly phases and milestones are defined in `docs/ROADMAP/2025Q4.md`; supporting notes live in `docs/ROADMAP/notes/`.
+Quarterly phases and milestones are defined in `docs/ROADMAP/2025Q4.md`; supporting notes live in `docs/ROADMAP/notes/`. Сводное определение MVP: `docs/ROADMAP/MVP.md`.
 
 All architectural decisions require an ADR (`docs/architecture/adr/`). If a new change lacks an ADR, create one before implementation.

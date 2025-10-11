@@ -25,11 +25,29 @@
 
 ## Roadmap Integration
 - Big task `task-state-persistence` covers implementation.
-- `make verify` should lint serialisable models and run load/save smoke tests.
+- `python3 scripts/verify.py` should lint serialisable models and run load/save smoke tests.
+
+## State Sync UI (Experience Hub)
+- Experience Hub overlay **State Sync** surfaces the latest workspace snapshots pulled
+  from `state/snapshots/`. The panel shows recency, size, storage path, and
+  classification tags (auto/manual/protected).
+- Highlight ratio blends recency and snapshot density; fresh snapshots (<15 min)
+  glow at full intensity while older sets degrade to 0.3.
+- Callout tile summarises the newest snapshot and links to the on-disk path for
+  quick inspection prior to restore.
+- Global actions provide one-keystroke recovery flows: `Ctrl+Shift+R` restores the
+  latest snapshot via `shelldone state restore`, `Ctrl+Shift+O` reveals the snapshots
+  directory in the OS file manager, and `Ctrl+Shift+C` copies the snapshot path to
+  the clipboard. Each action emits persistent toast notifications for success or
+  failure (missing CLI, I/O errors, etc.), giving immediate feedback.
+- Telemetry gauges: `experience.snapshots.count` and `experience.snapshots.recency`
+  (future) allow dashboards to track backup coverage.
+- Fallback states: when no snapshots exist the overlay renders guidance instead
+  of an empty list, nudging operators to run `shelldone state save`.
 
 ## Next Steps
 1. Create an ADR covering snapshot format (JSON vs SQLite vs binary).
 2. Implement `shelldone state save/restore` with automatic recovery on startup.
 3. Build the sync CLI/daemon.
-4. Add a state health-check to `make verify-full` (selective round trip).
+4. Add a state health-check to `python3 scripts/verify.py --mode full` (selective round trip).
 5. Write user-facing documentation (`docs/recipes/state-backup.md`).

@@ -16,7 +16,7 @@ sudo apt-get install k6
 ```
 
 ## Verify Integration
-`make verify-full`/`make verify-ci` start `shelldone-agentd`, run three trials for each probe, enforce budgets, and emit:
+`VERIFY_MODE=full make verify` / `VERIFY_MODE=ci make verify` start `shelldone-agentd`, run three trials for each probe, enforce budgets, and emit:
 
 ```
 artifacts/perf/
@@ -100,6 +100,8 @@ Measures latency for the Experience Hub telemetry fetches (`/context/full` and `
 | `SHELLDONE_PERF_EXPERIENCE_MAX_VUS` | 60 | experience_hub | Maximum virtual users for telemetry probe. |
 | `SHELLDONE_PERF_EXPERIENCE_WARMUP_SEC` | inherit | experience_hub | Warm-up for Experience Hub probe. |
 | `SHELLDONE_AGENTD_HOST` | http://127.0.0.1:17717 | experience_hub | Base URL for agentd telemetry endpoints. |
+| `SHELLDONE_PERF_TERMBRIDGE_ENDPOINT` | http://127.0.0.1:17717/termbridge/discover | termbridge_discovery | Override discover endpoint for the k6 probe. |
+| `SHELLDONE_PERF_TERMBRIDGE_TOKEN` | _empty_ | termbridge_discovery | Bearer token forwarded in the `Authorization` header. |
 
 ## Local Usage
 ```bash
@@ -134,12 +136,12 @@ python3 -m perf_runner run --profile prod     # trials=5, 120s длительн�
 - `--profile prod` — полный контракт (5 прогонов по 120 s, rate 240/150); используем в ночных jobах и при релизе.
 - Для кастомизации CI можно комбинировать `SHELLDONE_PERF_PROFILE=ci` с точечными `SHELLDONE_PERF_TRIALS=2` и т.д.
 
-## CI / Make Targets
+## CI / Automation Targets
 ```bash
-make perf-utif         # python3 -m perf_runner run --probe utif_exec
-make perf-policy       # python3 -m perf_runner run --probe policy_perf
-make perf-baseline     # python3 -m perf_runner run (оба прогона)
-make verify-full       # включает perf-probes gate + артефакты
+python3 -m perf_runner run --probe utif_exec        # perf-utif
+python3 -m perf_runner run --probe policy_perf      # perf-policy
+python3 -m perf_runner run                          # perf-baseline
+VERIFY_MODE=full make verify                        # включает perf-probes gate + артефакты
 ```
 
 ## Analyzing Results
@@ -152,3 +154,15 @@ jq '.probes' artifacts/perf/summary.json
 - **Missing k6**: install the binary (see prerequisites).
 - **High latency**: profile `shelldone-agentd` with `cargo flamegraph -p shelldone-agentd` and inspect `agentd_perf.log`.
 - **Policy budgets failing**: inspect `artifacts/perf/policy_perf/*.json` for outliers and review Rego rules.
+### `termbridge_consent.js`
+Exercises the TermBridge consent repository by alternating `POST /termbridge/consent/grant` and `POST /termbridge/consent/revoke`.
+
+Defaults
+- Rate: 80 req/s (`SHELLDONE_PERF_CONSENT_RATE` or `SHELLDONE_PERF_RATE`)
+- Duration: 30s (`SHELLDONE_PERF_CONSENT_DURATION` or `SHELLDONE_PERF_DURATION`)
+- VUs: 20/40 (`SHELLDONE_PERF_CONSENT_VUS` / `SHELLDONE_PERF_CONSENT_MAX_VUS`)
+- Warm-up: inherits `SHELLDONE_PERF_CONSENT_WARMUP_SEC` (fallback to `SHELLDONE_PERF_WARMUP_SEC`).
+
+Notes
+- The probe does not depend on a specific terminal. It optionally honours `SHELLDONE_PERF_CONSENT_TERMINAL` to target a particular id; otherwise it picks the first terminal with `requires_opt_in` from `/termbridge/discover` and falls back to `iterm2`.
+- Budgets (aggregated across trials): `consent_latency_p95_ms ≤ 50 ms`, `consent_latency_p99_ms ≤ 100 ms`, `consent_error_rate_ratio < 0.5%`.

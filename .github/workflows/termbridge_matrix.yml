@@ -1,0 +1,104 @@
+name: termbridge-matrix
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/tests/termbridge_matrix.py'
+      - 'shelldone-agentd/**'
+      - 'artifacts/termbridge/**'
+      - 'docs/architecture/termbridge.md'
+      - '.github/workflows/termbridge_matrix.yml'
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    name: ${{ matrix.os }} TermBridge Matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+          - ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install WezTerm (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install wezterm --no-progress -y
+
+      - name: Install WezTerm (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: brew install wezterm
+
+      - name: Install WezTerm (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          cd /tmp
+          wget https://github.com/wez/wezterm/releases/download/nightly/WezTerm-nightly-Ubuntu22.04.deb -O wezterm.deb
+          sudo apt-get install -y ./wezterm.deb || sudo dpkg -i ./wezterm.deb || (sudo apt-get install -f -y && sudo dpkg -i ./wezterm.deb)
+
+      - name: Smoke Check WezTerm
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          wezterm --version
+
+      - name: Smoke Check WezTerm (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          wezterm --version
+
+      - name: Run TermBridge capability export with OTLP check
+        env:
+          OTLP_OUTPUT: artifacts/termbridge/otlp-${{ matrix.os }}.json
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/termbridge
+          python scripts/tests/mock_otlp_collector.py --port 4318 --output "$OTLP_OUTPUT" &
+          COLLECTOR_PID=$!
+          sleep 1
+          python scripts/tests/termbridge_matrix.py --emit-otlp --otlp-endpoint http://127.0.0.1:4318
+          kill -s INT $COLLECTOR_PID || true
+          wait $COLLECTOR_PID || true
+          python scripts/tests/check_otlp_payload.py --payload "$OTLP_OUTPUT" --snapshot artifacts/termbridge/capability-map.json
+
+      - name: Upload capability snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: termbridge-${{ matrix.os }}
+          path: |
+            artifacts/termbridge/capability-map.json
+            dashboards/artefacts/termbridge
+          retention-days: 7

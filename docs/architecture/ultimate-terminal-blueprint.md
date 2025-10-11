@@ -1,6 +1,6 @@
 # Ultimate Shelldone Terminal Blueprint
 
-> Version: 2025-10-04 • Owner: Principal Engineering Guild • Status: Draft → Ready for Implementation
+> Version: 2025-10-04 • Owner: imagray `<magraytlinov@gmail.com>` • Status: Draft → Ready for Implementation
 
 ## 1. System Overview
 Shelldone evolves into an agent-native terminal platform that unifies user and AI automation flows. The architecture follows strict DDD boundaries with four primary bounded contexts:
@@ -59,13 +59,13 @@ The 30 pain points from `docs/architecture/pain-matrix.md` map to the following 
 4. **Continuum & Observability** — replay UI, OTLP dashboards, audit exports (AC::OBS-1::continuum_replay_latency_ms::<=120::2026-03-15::p95).
 5. **Persona UX Polish** — guided overlays, consent flows, theme guard (AC::UX-1::persona_nps::>=70::2026-03-31::personas=Nova,Core,Flux).
 
-Each phase ships with property/integration tests and CI gates (`make verify`, `make perf`, `make observability`).
+Each phase ships with property/integration tests and CI gates (`python3 scripts/verify.py`, perf runner scripts, observability smoke jobs).
 
 ## 5. Tests & Quality Gates
 - **Unit**: Sigma sanitiser fuzz (`sigma_proxy::tests::sanitize_*`), AgentBinding invariants, CapabilityMap property tests.
 - **Integration**: `/termbridge/*`, `/status`, `/context/full`, Microsoft SDK heartbeat via stdio harness.
 - **Contract**: Rego policy tests with golden decision tables.
-- **Diff Coverage**: enforce ≥ 90% via `make verify` pipeline (diff-cover).
+- **Diff Coverage**: enforce ≥ 90% via `python3 scripts/verify.py` pipeline (diff-cover).
 - **Performance**: k6 scenario `scripts/perf/termbridge_discovery.js` (p95 ≤ 80 ms for capability fetch) and `utif_sigma.js` (p95 ≤ 120 ms with sanitiser enabled).
 - **Security**: OSV scanner + `cargo deny` gating on ship; credential leak detection (entropy + policy).
 
@@ -88,14 +88,14 @@ Each phase ships with property/integration tests and CI gates (`make verify`, `m
 | Performance regression from sanitiser | Latency increase | Perf mini-protocol gating, fallback to streaming mode when ratio > 1.2x baseline.
 
 ## 8. Work Packages & Ownership
-- `SEC-Σ` — Security guild
-- `TERM-CORE`, `TERM-CLIP`, `TERM-UX` — TermBridge guild
-- `AGNT-GA`, `AGNT-MSAUTH`, `AGNT-MARKET` — AgentBridge guild
-- `OBS-CONT`, `OBS-OTLP` — Observability guild
-- `UX-PERSONA`, `UX-GUIDE` — UX guild
-- `DOC-PORTAL` — Docs guild
+- `SEC-Σ` — Owner: imagray (support: Security guild)
+- `TERM-CORE`, `TERM-CLIP`, `TERM-UX` — Owner: imagray (support: TermBridge guild)
+- `AGNT-GA`, `AGNT-MSAUTH`, `AGNT-MARKET` — Owner: imagray (support: AgentBridge guild)
+- `OBS-CONT`, `OBS-OTLP` — Owner: imagray (support: Observability guild)
+- `UX-PERSONA`, `UX-GUIDE` — Owner: imagray (support: UX guild)
+- `DOC-PORTAL` — Owner: imagray (support: Docs guild)
 
-Each package tracked in `todo.machine.md` with MVP checkpoints and Stage gates (`make status`).
+Each package tracked in `todo.machine.md` with MVP checkpoints and Stage gates (`see docs/status.md`).
 
 ## 9. KPIs & Evaluation
 - Latency budgets: Sigma sanitiser overhead ≤ 1.4× baseline; TermBridge spawn ≤ 250 ms p95.
@@ -112,4 +112,8 @@ Each package tracked in `todo.machine.md` with MVP checkpoints and Stage gates (
 5. Schedule perf validation sessions (k6 + GPU frame capture) before GA.
 
 ---
-Responsible engineers: `@principal`, `@sigma`, `@termbridge`, `@agentd`. Update cadence: weekly sync → `reports/status.json`.
+Responsible engineer: `@imagray` (liaison: `@sigma`, `@termbridge`, `@agentd`). Update cadence: weekly sync → `reports/status.json`.
+
+## 11. Alignment with RTF and MVP
+- RTF Gate: см. `docs/architecture/rtf.md` — этот blueprint соответствует RTF-порогам (Σ-cap ≤5 ms p95, ACK overhead ≤3 ms p95, Continuum append ≤1 ms p95, TermBridge spawn ≤250 ms p95, TTI ≤20 мс). Все изменения в разделах 4–7 должны сопровождаться обновлением артефактов RTF.
+- MVP Scope: см. `docs/ROADMAP/MVP.md` — Wave 1 покрывает минимально достаточные компоненты MVP. Любой выход за рамки MVP должен быть помечен флагами и не нарушать RTF.

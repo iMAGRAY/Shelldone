@@ -11,5 +11,5 @@
   - Требуется дополнительный telemetry канал для persona метрик.
 - **Rollback Plan:** git tag `codex/2025-10-03-pre-persona`, CLI `shelldone persona disable --all` + revert конфигов.
 - **Testing:** UX сценарии, property tests на отсутствие подсказок в Flux, perf профили подсказок.
-- **Owners:** Experience squad.
+- **Owners:** imagray `<magraytlinov@gmail.com>` (support: Experience squad).
 - **Dependencies:** ADR-0001, ADR-0002.

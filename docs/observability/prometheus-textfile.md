@@ -39,7 +39,7 @@ shelldone_perf_metric{probe="utif_exec",metric="latency_p95_ms",unit="ms"} 12.4
 ```
 
 ## Verification
-- `make perf-ci` uses `SHELLDONE_PERF_PROFILE=ci`, generating the file automatically.
+- `SHELLDONE_PERF_PROFILE=ci python3 -m perf_runner run` generates the file automatically.
 - `scripts/status.py --json` exposes `perf.last_verify.metrics_prom` so CD pipelines can sync the latest file.
 - `scripts/tests/test_perf_runner.py::test_prometheus_renderer` ensures the exporter emits data.
 

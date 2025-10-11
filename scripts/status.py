@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate snapshot reader for agentcontrol/reports/status.json."""
+"""Aggregate snapshot reader for reports/status.json (project-local)."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-STATUS_PATH = PROJECT_ROOT / "agentcontrol" / "reports" / "status.json"
+STATUS_PATH = PROJECT_ROOT / "reports" / "status.json"
 
 
 def load_status() -> Dict[str, Any]:

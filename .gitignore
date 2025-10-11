@@ -75,15 +75,17 @@ dhat-heap.json
 /nix/result
 # Agent adapter artefacts
 agents/claude/node_modules/
-# agentcontrol runtime artefacts
-agentcontrol/.sdk/pip-audit-cache/
-agentcontrol/.sdk/setup/
-agentcontrol/.venv/
-agentcontrol/context/
-agentcontrol/reports/
-agentcontrol/scripts/bin/
+# legacy runtime artefacts (no longer used)
+# kept for local developer convenience if present, but not referenced in code
+.agentcontrol/
 scripts/bin/
 reports/perf/
 reports/*.json
 reports/*.sarif
 artifacts/
+dashboards/artefacts/
+reports/logs/
+reports/sbom/
+state/
+shelldone_agentcontrol.egg-info/
+dist/

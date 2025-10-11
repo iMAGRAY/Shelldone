@@ -50,7 +50,7 @@
 | `balanced` | TLS 1.3 + TLS 1.2 (ECDHE+AES-GCM) | `strict` + `TLS_ECDHE_[RSA|ECDSA]_WITH_AES_{256,128}_GCM_SHA384` | Требуется, если задан `--grpc-tls-ca` | Стандартный режим: совместимость с корпоративными mTLS-клиентами, при этом Rego требует CA hash match. |
 | `legacy` | TLS 1.3 + TLS 1.2 | `balanced` + `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` | Требуется при передаче по сети | Для старых клиентов с ограниченной аппаратной поддержкой; включается временно, требует ADR c TTL. |
 
-Все политики зависят от глобально установленного `rustls` provider’а; попытка запуска нескольких `shelldone-agentd` с разными политиками детектируется `make verify` (lint `verify_tls_policy_consistency`).
+Все политики зависят от глобально установленного `rustls` provider’а; попытка запуска нескольких `shelldone-agentd` с разными политиками детектируется `python3 scripts/verify.py` (lint `verify_tls_policy_consistency`).
 
 #### Certificate Lifecycle & Runbook
 

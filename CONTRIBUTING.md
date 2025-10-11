@@ -21,6 +21,8 @@ Be respectful, assume good intent, and report issues privately to
 
 Additional scripts live in `ci/` and `get-deps/` for packaging flows.
 
+> Python tooling: используйте локальное окружение `./.venv` (или системный Python). Запуск проверок осуществляется через `make verify`/`scripts/verify.sh`.
+
 ## Workflow
 
 1. **Issue first.** Start from an existing issue or create one with the proper
@@ -56,8 +58,8 @@ The documentation site is powered by MkDocs: `make servedocs` reloads on save.
 
 ## Release & Distribution
 
-`make ship` currently proxies to `make verify`. Release automation lives in
-`ci/` and is run by maintainers. Contributors only need to ensure verify passes
+`make ship` proxies to `make verify`. Release automation lives in
+`ci/` and is run by maintainers. Contributors only need to ensure `make verify` passes
 and changelog entries are accurate.
 
 ## Communication

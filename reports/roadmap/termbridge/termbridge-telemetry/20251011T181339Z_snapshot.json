@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "generated_at": "2025-10-11T18:13:39.577396100+00:00",
+  "discovered_at": "2025-10-11T18:13:39.577280025+00:00",
+  "discovery_ms": 0.239822,
+  "changed": true,
+  "diff": {
+    "added": [
+      "alacritty",
+      "iterm2",
+      "kitty",
+      "konsole",
+      "tilix",
+      "wezterm",
+      "windows-terminal"
+    ],
+    "updated": [],
+    "removed": []
+  },
+  "totals": {
+    "terminals": 7,
+    "clipboard_backends": 1
+  },
+  "terminals": [
+    {
+      "terminal": "alacritty",
+      "display_name": "Alacritty",
+      "requires_opt_in": false,
+      "source": "local",
+      "capabilities": {
+        "spawn": false,
+        "split": false,
+        "focus": false,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": false,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": null
+      },
+      "notes": [
+        "alacritty binary not found",
+        "IPC ограничен: нет split/focus"
+      ]
+    },
+    {
+      "terminal": "iterm2",
+      "display_name": "iTerm2",
+      "requires_opt_in": true,
+      "source": "local",
+      "capabilities": {
+        "spawn": false,
+        "split": false,
+        "focus": false,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": false,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": 128
+      },
+      "notes": [
+        "iTerm2 API доступен только на macOS"
+      ]
+    },
+    {
+      "terminal": "kitty",
+      "display_name": "kitty",
+      "requires_opt_in": true,
+      "source": "local",
+      "capabilities": {
+        "spawn": false,
+        "split": false,
+        "focus": false,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": true,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": 75
+      },
+      "notes": [
+        "kitty binary not found in PATH",
+        "KITTY_LISTEN_ON not set; remote control disabled"
+      ]
+    },
+    {
+      "terminal": "konsole",
+      "display_name": "Konsole",
+      "requires_opt_in": true,
+      "source": "local",
+      "capabilities": {
+        "spawn": true,
+        "split": true,
+        "focus": true,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": true,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": null
+      },
+      "notes": [
+        "Для операций duplicate/close требуется qdbus (konsole remote control)"
+      ]
+    },
+    {
+      "terminal": "tilix",
+      "display_name": "Tilix",
+      "requires_opt_in": false,
+      "source": "local",
+      "capabilities": {
+        "spawn": true,
+        "split": false,
+        "focus": false,
+        "duplicate": true,
+        "close": true,
+        "send_text": false,
+        "clipboard_write": true,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": null
+      },
+      "notes": [
+        "Automation использует CLI tilix --session"
+      ]
+    },
+    {
+      "terminal": "wezterm",
+      "display_name": "WezTerm",
+      "requires_opt_in": false,
+      "source": "local",
+      "capabilities": {
+        "spawn": false,
+        "split": false,
+        "focus": false,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": true,
+        "clipboard_read": true,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": 256
+      },
+      "notes": [
+        "wezterm CLI not found"
+      ]
+    },
+    {
+      "terminal": "windows-terminal",
+      "display_name": "Windows Terminal",
+      "requires_opt_in": false,
+      "source": "local",
+      "capabilities": {
+        "spawn": false,
+        "split": false,
+        "focus": false,
+        "duplicate": false,
+        "close": false,
+        "send_text": false,
+        "clipboard_write": true,
+        "clipboard_read": false,
+        "cwd_sync": true,
+        "bracketed_paste": true,
+        "max_clipboard_kb": 64
+      },
+      "notes": [
+        "wt.exe not available"
+      ]
+    }
+  ],
+  "clipboard_backends": [
+    {
+      "id": "xclip",
+      "channels": [
+        "clipboard",
+        "primary"
+      ],
+      "can_read": true,
+      "can_write": true,
+      "notes": [
+        "X11 xclip bridge"
+      ]
+    }
+  ]
+}

@@ -5,6 +5,8 @@ Status legend:
 - 🟡 — частично реализовано; есть задел, требуется завершение.
 - ❌ — отсутствует; описан roadmap/решение.
 
+*Общий владелец всех инициатив — imagray `<magraytlinov@gmail.com>`; перечисленные гильдии выступают поддержкой.*
+
 | # | Pain Point | Current Status | Existing Signals | Plan / Owner |
 |---|------------|----------------|------------------|--------------|
 |1|Multiline paste warning|🟡|`canonicalize_pasted_newlines`, nightly confirm overlay|UX guild · `task-persona-onboarding` (links to `UX-12`) — guided overlay + Lua hook.|

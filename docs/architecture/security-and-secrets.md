@@ -37,7 +37,8 @@
 - Все входящие/исходящие строки очищаются ANSI-санитайзером, прежде чем попасть в Continuum/логи, предотвращая избежание alert’ов через ESC.
 - PasteGuard (см. `termbridge.md`) блокирует вставки с подозрительными символами (ZWSP/NBSP) и требует подтверждение. Пороговые значения регулируются persona preset’ами.
 - Spawn-пайплайн требует, чтобы capability map подтверждала `spawn=true`; при отсутствии consent или запрете политики запрос `POST /termbridge/spawn` отвечает `policy_denied`. Для wezterm токен pane_id сохраняется в binding и журнале, что исключает «слепую» отправку команд.
-- Override `SHELLDONE_TERMBRIDGE_WEZTERM_CLI` проходит проверку существования/прав доступа: успешный override журналируется как `termbridge.capability.update` (note `using override`), провал → `reason=not_supported` без silent fallback.
+- Override `SHELLDONE_TERMBRIDGE_WEZTERM_CLI` проходит проверку существования/прав доступа: успешный override журналируется как `termbridge.capability.update{change="updated"}` (note `using override`), провал → `reason=not_supported` без silent fallback.
+- `/termbridge/discover` допускает анонимный доступ только по loopback. Установка `SHELLDONE_TERMBRIDGE_DISCOVERY_TOKEN` (agentd) включает Bearer-аутентификацию; GUI и внешние клиенты должны передавать тот же токен через `SHELLDONE_AGENTD_DISCOVERY_TOKEN`. Дополнительная переменная `SHELLDONE_GUI_ALLOW_INSECURE_AGENTD` включает HTTP fallback и помечена как временная диагностика (production=HTTPS-only).
 
 #### Enablement Checklist (per terminal)
 
@@ -82,9 +83,9 @@
   - При восстановлении соединения спул воспроизводится и журналируется.
 
 ## Checks
-- Static validation of policy/configs via `make verify` (extend `scripts/verify.py`).
-- Secret scanning (git-secrets or custom check) in `make verify-full`.
-- Containerised smoke tests in `make verify-full` (WASM sandbox + capability drops).
+- Static validation of policy/configs via `python3 scripts/verify.py` (extend `scripts/verify.py`).
+- Secret scanning (git-secrets or custom check) in `python3 scripts/verify.py --mode full`.
+- Containerised smoke tests in `python3 scripts/verify.py --mode full` (WASM sandbox + capability drops).
 
 ## Milestones
 1. ADR for the secret/key-management model.

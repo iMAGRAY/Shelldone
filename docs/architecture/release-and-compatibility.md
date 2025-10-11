@@ -4,7 +4,7 @@
 - **Channels:** nightly → beta → stable. Each channel ships tarballs, deb/rpm packages, winget manifests, and a Homebrew cask.
 - **Signing:** all artefacts are signed by the Maintainer Team (ed25519; cosign for containers). Public keys are checked into `release/keys/`.
 - **Auto-updates:** built-in updater (`shelldone self update`) plus integrations with system package managers.
-- **CI/CD:** `make ship` runs `make verify VERIFY_MODE=prepush`, bumps the version, refreshes the changelog, and publishes via GitHub Actions or the internal runner.
+- **CI/CD:** release orchestration выполняется скриптами в `ci/` (см. `ci/create-release.sh`, `ci/deploy.sh`). Перед релизом обязательно прогоняйте `python3 scripts/verify.py --mode prepush` и обновляйте changelog вручную.
 
 ## Versioning and Compatibility
 - **SemVer:** majors change on breaking APIs (plugins, config, agent protocol).

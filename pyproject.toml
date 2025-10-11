@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shelldone-devtools"
+version = "0.5.2"
+description = "Shelldone developer tooling (docs/QA helpers)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Shelldone Team", email = "team@shelldone.dev" }
+]
+dependencies = [
+  "PyYAML>=6.0",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+#[project.scripts]
+# (no CLI entrypoints)
+
+[tool.setuptools]
+py-modules = []

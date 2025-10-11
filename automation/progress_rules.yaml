@@ -1,0 +1,178 @@
+version: 1
+tasks:
+  - id: task-termbridge-test-suite
+    description: TermBridge matrix validated on macOS/Windows/Linux with telemetry drift detection
+    conditions:
+      - type: file_exists
+        path: .github/workflows/termbridge_matrix.yml
+      - type: file_contains
+        path: .github/workflows/termbridge_matrix.yml
+        contains:
+          - macos-latest
+          - windows-latest
+          - ubuntu-latest
+          - scripts/tests/check_otlp_payload.py
+      - type: file_contains
+        path: scripts/tests/termbridge_matrix.py
+        contains:
+          - write_dashboard_snapshot
+          - check_capability_drift
+      - type: file_exists
+        path: scripts/tests/check_otlp_payload.py
+      - type: rg_present
+        pattern: termbridge_export_produces_expected_snapshot
+        paths:
+          - shelldone-agentd/tests
+      - type: rg_absent
+        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
+        paths:
+          - shelldone-agentd/src/app/termbridge
+      - type: command
+        cmd:
+          - cargo
+          - test
+          - -p
+          - shelldone-agentd
+          - --test
+          - cli_termbridge
+        timeout: 600
+    on_true:
+      status: done
+      progress_pct: 100
+      health: green
+    on_false:
+      status: in_progress
+      progress_pct: 50
+      health: yellow
+
+  - id: task-termbridge-core-telemetry
+    description: TermBridge telemetry validated via OTLP payload checks
+    conditions:
+      - type: file_exists
+        path: scripts/tests/check_otlp_payload.py
+      - type: file_contains
+        path: scripts/tests/check_otlp_payload.py
+        contains:
+          - termbridge.capability.update
+          - change attribute
+          - source attribute
+          - zero value
+      - type: file_exists
+        path: scripts/tests/otlp_metrics_parser.py
+      - type: file_contains
+        path: .github/workflows/termbridge_matrix.yml
+        contains:
+          - check_otlp_payload.py
+      - type: rg_present
+        pattern: termbridge_export_produces_expected_snapshot
+        paths:
+          - shelldone-agentd/tests/cli_termbridge.rs
+      - type: rg_absent
+        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
+        paths:
+          - shelldone-agentd/src/app/termbridge
+      - type: command
+        cmd:
+          - cargo
+          - test
+          - -p
+          - shelldone-agentd
+          - termbridge::telemetry
+        timeout: 600
+    on_true:
+      status: done
+      progress_pct: 100
+      health: green
+    on_false:
+      status: in_progress
+      progress_pct: 40
+      health: yellow
+
+  - id: task-termbridge-discovery-registry
+    description: Capability registry snapshot exported and guarded against drift
+    conditions:
+      - type: file_exists
+        path: dashboards/baselines/termbridge/monitored_capabilities.json
+      - type: file_contains
+        path: scripts/tests/termbridge_matrix.py
+        contains:
+          - write_dashboard_snapshot
+          - write_drift_report
+      - type: file_contains
+        path: docs/architecture/termbridge.md
+        contains:
+          - dashboards/artefacts/termbridge
+      - type: file_contains
+        path: .github/workflows/termbridge_matrix.yml
+        contains:
+          - dashboards/artefacts/termbridge
+      - type: rg_absent
+        pattern: 'todo!\(|unimplemented!\(|panic!\("TODO"\)'
+        paths:
+          - shelldone-agentd/src/app/termbridge
+      - type: rg_present
+        pattern: TermBridge matrix OK
+        paths:
+          - scripts/tests/termbridge_matrix.py
+      - type: command
+        cmd:
+          - cargo
+          - test
+          - -p
+          - shelldone-agentd
+          - termbridge::registry
+        timeout: 600
+    on_true:
+      status: done
+      progress_pct: 100
+      health: green
+    on_false:
+      status: in_progress
+      progress_pct: 45
+      health: yellow
+
+  - id: task-termbridge-discovery
+    description: Discovery core reaches production readiness when registry automation is in place
+    conditions:
+      - type: rule_passed
+        task: task-termbridge-discovery-registry
+      - type: command
+        cmd:
+          - cargo
+          - test
+          - -p
+          - shelldone-agentd
+          - termbridge::discovery
+        timeout: 600
+    on_true:
+      status: in_progress
+      progress_pct: 50
+      health: green
+    on_false:
+      status: in_progress
+      progress_pct: 33
+      health: yellow
+
+  - id: task-termbridge-core
+    description: Core orchestration matures alongside telemetry automation
+    conditions:
+      - type: rule_passed
+        task: task-termbridge-core-telemetry
+      - type: rule_passed
+        task: task-termbridge-discovery
+      - type: command
+        cmd:
+          - cargo
+          - test
+          - -p
+          - shelldone-agentd
+          - termbridge::
+        timeout: 600
+    on_true:
+      status: in_progress
+      progress_pct: 50
+      health: green
+    on_false:
+      status: in_progress
+      progress_pct: 36
+      health: yellow

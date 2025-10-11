@@ -71,7 +71,7 @@ UTIF-Σ control plane foundations — **72% complete**. Core компонент�
 - `utif_exec_latency`: p95≤15ms, p99≤25ms
 - `utif_exec_errors`: rate<0.5%
 
-**CI Integration:** Makefile target `make perf-utif` TODO
+**CI Integration:** Автоматизировать `python3 -m perf_runner run --probe utif_exec` отдельным GitHub Action (TODO)
 
 ## In Progress / Pending
 
@@ -168,7 +168,7 @@ shelldone agent journal --kind test --payload '{"msg":"hello"}'
 k6 run scripts/perf/utif_exec.js
 
 # Future: run full integration suite
-make verify-utif-integration  # TODO
+python3 scripts/test-utif-integration.sh  # TODO включить в verify pipeline
 ```
 
 ## Rollback Plan

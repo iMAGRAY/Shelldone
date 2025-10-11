@@ -31,7 +31,7 @@ UTIF-Σ defines the end-to-end control plane for Shelldone's agent-first termina
 - **Σ-cap:** capability handshake endpoint exchanging feature manifests between the terminal, shells, and remote hosts.
 
 > Implementation status: `shelldone-agentd` exposes `/sigma/handshake`, `/ack/exec`, `/journal/event`, and `/healthz` over HTTP (default `127.0.0.1:17717`). Launch via `cargo run -p shelldone-agentd -- --state-dir state`.
-> Быстрый запуск: `make run-agentd` (foreground). Для CLI проверки используйте `shelldone agent handshake --persona core`, `shelldone agent exec --cmd "echo hi"` или `shelldone agent journal --payload '{"note":"test"}'`.
+- Быстрый запуск: `shelldone-agentd --foreground`. Для CLI проверки используйте `shelldone agent handshake --persona core`, `shelldone agent exec --cmd "echo hi"` или `shelldone agent journal --payload '{"note":"test"}'`.
 
 ### Σ-pty Integration (ADR-0005)
 - Proxy lives inside `shelldone-mux-server` and intercepts all PTY reads/writes.
@@ -104,7 +104,7 @@ Personas are configured via `config/personas/*.yaml` and negotiated during hands
 ### Persona Guardrails (ADR-0003)
 - Hints budget: Nova ≤6/min, Core ≤3/min, Flux 0/min (enforced by engine).
 - Safety prompts: always require explicit ack; persona profiles determine text + severity.
-- Telemetry: `persona.hints.count`, `persona.policy.prompt_latency`; thresholds validated in `make verify-full`.
+- Telemetry: `persona.hints.count`, `persona.policy.prompt_latency`; thresholds validated in `python3 scripts/verify.py --mode full`.
 - UX validation: SUS ≥85 (Nova), frustration rate <10%; experiments logged in `artifacts/ux/`.
 
 ## Continuum Workspace Graph

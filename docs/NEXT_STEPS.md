@@ -53,7 +53,7 @@ shelldone-agentd/src/policy_engine.rs:
 ```
 
 **DoD:**
-- [ ] `make verify-prepush` проходит
+- [ ] `python3 scripts/verify.py --mode prepush` проходит
 - [ ] policy denials логируются в JSONL
 - [ ] metrics `agent.policy.denied.count` экспортируются
 
@@ -128,7 +128,7 @@ artifacts/observability/utif-sigma-dashboard.json:
 
 **DoD:**
 - [ ] Метрики экспортируются в Prometheus/Grafana
-- [ ] `make verify-full` включает telemetry smoke test
+- [ ] `python3 scripts/verify.py --mode full` включает telemetry smoke test
 - [ ] Alerts настроены для SLA breach
 
 **Риски:** OTLP overhead может добавить 1-3ms latency → батчинг
@@ -149,15 +149,15 @@ scripts/test-utif-integration.sh:
   - Σ-cap downgrade (tmux, ConPTY)
   - cleanup on exit
 
-# 2. Добавить в Makefile
-make verify-utif-integration:
-  - bash scripts/test-utif-integration.sh
-  - k6 run scripts/perf/utif_exec.js --quiet
+# 2. Подключить в verify pipeline
+python3 scripts/verify.py (SDK_VERIFY_COMMANDS += [
+  "bash scripts/test-utif-integration.sh",
+  "k6 run scripts/perf/utif_exec.js --quiet"
+])
 
 # 3. CI gate
 .github/workflows/ci.yml:
-  - make verify-prepush
-  - make verify-utif-integration
+  - python3 scripts/verify.py --mode prepush
   - fail if p95 > 15ms or error_rate > 0.5%
 ```
 
@@ -217,8 +217,8 @@ k6 run scripts/perf/utif_exec.js
 
 ### Verify pipeline
 ```bash
-make verify-prepush     # lint, format, unit tests
-make verify-full        # + perf, integration tests (TODO)
+python3 scripts/verify.py --mode prepush     # lint, format, unit tests
+python3 scripts/verify.py --mode full             # + perf, integration tests (TODO)
 ```
 
 ---

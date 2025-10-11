@@ -1,0 +1,32 @@
+{
+  "darwin": {
+    "wezterm": {
+      "spawn": true,
+      "split": true,
+      "focus": true,
+      "send_text": true,
+      "clipboard_write": true,
+      "clipboard_read": true
+    }
+  },
+  "windows": {
+    "wezterm": {
+      "spawn": true,
+      "split": true,
+      "focus": true,
+      "send_text": true,
+      "clipboard_write": true,
+      "clipboard_read": true
+    }
+  },
+  "linux": {
+    "wezterm": {
+      "spawn": true,
+      "split": true,
+      "focus": true,
+      "send_text": true,
+      "clipboard_write": true,
+      "clipboard_read": true
+    }
+  }
+}

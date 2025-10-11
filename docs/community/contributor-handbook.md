@@ -1,99 +1,78 @@
 # Shelldone Contributor Handbook
 
-This handbook complements [`CONTRIBUTING.md`](../../CONTRIBUTING.md) with deeper
-context on tooling, conventions, and quality expectations.
+> Последнее обновление: 2025‑10‑10
 
-## Environment Setup
+Этот документ дополняет [`CONTRIBUTING.md`](../../CONTRIBUTING.md) рабочими инструкциями: как разворачивать окружение, какие команды запускать, куда смотреть в документации.
+
+## 1. Окружение
 
 ```bash
 git clone git@github.com:imagray/Shelldone.git
 cd Shelldone
-./get-deps         # install native dependencies (optional but recommended)
-make verify        # run full orchestrated QA pipeline
+./get-deps                 # нативные зависимости (опционально)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+rustup toolchain install stable
+cargo install cargo-nextest cargo-deny --locked
 ```
 
-Additional architecture details live in `docs/architecture/` — prioritise
-`state-and-storage.md`, `security-and-secrets.md`, `observability.md`, and
-`release-and-compatibility.md`.
+- Node/TypeScript и Go ставим по потребности (`npm install`, `go install`).
+- macOS/Windows: установите `psutil` (`pip install psutil`) — без него `scripts/verify.py` не снимет peak RSS, и resource budget останется пустым.
+- Для управления выводом QA используйте `VERIFY_TAIL_CHAR_LIMIT` (число в символах, по умолчанию 4000).
+- Весь tooling работает из стандартного каталога проекта — никаких капсул `.agentcontrol`.
 
-### Toolchain Versions
-- Rust stable (updated monthly) + nightly for `cargo fmt`
-- `cargo nextest` for test execution
-- `clang`/`lld` recommended on macOS for faster builds
-- Optional: `just`, `direnv`, `nix` (flakes coming soon)
+## 2. Повседневные команды
 
-## Repository Layout
-- `shelldone/` — CLI + multiplexer entrypoint
-- `shelldone-gui/` — windowing front-end
-- `term/` — core terminal model
-- `mux/` — multiplexer backend
-- `docs/` — user & contributor docs (MkDocs)
-- `ci/` — pipelines, packaging, release tooling
-
-## Development Workflow
-1. Pick or create an issue and assign yourself.
-2. Branch from `main` (e.g. `feature/<topic>`).
-3. Develop with `make dev` and `RUST_LOG=debug` when needed.
-4. Keep commits focused; rebase before opening a PR.
-5. Run `make verify` (or `make verify-prepush`) before every push.
-
-### Verification Modes & Baselines
-
-`make verify` proxies `scripts/verify.sh` and supports
-`VERIFY_MODE=fast|prepush|full|ci` (default `prepush`). Each run:
-
-- Validates docs (links, `todo.machine.md`, roadmap tables).
-- Executes the Rust pipeline (`fmt`, `clippy`, `cargo test`, `cargo nextest`, `cargo doc` in full/ci).
-- Scans for forbidden markers via `qa/baselines/banned_markers.json`.
-- Writes a summary to `artifacts/verify/summary.json` (add `JSON=1` for machine output).
-
-Technical debt is captured in the baselines:
-
-| File | Purpose | Update command |
+| Задача | Команда | Комментарий |
 | --- | --- | --- |
-| `qa/baselines/banned_markers.json` | Remaining `TODO|FIXME|XXX|???` occurrences | `python3 scripts/verify.py --update-marker-baseline` |
-| `qa/baselines/clippy.json` | Current Rust/Clippy warnings | `python3 scripts/verify.py --update-clippy-baseline` |
+| Быстрый линт/тест | `python3 scripts/verify.py --mode fast` | Проверяет forbidden markers, Rust fmt/clippy (ограниченный набор), базовые тесты |
+| Полный прогон | `python3 scripts/verify.py --mode prepush` | Рекомендуем перед PR; при необходимости добавляйте свои цели |
+| TermBridge матрица | `python3 scripts/tests/termbridge_matrix.py --emit-otlp --otlp-endpoint http://127.0.0.1:4318` + mock collector | См. README в `scripts/tests/` |
+| Telemetry smoke | `python3 scripts/tests/check_otlp_payload.py --payload <file> --snapshot artifacts/termbridge/capability-map.json` | Проверяет, что OTLP метрики непротиворечивы |
+| Agentd smoke | `python3 scripts/agentd.py smoke` | Проверяет базовые сценарии работы daemon и адаптеров |
 
-Update a baseline **only** after fixing warnings or deliberately accepting them.
-Any new warning in the pipeline results in an immediate failure with explicit
-diffs.
+Полный список задач и статусов находится в `docs/tasks.yaml`; архитектура — `docs/architecture/manifest.md`.
 
-Use `make roadmap status` to compute program/epic progress from
-`todo.machine.md`; the command fails if declared progress differs by more than
-0.5 percentage points (`JSON=1` and `STRICT=0` are available).
+## 3. Workflow разработки
+1. Выберите задачу в `docs/tasks.yaml` или создайте issue.
+2. Создайте ветку `feature/<topic>` от `main`.
+3. Пишите код, сопровождайте тестами/документацией.
+4. Перед PR выполните `python3 scripts/verify.py --mode prepush` и релевантные целевые команды (см. таблицу выше).
+5. Обновите `docs/status.md`/`docs/tasks.yaml`/`docs/architecture/manifest.md`, если изменился статус работы.
+6. Откройте PR, укажите пройденные тесты и ссылки на документацию.
 
-## Testing Matrix
-| Area | Command | Notes |
+## 4. Тестовая матрица
+| Категория | Команда | Примечания |
 | --- | --- | --- |
-| Type-check | `cargo check` | Fast sanity check |
-| Unit & integration | `make verify` (runs `cargo test` + `nextest`) | Required |
-| Lua plugins | `cargo test -p luahelper` | When touching plugins |
-| Performance | `cargo bench` or scripts in `tests/perf` | Attach results |
-| Docs | `make servedocs` | Include screenshots for UX updates |
+| Rust unit/integration | `cargo test` / `cargo nextest` | Используется внутри `scripts/verify.py` |
+| TermBridge CLI | `shelldone-agentd/tests/cli_termbridge.rs` (через `cargo test -p shelldone-agentd --test cli_termbridge`) | Проверяет CLI и capability export |
+| QA resource budget | `python3 scripts/verify.py --mode fast` | `reports/verify/summary.json` содержит `resources.top_peak_kb`/`top_duration_sec`; пороги управляются `VERIFY_PEAK_KB_LIMIT[_NAME]`, `VERIFY_DURATION_LIMIT_SEC[_NAME]`; полные логи шагов лежат в `reports/logs/*.log` |
+| Telemetry | `scripts/tests/check_otlp_payload.py` | Работает вместе с mock OTLP collector |
+| Perf | `scripts/perf_runner/specs.py` | Пока вручную; для TermBridge discovery можно задать `SHELLDONE_PERF_TERMBRIDGE_ENDPOINT`/`…_TOKEN`, результаты прикладывайте к PR |
+| Docs | Ревьюйте обновления в `docs/` в том же PR | Никаких auto-docs |
 
-## Coding Standards
-- Prefer small, composable modules; avoid panics in library code.
-- Use `tracing` with structured fields at appropriate levels.
-- Validate external inputs; never rely on unsafe path handling.
-- For async work, favour the `smol` primitives already used in the repo.
-- Document public functions (rustdoc) and non-trivial code paths.
+## 5. Кодстайл
+- Минимизируйте `panic!`/`unwrap!` в библиотечном коде; отдавайте предпочтение `Result`.
+- Используйте `tracing` с именованными полями.
+- Обрабатывайте пользовательский ввод безопасно (никаких непроверенных путей).
+- Асинхронные задачи — на стандартном движке (`tokio` здесь, `smol` в утилитах).
+- Пишите rustdoc и комментарии к нетривиальным блокам.
 
-## Reviews & Merging
-- Every PR requires at least one maintainer review (managed via CODEOWNERS).
-- CI must be green; reviewers may request additional profiling or tests.
-- We use squash merge; add a changelog entry for user-facing changes.
+## 6. Review и merge
+- Каждый PR требует ревью мейнтейнера (см. CODEOWNERS).
+- Всегда указывайте, какие тесты вы запускали.
+- Мы используем squash merge; для user-facing изменений обновляйте документацию/roadmap.
 
-## Communication
-- Daily chat: Matrix `#shelldone:matrix.org`
-- Weekly sync agenda: `docs/ROADMAP/meetings.md` (TBD)
-- Security contact: [team@shelldone.dev](mailto:team@shelldone.dev)
+## 7. Коммуникация
+- Questions & proposals: GitHub Discussions (`imagray/Shelldone`).
+- Чат: Matrix `#shelldone:matrix.org`.
+- Security: [team@shelldone.dev](mailto:team@shelldone.dev).
 
-## Useful Commands
-```bash
-make dev                # start the GUI quickly
-RUST_LOG=debug make dev # verbose logging
-make verify             # fmt + clippy + tests + nextest
-cargo clippy --fix      # apply lint suggestions (review the diff!)
-```
+## 8. Полезные ссылки
+- Состояние работ — `docs/status.md`
+- Архитектура — `docs/architecture/manifest.md`
+- Правила обновления статусов — `docs/governance/status-updates.md`
+- Roadmap — `docs/ROADMAP/`
 
-> Have ideas to improve the handbook? Open a docs issue or PR!
+Нашли несовпадение между кодом и документацией? Обязательно откройте issue или PR с исправлением. Спасибо за вклад!

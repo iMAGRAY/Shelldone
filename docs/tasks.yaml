@@ -1,0 +1,264 @@
+meta:
+  version: 2025-Q4
+  updated_at: '2025-10-10T13:45:00Z'
+  program: Shelldone Terminal Platform
+
+statuses:
+  ready:
+    label: "Готово"
+    definition: "Код в main, обязательные тесты/CI проходят, документация синхронизирована"
+  in_progress:
+    label: "В процессе"
+    definition: "Активная разработка, есть компромиссы или непокрытые сценарии"
+  not_ready:
+    label: "Не готово"
+    definition: "Разработка не начата либо нет технического плана"
+
+areas:
+  termbridge:
+    owner: "imagray (support: TermBridge Guild)"
+    items:
+      - id: task-termbridge-test-suite
+        title: TermBridge CLI Matrix
+        status: ready
+        scope:
+          - scripts/tests/termbridge_matrix.py
+          - .github/workflows/termbridge_matrix.yml
+        evidence:
+          tests:
+            - scripts/tests/termbridge_matrix.py
+            - shelldone-agentd/tests/cli_termbridge.rs
+          notes:
+            - "CI: macOS, Windows, Ubuntu"
+        rft:
+          log_dir: reports/roadmap/termbridge/termbridge-matrix/
+          cadence: nightly
+      - id: task-termbridge-core-telemetry
+        title: Telemetry integration
+        status: ready
+        scope:
+          - shelldone-agentd/src/telemetry.rs
+          - scripts/tests/check_otlp_payload.py
+        evidence:
+          tests:
+            - scripts/tests/check_otlp_payload.py
+            - cargo test -p shelldone-agentd termbridge::telemetry
+        rft:
+          log_dir: reports/roadmap/termbridge/termbridge-telemetry/
+          cadence: weekly
+      - id: task-termbridge-discovery-registry
+        title: Capability registry snapshot
+        status: ready
+        scope:
+          - shelldone-agentd/src/app/termbridge/discovery.rs
+          - dashboards/artefacts/termbridge/
+        evidence:
+          tests:
+            - cargo test -p shelldone-agentd termbridge::registry
+          artefacts:
+            - dashboards/artefacts/termbridge/<os>.json
+        rft:
+          log_dir: reports/roadmap/termbridge/discovery/
+          cadence: weekly
+      - id: task-termbridge-core
+        title: Core orchestrator
+        status: in_progress
+        scope:
+          - shelldone-agentd/src/app/termbridge/**
+        evidence:
+          tests:
+            - cargo test -p shelldone-agentd termbridge
+            - cargo test -p shelldone-agentd --test e2e_ack
+          gaps:
+            - "Не реализованы kitty/Windows Terminal адаптеры"
+            - "Нужно переиспытать CLI quoting на Windows"
+        rft:
+          log_dir: reports/roadmap/termbridge/core/
+          cadence: nightly
+      - id: task-termbridge-discovery
+        title: Discovery registry
+        status: in_progress
+        scope:
+          - shelldone-agentd/src/app/termbridge/discovery.rs
+        evidence:
+          tests:
+            - cargo test -p shelldone-agentd termbridge::discovery
+          notes:
+            - "Параллельный discover: 1.3 мс на Linux (scripts/tests/termbridge_matrix.py, 2025-10-10; dashboards/artefacts/termbridge/linux.json)"
+          gaps:
+            - "Live MCP sync watcher требует e2e-тест через gRPC + GUI"
+            - "Backpressure для discovery не внедрён"
+            - "scripts/perf/termbridge_discovery.js нужно связать с актуальным sync pipeline"
+        rft:
+          log_dir: reports/roadmap/termbridge/discovery-core/
+          cadence: nightly
+      - id: task-termbridge-discovery-mcp-sync
+        title: MCP sync watcher
+        status: in_progress
+        scope:
+          - shelldone-agentd/src/adapters/mcp/
+          - shelldone-agentd/src/app/mcp/service.rs
+          - scripts/verify.py
+          - docs/architecture/termbridge.md
+          - docs/community/contributor-handbook.md
+        notes:
+          - "терминальный инструмент `termbridge.sync` реализован, Capability Map снапшоты сохраняются и логируются (reports/logs/*-termbridge-sync.log)"
+        evidence:
+          tests:
+            - cargo test -p shelldone-agentd app::mcp::service::tests::termbridge_sync_updates_capability_map
+            - cargo test -p shelldone-agentd --tests -- termbridge_sync_requires_capability
+            - cargo test -p shelldone-agentd --test e2e_mcp_grpc termbridge_sync_applies_remote_snapshot -- --exact
+          artefacts:
+            - artifacts/verify/summary.json
+            - reports/logs/*-termbridge-sync.log
+        gaps:
+          - "Persona playback сценарий (UX acceptance + автоматизация) остаётся незавершённым"
+      - id: task-termbridge-backpressure
+        title: TermBridge backpressure policy
+        status: not_ready
+        notes:
+          - "Сформулировать требования, определить метрики, спланировать implementation"
+
+  qa:
+    owner: "imagray (support: QA Guild)"
+    items:
+      - id: task-qa-orchestrator
+        title: make verify orchestrator
+        status: ready
+        evidence:
+          notes:
+            - "`scripts/verify.py`: peak RSS/длительность команд пишутся в `artifacts/verify/summary.json`, используются budget-чеки"
+        rft:
+          log_dir: reports/roadmap/qa/verify/
+          cadence: nightly
+      - id: task-qa-marker-baseline
+        title: Forbidden marker control
+        status: ready
+        evidence:
+          notes:
+            - "Baseline актуализирован, нет новых forbidden markers"
+        rft:
+          log_dir: reports/roadmap/qa/markers/
+          cadence: weekly
+      - id: task-qa-perf-probes
+        title: Performance probes
+        status: in_progress
+        evidence:
+          tests:
+            - scripts/perf_runner/specs.py
+          gaps:
+            - "Нужна визуализация результатов и интеграция в CI"
+        rft:
+          log_dir: reports/roadmap/qa/perf/
+          cadence: nightly
+
+  plugin_platform:
+    owner: "imagray (support: Plugin Council)"
+    items:
+      - id: task-plugin-sdk
+        title: Plugin SDK & specification
+        status: not_ready
+        notes:
+          - "Нужен draft API, примеры плагинов"
+        rft:
+          log_dir: reports/roadmap/plugin/sdk/
+          cadence: weekly
+      - id: task-plugin-examples
+        title: Reference plugins & themes
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/plugin/examples/
+          cadence: weekly
+      - id: task-marketplace-hooks
+        title: Marketplace/webhook hooks
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/plugin/marketplace/
+          cadence: biweekly
+      - id: task-observability-reports
+        title: Plugin observability reports
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/plugin/observability/
+          cadence: monthly
+
+  ai_automation:
+    owner: "imagray (support: Automation Guild)"
+    items:
+      - id: task-mcp-bridge
+        title: MCP/gRPC bridge
+        status: in_progress
+        evidence:
+          scope:
+            - shelldone-agentd/src/app/mcp/**
+          gaps:
+            - "Нужно end-to-end тестирование с persona"
+        rft:
+          log_dir: reports/roadmap/automation/mcp/
+          cadence: weekly
+      - id: task-agent-policy
+        title: Agent policy documentation
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/automation/policy/
+          cadence: monthly
+      - id: task-persona-engine
+        title: Persona engine evolution
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/automation/persona/
+          cadence: monthly
+      - id: task-agent-microsoft
+        title: Microsoft agent SDK adapter
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/automation/microsoft/
+          cadence: monthly
+
+  animation_engine:
+    owner: "imagray (support: Experience Guild)"
+    items:
+      - id: task-animation-core
+        title: Render loop and animation core
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/experience/animation-core/
+          cadence: biweekly
+      - id: task-animation-toolkit
+        title: Effect authoring toolkit
+        status: not_ready
+        rft:
+          log_dir: reports/roadmap/experience/animation-toolkit/
+          cadence: monthly
+      - id: task-observability-visual
+        title: Performance visualisation dashboards
+        status: not_ready
+
+  ide_dx:
+    owner: "imagray (support: IDE & DX Guild)"
+    items:
+      - id: task-ide-file-manager
+        title: File manager & IDE UX
+        status: not_ready
+      - id: task-state-sync-ui
+        title: State sync UI
+        status: not_ready
+
+  platform_resilience:
+    owner: "imagray (support: Platform Reliability Guild)"
+    items:
+      - id: task-state-persistence
+        title: Persistent state & recovery
+        status: not_ready
+      - id: task-security-hardening
+        title: Security hardening
+        status: not_ready
+      - id: task-observability-pipeline
+        title: Observability pipeline
+        status: not_ready
+      - id: task-release-hardening
+        title: Release pipeline & migrations
+        status: not_ready
+      - id: task-utif-sigma-foundation
+        title: UTIF-Σ foundations
+        status: not_ready

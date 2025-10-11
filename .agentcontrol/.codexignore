@@ -1,4 +1,0 @@
-# Ignore generated artefacts within agentcontrol runtime
-reports/
-state/
-journal/

@@ -11,5 +11,5 @@
   - Появляется единая точка обновлений и отзывов capabilities.
 - **Rollback Plan:** git tag `codex/2025-10-03-pre-marketplace`, отключение marketplace через `shelldone marketplace disable` и policy revert.
 - **Testing:** контрактные тесты установки/отката, security fuzz на манифесты, perf измерения handshake.
-- **Owners:** Plugin Platform squad.
+- **Owners:** imagray `<magraytlinov@gmail.com>` (support: Plugin Platform squad).
 - **Dependencies:** ADR-0001, ADR-0002.

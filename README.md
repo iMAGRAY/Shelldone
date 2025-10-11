@@ -39,14 +39,21 @@ spent working on it!
 - Security incidents: [team@shelldone.dev](mailto:team@shelldone.dev).
 - Roadmap snapshots live in [`docs/ROADMAP`](docs/ROADMAP).
 
+## Project Documentation
+
+- **Архитектура:** [`docs/architecture/manifest.md`](docs/architecture/manifest.md)
+- **Статусы работ:** [`docs/status.md`](docs/status.md)
+- **Подробный список задач:** [`docs/tasks.yaml`](docs/tasks.yaml)
+- **Как обновлять статусы:** [`docs/governance/status-updates.md`](docs/governance/status-updates.md)
+
 ## Contributing
 
 Want to help? Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) for tooling,
 workflow and review expectations. TL;DR:
 
 ```bash
-make dev      # launch a dev shell
-make verify   # orchestrated QA (fmt + clippy baseline + tests + nextest)
+make dev           # launch a dev shell
+make verify        # QA (fmt + clippy baseline + tests + nextest)
 ```
 
 - Contributor resources: [`docs/community/contributor-handbook.md`](docs/community/contributor-handbook.md)
@@ -54,7 +61,7 @@ Bug reports and feature ideas belong in [GitHub Issues](https://github.com/imagr
 
 ### Quality pipeline
 
-`make verify` is an orchestrated front-end for `scripts/verify.sh` and supports
+`make verify` wraps `scripts/verify.sh` and supports
 four modes via the `VERIFY_MODE=fast|prepush|full|ci` environment variable.
 Each run renders a summary table and (with `JSON=1`) a machine-readable report
 under `artifacts/verify/summary.json`.
@@ -78,7 +85,7 @@ The project treats Rust warnings as hard failures. When iterating locally run
 `cargo clippy --workspace --all-targets -- -D warnings` before pushing large
 changes to ensure the baseline remains empty.
 
-To assess roadmap progress run `make roadmap status` — the command reads
+To assess roadmap progress run `make roadmap` — it reads
 `todo.machine.md`, prints the true completion percentage, and exits with an
 error if declared and computed values diverge. Use `STRICT=0` for a non-fatal
 mode and `JSON=1` for automation.

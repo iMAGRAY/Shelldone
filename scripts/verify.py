@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
-import shutil
-import tempfile
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -34,13 +36,36 @@ from perf_runner.reporting import render_prometheus_metrics
 from perf_runner.specs import default_specs
 
 ROOT = Path(__file__).resolve().parent.parent
+CAPSULE_ROOT = ROOT / ".agentcontrol"
 ARTIFACTS_DIR = ROOT / "artifacts" / "verify"
+LOGS_DIR = ROOT / "reports" / "logs"
 BASELINE_DIR = ROOT / "qa" / "baselines"
 MARKER_BASELINE = BASELINE_DIR / "banned_markers.json"
+PYTHON_BUILD_MANIFEST = ARTIFACTS_DIR / "python_build.json"
+PYTHON_BUILD_INPUTS = [
+    ROOT / "pyproject.toml",
+    ROOT / "requirements.txt",
+    ROOT / "requirements.lock",
+    CAPSULE_ROOT / "requirements.txt",
+    CAPSULE_ROOT / "requirements.lock",
+]
 
 PASS = "PASS"
 FAIL = "FAIL"
 SKIP = "SKIP"
+TAIL_CHAR_LIMIT_DEFAULT = 4000
+TAIL_CHAR_LIMIT_ENV = "VERIFY_TAIL_CHAR_LIMIT"
+
+
+def _resolve_tail_char_limit(env: Dict[str, str]) -> int:
+    raw = env.get(TAIL_CHAR_LIMIT_ENV)
+    if raw is None or raw.strip() == "":
+        return TAIL_CHAR_LIMIT_DEFAULT
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return TAIL_CHAR_LIMIT_DEFAULT
+    return max(0, value)
 
 
 class CheckFailure(RuntimeError):
@@ -79,6 +104,7 @@ class VerificationContext:
     def __post_init__(self) -> None:
         ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
         self.env = os.environ.copy()
         if "PKG_CONFIG_PATH" not in self.env:
             self.env["PKG_CONFIG_PATH"] = "/usr/lib/x86_64-linux-gnu/pkgconfig"
@@ -89,6 +115,7 @@ class VerificationContext:
             rustflags = f"{rustflags} {cap_flag}".strip()
             self.env["RUSTFLAGS"] = rustflags
         self.result_payload: Dict[str, Dict[str, str]] = {}
+        self.tail_char_limit = _resolve_tail_char_limit(self.env)
 
     # Helpers -----------------------------------------------------------------
     def _discover_changed_files(self) -> List[str]:
@@ -110,10 +137,21 @@ class VerificationContext:
     def has_changed_rust_sources(self) -> bool:
         return any(path.endswith(".rs") for path in self.changed_files)
 
-    def run_command(self, name: str, command: Sequence[str], cwd: Optional[Path] = None) -> str:
+    def run_command(
+        self,
+        name: str,
+        command: Sequence[str],
+        cwd: Optional[Path] = None,
+        line_handler: Optional[Callable[[str], None]] = None,
+    ) -> str:
         """Run command streaming output; raise on failure."""
         cwd = cwd or ROOT
         start = time.perf_counter()
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", name.lower()).strip("-")
+        if not safe_name:
+            safe_name = "step"
+        log_stamp = time.strftime("%Y%m%d-%H%M%S")
+        log_path = LOGS_DIR / f"{log_stamp}-{time.time_ns()}-{safe_name}.log"
         process = subprocess.Popen(
             command,
             cwd=str(cwd),
@@ -122,23 +160,45 @@ class VerificationContext:
             stderr=subprocess.STDOUT,
             text=True,
         )
-        output_lines: List[str] = []
+        tail_buffer: deque[str] = deque()
+        tail_chars = 0
+        tail_limit = self.tail_char_limit
         assert process.stdout is not None
-        try:
-            for line in process.stdout:
-                sys.stdout.write(line)
-                output_lines.append(line)
-        finally:
-            process.stdout.close()
+        peak_kb = 0
+        last_sample = time.perf_counter()
+        with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+            try:
+                for line in process.stdout:
+                    log_file.write(line)
+                    if line_handler is not None:
+                        line_handler(line)
+                    else:
+                        sys.stdout.write(line)
+                    if tail_limit > 0:
+                        tail_buffer.append(line)
+                        tail_chars += len(line)
+                        while tail_chars > tail_limit and tail_buffer:
+                            removed = tail_buffer.popleft()
+                            tail_chars -= len(removed)
+                    now = time.perf_counter()
+                    if now - last_sample >= 0.1:
+                        peak_kb = max(peak_kb, _read_peak_kb(process.pid, peak_kb))
+                        last_sample = now
+            finally:
+                process.stdout.close()
+        peak_kb = max(peak_kb, _read_peak_kb(process.pid, peak_kb))
         exit_code = process.wait()
         duration = time.perf_counter() - start
-        tail = "".join(output_lines)[-2000:]
-        self.result_payload[name] = {
+        tail = "".join(tail_buffer)
+        payload = self.result_payload.setdefault(name, {})
+        payload.update({
             "command": " ".join(command),
             "duration_sec": f"{duration:.2f}",
             "exit_code": str(exit_code),
             "output_tail": tail,
-        }
+            "peak_kb": str(peak_kb) if peak_kb else "",
+            "log_path": str(log_path.relative_to(ROOT)),
+        })
         if exit_code != 0:
             raise CheckFailure(f"Command {' '.join(command)} exited with code {exit_code}")
         return tail
@@ -161,7 +221,7 @@ def discover_language_stacks() -> Dict[str, bool]:
     python_markers = [
         ROOT / "pyproject.toml",
         ROOT / "requirements.txt",
-        ROOT / "agentcontrol" / "requirements.txt",
+        CAPSULE_ROOT / "requirements.txt",
     ]
     stacks = {
         "rust": (ROOT / "Cargo.toml").exists(),
@@ -170,6 +230,190 @@ def discover_language_stacks() -> Dict[str, bool]:
         "go": (ROOT / "go.mod").exists(),
     }
     return stacks
+
+
+def _read_peak_kb(pid: int, fallback: int = 0) -> int:
+    """Best-effort RSS/HWM reader; prefers /proc, falls back to psutil when available."""
+    peak = fallback
+    rss = fallback
+
+    if sys.platform.startswith("linux"):
+        status_path = Path("/proc") / str(pid) / "status"
+        try:
+            text = status_path.read_text(encoding="utf-8")
+        except (FileNotFoundError, ProcessLookupError, PermissionError, OSError):
+            text = ""
+        if text:
+            for line in text.splitlines():
+                if line.startswith("VmHWM:"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            peak = max(peak, int(parts[1]))
+                        except ValueError:
+                            continue
+                elif line.startswith("VmRSS:"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            rss = max(rss, int(parts[1]))
+                        except ValueError:
+                            continue
+            if peak or rss:
+                return max(peak, rss, fallback)
+
+    try:
+        import psutil  # type: ignore
+
+        try:
+            proc = psutil.Process(pid)
+            mem_info = proc.memory_info()
+            rss = max(rss, int(mem_info.rss // 1024))
+            # Windows exposes peak via peak_wset, macOS via rss (no HWM)
+            peak_attr = getattr(mem_info, "peak_wset", None)
+            if peak_attr:
+                peak = max(peak, int(peak_attr // 1024))
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):  # type: ignore[attr-defined]
+            return max(peak, rss, fallback)
+        return max(peak, rss, fallback)
+    except ImportError:
+        return fallback
+
+
+def resolve_virtualenv_tool(executable: str) -> Optional[Path]:
+    """Locate binary inside Shelldone-managed virtual environments."""
+
+    candidate_roots = [CAPSULE_ROOT / ".venv", ROOT / ".venv"]
+    bin_dirs = ["bin", "Scripts"]
+
+    suffixes: List[str] = [""]
+    if os.name == "nt" and not executable.lower().endswith(".exe"):
+        suffixes.append(".exe")
+
+    for root in candidate_roots:
+        if not root.exists():
+            continue
+        for bin_dir in bin_dirs:
+            base_dir = root / bin_dir
+            if not base_dir.exists():
+                continue
+            for suffix in suffixes:
+                candidate = base_dir / f"{executable}{suffix}"
+                if candidate.exists():
+                    return candidate.resolve()
+    return None
+
+
+def _hash_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def python_build_env_signature() -> bytes:
+    parts: List[str] = []
+    version_info = getattr(sys, "version_info", None)
+    if version_info is not None:
+        parts.append(str(tuple(version_info)))
+    version = getattr(sys, "version", None)
+    if isinstance(version, str):
+        parts.append(version)
+    platform_name = getattr(sys, "platform", None)
+    if isinstance(platform_name, str):
+        parts.append(platform_name)
+    implementation = getattr(sys, "implementation", None)
+    if implementation is not None:
+        name = getattr(implementation, "name", None)
+        if isinstance(name, str):
+            parts.append(name)
+        impl_version = getattr(implementation, "version", None)
+        if impl_version is not None:
+            parts.append(str(impl_version))
+    machine = platform.machine()
+    if machine:
+        parts.append(machine)
+    processor = platform.processor()
+    if processor:
+        parts.append(processor)
+    platform_descriptor = platform.platform(aliased=True, terse=True)
+    if platform_descriptor:
+        parts.append(platform_descriptor)
+    return "\0".join(parts).encode("utf-8")
+
+
+def compute_python_build_fingerprint(paths: Sequence[Path]) -> str:
+    hasher = hashlib.sha256()
+    for path in sorted(paths, key=lambda item: str(item)):
+        if not path.exists():
+            continue
+        try:
+            rel = path.relative_to(ROOT)
+        except ValueError:
+            rel = path.resolve()
+        hasher.update(str(rel).encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(_hash_file(path).encode("utf-8"))
+    hasher.update(python_build_env_signature())
+    return hasher.hexdigest()
+
+
+def load_python_build_cache(manifest_path: Path) -> Optional[Dict[str, object]]:
+    if not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if "fingerprint" not in data or "files" not in data:
+        return None
+    if not isinstance(data["files"], list):
+        return None
+    return data
+
+
+def is_python_build_cache_valid(
+    fingerprint: str, cache: Dict[str, object], root: Path
+) -> bool:
+    if cache.get("fingerprint") != fingerprint:
+        return False
+    env_signature = cache.get("env_signature")
+    if isinstance(env_signature, str):
+        current_signature = python_build_env_signature().hex()
+        if env_signature != current_signature:
+            return False
+    files = cache.get("files")
+    if not isinstance(files, list) or not files:
+        return False
+    for entry in files:
+        if not isinstance(entry, dict):
+            return False
+        rel_path = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(rel_path, str) or not isinstance(digest, str):
+            return False
+        candidate = root / rel_path
+        if not candidate.exists() or not candidate.is_file():
+            return False
+        if _hash_file(candidate) != digest:
+            return False
+    return True
+
+
+def write_python_build_cache(
+    manifest_path: Path, fingerprint: str, files: Sequence[Dict[str, str]]
+) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "fingerprint": fingerprint,
+        "files": list(files),
+        "python_version": getattr(sys, "version", "unknown"),
+        "env_signature": python_build_env_signature().hex(),
+    }
+    manifest_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
 def _env_positive_int(key: str, default: int, *, allow_zero: bool = False) -> int:
@@ -220,6 +464,8 @@ def _update_perf_status(status_value: str, suite_report, summary_text: str, arti
 def check_perf_probes(ctx: VerificationContext) -> str:
     if ctx.mode not in {"full", "ci"}:
         raise SkipCheck("performance probes run only in full/ci modes")
+    if os.environ.get("ALLOW_PERF_SKIP") == "1":
+        raise SkipCheck("perf probes disabled by ALLOW_PERF_SKIP=1")
     if shutil.which("k6") is None:
         raise CheckFailure("k6 binary is required for performance probes")
 
@@ -337,7 +583,7 @@ SKIP_MARKER_DIRS = {
 SKIP_MARKER_SUFFIXES = {".md", ".markdown", ".rst", ".txt"}
 ALLOW_MARKER_BASENAMES = {"Makefile", "makefile"}
 SKIP_MARKER_FILES = {
-    "agentcontrol/scripts/lib/quality_guard.py",
+    ".agentcontrol/scripts/lib/quality_guard.py",
 }
 RUST_EXCLUDE_PACKAGES = [
     "cairo-sys-rs",
@@ -346,6 +592,32 @@ RUST_EXCLUDE_PACKAGES = [
     "harfbuzz",
 ]
 CLIPPY_BASELINE = BASELINE_DIR / "clippy.json"
+
+PEAK_KB_LIMIT_DEFAULT = int(os.environ.get("VERIFY_PEAK_KB_LIMIT", str(6 * 1024 * 1024)))
+DURATION_LIMIT_DEFAULT = float(os.environ.get("VERIFY_DURATION_LIMIT_SEC", "900"))
+RESOURCE_TOP_COUNT = int(os.environ.get("VERIFY_RESOURCE_TOP", "5"))
+
+
+def _resolve_peak_limit(name: str) -> int:
+    env_key = f"VERIFY_PEAK_KB_LIMIT_{name.replace('-', '_').upper()}"
+    raw = os.environ.get(env_key)
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            raise CheckFailure(f"{env_key} must be an integer") from None
+    return PEAK_KB_LIMIT_DEFAULT
+
+
+def _resolve_duration_limit(name: str) -> float:
+    env_key = f"VERIFY_DURATION_LIMIT_SEC_{name.replace('-', '_').upper()}"
+    raw = os.environ.get(env_key)
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            raise CheckFailure(f"{env_key} must be a number") from None
+    return DURATION_LIMIT_DEFAULT
 
 
 # ----------------------------------------------------------------------------
@@ -613,6 +885,51 @@ def check_architecture_doc(_: VerificationContext) -> str:
     return "Architecture overview contains required sections"
 
 
+def check_observability_alert(_: VerificationContext) -> str:
+    path = ROOT / "docs/architecture/observability.md"
+    if not path.exists():
+        raise CheckFailure("docs/architecture/observability.md is missing")
+    text = path.read_text(encoding="utf-8")
+    required_fragments = [
+        "termbridge.actions{command=\"discover\"}",
+        "150/мин",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    if missing:
+        raise CheckFailure(
+            "Observability doc missing discover throughput alert details: " + ", ".join(missing)
+        )
+    return "Observability alert for termbridge discover is documented"
+
+
+def check_termbridge_matrix(ctx: VerificationContext) -> str:
+    script = ROOT / "scripts" / "tests" / "termbridge_matrix.py"
+    if not script.exists():
+        raise CheckFailure("scripts/tests/termbridge_matrix.py is missing")
+    ctx.run_command(
+        "termbridge-matrix",
+        [sys.executable, str(script)],
+    )
+    return "TermBridge capability snapshot validated"
+
+
+def check_termbridge_telemetry(ctx: VerificationContext) -> str:
+    script = ROOT / "scripts" / "tests" / "termbridge_otlp_smoke.py"
+    if not script.exists():
+        raise CheckFailure("scripts/tests/termbridge_otlp_smoke.py is missing")
+    artifacts_dir = ARTIFACTS_DIR / "termbridge-telemetry"
+    ctx.run_command(
+        "termbridge-telemetry",
+        [
+            sys.executable,
+            str(script),
+            "--artifacts-dir",
+            str(artifacts_dir),
+        ],
+    )
+    return "TermBridge OTLP telemetry smoke recorded"
+
+
 def _parse_markdown_table(lines: List[str]) -> List[Dict[str, str]]:
     if len(lines) < 2:
         raise CheckFailure("Table must contain header and data rows")
@@ -712,6 +1029,9 @@ def _collect_markers() -> Dict[str, Counter]:
             suffix = path.suffix.lower()
             if suffix in SKIP_MARKER_SUFFIXES and path.name not in ALLOW_MARKER_BASENAMES:
                 continue
+            if not path.exists():
+                # Tracked but missing (e.g., removed legacy capsule files); skip safely
+                continue
             try:
                 data = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
@@ -772,6 +1092,55 @@ def check_agent_adapters(ctx: VerificationContext) -> str:
     return "Agent adapters emit structured errors without dependencies"
 
 
+LEGACY_PATTERNS = [
+    re.compile(r"\bagentcall\b", re.IGNORECASE),
+    # forbid legacy SDK tokens but allow filesystem path '.agentcontrol'
+    re.compile(r"(?<!\.)\bagentcontrol\b", re.IGNORECASE),
+]
+LEGACY_SKIP_DIRS = {
+    ".git",
+    "target",
+    "artifacts",
+    "reports",
+    "licenses",
+}
+LEGACY_SKIP_FILES = {
+    ".gitignore",
+    "docs/ROADMAP/notes/2025-10-05-heart-sync.md",
+}
+
+
+def check_no_legacy_mentions(_: VerificationContext) -> str:
+    files = subprocess.run(["git", "ls-files"], check=True, capture_output=True, text=True, cwd=ROOT)
+    violations: List[str] = []
+    for rel in files.stdout.strip().splitlines():
+        if not rel:
+            continue
+        if any(rel.startswith(d + "/") for d in LEGACY_SKIP_DIRS):
+            continue
+        path = ROOT / rel
+        if not path.exists() or not path.is_file():
+            continue
+        if path.name in LEGACY_SKIP_FILES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for idx, line in enumerate(text.splitlines(), start=1):
+            for pat in LEGACY_PATTERNS:
+                if pat.search(line):
+                    violations.append(f"{rel}:{idx}: {line.strip()[:160]}")
+                    break
+            if len(violations) >= 20:
+                break
+        if len(violations) >= 20:
+            break
+    if violations:
+        raise CheckFailure("Legacy CLI/SDK mentions detected (forbidden):\n" + "\n".join(violations))
+    return "No legacy CLI/SDK mentions present"
+
+
 def check_rust_fmt(ctx: VerificationContext) -> str:
     if not ctx.has_changed_rust_sources():
         raise SkipCheck("no .rs changes detected")
@@ -790,27 +1159,17 @@ def check_rust_clippy(ctx: VerificationContext) -> str:
     ctx.apply_rust_excludes(args)
     args.extend(["--", "--no-deps"])
 
-    start = time.perf_counter()
-    process = subprocess.Popen(
-        args,
-        cwd=str(ROOT),
-        env=ctx.env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-
     warnings: List[Dict[str, object]] = []
-    assert process.stdout is not None
-    for line in process.stdout:
-        line = line.strip()
-        if not line:
-            continue
+
+    def handle(line: str) -> None:
+        stripped = line.strip()
+        if not stripped:
+            return
         try:
-            payload = json.loads(line)
+            payload = json.loads(stripped)
         except json.JSONDecodeError:
-            sys.stdout.write(line + "\n")
-            continue
+            sys.stdout.write(line)
+            return
 
         if payload.get("reason") != "compiler-message":
             message = payload.get("message")
@@ -818,7 +1177,7 @@ def check_rust_clippy(ctx: VerificationContext) -> str:
                 sys.stdout.write(message)
                 if not message.endswith("\n"):
                     sys.stdout.write("\n")
-            continue
+            return
 
         msg = payload.get("message", {})
         rendered = msg.get("rendered")
@@ -838,21 +1197,10 @@ def check_rust_clippy(ctx: VerificationContext) -> str:
                     "line": primary.get("line_start") if primary else 0,
                 }
             )
-        elif level == "error":
-            # An actual clippy error occurred
-            pass
 
-    exit_code = process.wait()
-    duration = time.perf_counter() - start
-    ctx.result_payload["rust-clippy"] = {
-        "command": " ".join(args),
-        "duration_sec": f"{duration:.2f}",
-        "warning_count": str(len(warnings)),
-    }
-    if exit_code != 0:
-        raise CheckFailure(f"cargo clippy exited with code {exit_code}")
+    ctx.run_command("rust-clippy", args, line_handler=handle)
+    ctx.result_payload.setdefault("rust-clippy", {})["warning_count"] = str(len(warnings))
 
-    # Baseline handling ------------------------------------------------------
     warnings_sorted = sorted(
         warnings,
         key=lambda w: (w["code"], w["file"], int(w.get("line", 0)), w["message"]),
@@ -925,16 +1273,131 @@ def check_python(ctx: VerificationContext) -> str:
     if not stacks["python"]:
         raise SkipCheck("python stack not detected")
 
-    ctx.run_command("python-compile", ["python3", "-m", "compileall", str(ROOT)])
+    python_bin = resolve_virtualenv_tool("python")
+    compile_cmd = [str(python_bin or Path(sys.executable or "python3")), "-m", "compileall", str(ROOT)]
+    ctx.run_command("python-compile", compile_cmd)
 
-    pytest_bin = ROOT / ".venv" / "bin" / "pytest"
-    if pytest_bin.exists():
+    pytest_bin = resolve_virtualenv_tool("pytest")
+    if pytest_bin is not None:
         cmd = [str(pytest_bin)]
     else:
-        cmd = ["python3", "-m", "pytest"]
+        cmd = [str(Path(sys.executable or "python3")), "-m", "pytest"]
 
     ctx.run_command("python-pytest", cmd)
     return "python compileall + pytest"
+
+
+def check_python_build(ctx: VerificationContext) -> str:
+    stacks = discover_language_stacks()
+    if not stacks["python"]:
+        raise SkipCheck("python stack not detected")
+    # Skip if 'build' module is not available to avoid network installs in CI/prepush
+    try:
+        import importlib.util as _importlib_util  # type: ignore
+        if _importlib_util.find_spec("build") is None:  # type: ignore[attr-defined]
+            raise SkipCheck("python 'build' module not installed")
+    except Exception:
+        raise SkipCheck("python 'build' module not installed")
+
+    fingerprint = compute_python_build_fingerprint(PYTHON_BUILD_INPUTS)
+    cache = load_python_build_cache(PYTHON_BUILD_MANIFEST)
+    if cache and is_python_build_cache_valid(fingerprint, cache, ROOT):
+        ctx.result_payload["python-build"] = {
+            "command": "python -m build (cache)",
+            "duration_sec": "0.00",
+            "exit_code": "0",
+            "output_tail": "cache hit",
+        }
+        return "python build cache hit"
+
+    dist_dir = ROOT / "dist"
+    if dist_dir.exists():
+        shutil.rmtree(dist_dir)
+    python_bin = resolve_virtualenv_tool("python")
+    python_exec = str(python_bin or Path(sys.executable or "python3"))
+    cmd = [python_exec, "-m", "build"]
+    ctx.run_command("python-build", cmd)
+    if dist_dir.exists():
+        files: List[Dict[str, str]] = []
+        for artifact in sorted(dist_dir.iterdir()):
+            if artifact.is_file():
+                files.append(
+                    {
+                        "path": str(artifact.relative_to(ROOT)),
+                        "sha256": _hash_file(artifact),
+                    }
+                )
+        if files:
+            write_python_build_cache(PYTHON_BUILD_MANIFEST, fingerprint, files)
+    return "python -m build"
+
+
+def _parse_float(value: Optional[str]) -> float:
+    if value is None or value == "":
+        return 0.0
+    try:
+        return float(value)
+    except ValueError:
+        return 0.0
+
+
+def _parse_int(value: Optional[str]) -> int:
+    if value is None or value == "":
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
+def check_resource_budget(ctx: VerificationContext) -> str:
+    if not ctx.result_payload:
+        return "No commands executed"
+
+    overruns: List[str] = []
+    entries: List[Tuple[str, int, float]] = []
+    for name, payload in ctx.result_payload.items():
+        if name == "resource-budget":
+            continue
+        peak_kb = _parse_int(payload.get("peak_kb"))
+        duration = _parse_float(payload.get("duration_sec"))
+        entries.append((name, peak_kb, duration))
+        peak_limit = _resolve_peak_limit(name)
+        duration_limit = _resolve_duration_limit(name)
+        if peak_limit > 0 and peak_kb > peak_limit:
+            overruns.append(
+                f"{name}: peak {peak_kb / 1024:.1f} MiB > {peak_limit / 1024:.1f} MiB"
+            )
+        if duration_limit > 0 and duration > duration_limit:
+            overruns.append(
+                f"{name}: duration {duration:.1f}s > {duration_limit:.1f}s"
+            )
+
+    top_peak = sorted(entries, key=lambda item: item[1], reverse=True)[:RESOURCE_TOP_COUNT]
+    top_duration = sorted(entries, key=lambda item: item[2], reverse=True)[:RESOURCE_TOP_COUNT]
+    ctx.result_payload["resource-budget"] = {
+        "top_peak_kb": [
+            {"name": name, "peak_kb": peak}
+            for name, peak, _ in top_peak
+            if peak > 0
+        ],
+        "top_duration_sec": [
+            {"name": name, "duration_sec": duration}
+            for name, _, duration in top_duration
+            if duration > 0
+        ],
+    }
+    summary = []
+    if top_peak:
+        peak_name, peak_value, _ = top_peak[0]
+        summary.append(f"max peak {peak_value / 1024:.1f} MiB ({peak_name})")
+    if top_duration:
+        dur_name, _, dur_value = top_duration[0]
+        summary.append(f"max duration {dur_value:.1f}s ({dur_name})")
+    detail = "; ".join(summary) if summary else "no metrics recorded"
+    if overruns:
+        raise CheckFailure("Resource budgets exceeded: " + "; ".join(overruns[:5]))
+    return detail
 
 
 def check_js(ctx: VerificationContext) -> str:
@@ -958,8 +1421,12 @@ def check_go(ctx: VerificationContext) -> str:
 
 CHECKS: List[Check] = [
     Check("docs-links", ("fast", "prepush", "full", "ci"), check_markdown_links),
+    Check("legacy-scan", ("fast", "prepush", "full", "ci"), check_no_legacy_mentions),
     Check("todo-machine", ("fast", "prepush", "full", "ci"), check_todo_machine),
     Check("architecture-doc", ("fast", "prepush", "full", "ci"), check_architecture_doc),
+    Check("observability-alert", ("fast", "prepush", "full", "ci"), check_observability_alert),
+    Check("termbridge-matrix", ("prepush", "full", "ci"), check_termbridge_matrix),
+    Check("termbridge-telemetry", ("prepush", "full", "ci"), check_termbridge_telemetry),
     Check("roadmap", ("prepush", "full", "ci"), check_roadmap),
     Check("banned-markers", ("fast", "prepush", "full", "ci"), check_banned_markers),
     Check("agents", ("prepush", "full", "ci"), check_agent_adapters),
@@ -970,8 +1437,10 @@ CHECKS: List[Check] = [
     Check("rust-doc", ("full", "ci"), check_rust_doc),
     Check("perf-probes", ("full", "ci"), check_perf_probes),
     Check("python", ("prepush", "full", "ci"), check_python),
+    Check("python-build", ("prepush", "full", "ci"), check_python_build),
     Check("javascript", ("full", "ci"), check_js),
     Check("go", ("full", "ci"), check_go),
+    Check("resource-budget", ("fast", "prepush", "full", "ci"), check_resource_budget),
 ]
 
 
@@ -1088,6 +1557,7 @@ def main() -> int:
         ],
         "commands": ctx.result_payload,
     }
+    payload["resources"] = ctx.result_payload.get("resource-budget", {})
     (ARTIFACTS_DIR / "summary.json").write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     if ctx.json_output:
         print(json.dumps(payload, indent=2, ensure_ascii=True))

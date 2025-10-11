@@ -12,5 +12,5 @@
   - Снижается площадь API и упрощается контроль безопасности.
 - **Rollback Plan:** git tag `codex/2025-10-03-pre-ack`, скрипт `./scripts/rollback-ack.sh` отключает ACK, возвращает старые команды.
 - **Testing:** contract tests на ACK → Σ-pty, persona switching, denial матрицы (Rego).
-- **Owners:** AI Automation squad.
+- **Owners:** imagray `<magraytlinov@gmail.com>` (support: AI Automation squad).
 - **Dependencies:** ADR-0001.

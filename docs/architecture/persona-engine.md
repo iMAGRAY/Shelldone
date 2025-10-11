@@ -97,7 +97,7 @@ experience:
         max_per_min: 0
         cooldown_ms: 0
 ```
-Валидация происходит в `make verify-full`; несоответствия (например, preset без persona) приводят к ошибке сборки.
+Валидация происходит в `python3 scripts/verify.py --mode full`; несоответствия (например, preset без persona) приводят к ошибке сборки.
 
 ## Guardrails
 - `HintBudget` логирует отбрасывание подсказок как `persona.hint.dropped{preset=}`.

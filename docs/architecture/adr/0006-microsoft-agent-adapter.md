@@ -11,5 +11,5 @@
   - Появляется новая поверхность секретов — необходимо расширить policy guardrails и secret manager.
 - **Rollback Plan:** git tag `codex/2025-10-03-pre-ms-agent`, удалить `agents/microsoft` и записи из manifest, пересобрать `scripts/agentd.py`.
 - **Testing:** smoke (`python3 scripts/agentd.py smoke`), contract tests в `shelldone-agentd` (ready/error), security scanning npm lock.
-- **Owners:** AI Automation squad.
+- **Owners:** imagray `<magraytlinov@gmail.com>` (support: AI Automation squad).
 - **Dependencies:** ADR-0001, ADR-0002.
