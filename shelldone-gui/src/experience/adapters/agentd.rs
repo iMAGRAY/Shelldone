@@ -9,9 +9,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 const DISCOVERY_ENV_KEY: &str = "SHELLDONE_AGENTD_DISCOVERY";
 const DISCOVERY_RELATIVE_PATH: &str = "shelldone/agentd.json";
