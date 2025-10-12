@@ -89,3 +89,6 @@ reports/sbom/
 state/
 shelldone_agentcontrol.egg-info/
 dist/
+# vendor source drops kept locally
+deps/freetype/freetype2/
+deps/harfbuzz/harfbuzz/

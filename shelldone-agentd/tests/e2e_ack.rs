@@ -6,7 +6,7 @@
 use serde_json::json;
 use std::time::Duration;
 use tempfile::TempDir;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -33,7 +33,7 @@ async fn e2e_agent_exec_echo_command() {
     });
 
     // Wait for server to start
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     // Send agent.exec request
     let client = reqwest::Client::new();
@@ -96,7 +96,7 @@ async fn e2e_sigma_guard_journal_event() {
         shelldone_agentd::run(settings).await.unwrap();
     });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     let client = reqwest::Client::new();
     let payload = json!({
@@ -181,7 +181,7 @@ allow if {
         shelldone_agentd::run(settings).await.unwrap();
     });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     // Try with core persona (should be denied)
     let client = reqwest::Client::new();
@@ -251,7 +251,7 @@ async fn e2e_agent_undo_snapshot_restore() {
         shelldone_agentd::run(settings).await.unwrap();
     });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     // Execute commands to generate journal events
     let client = reqwest::Client::new();
@@ -302,7 +302,7 @@ async fn e2e_healthz_endpoint() {
         shelldone_agentd::run(settings).await.unwrap();
     });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     let client = reqwest::Client::new();
     let response = client
@@ -341,7 +341,7 @@ async fn e2e_concurrent_requests() {
         shelldone_agentd::run(settings).await.unwrap();
     });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_for_port(port).await;
 
     // Send 10 concurrent requests
     let mut handles = vec![];
@@ -382,4 +382,23 @@ async fn find_free_port() -> u16 {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
     port
+}
+
+async fn wait_for_port(port: u16) {
+    let mut attempts = 0;
+    loop {
+        match TcpStream::connect(("127.0.0.1", port)).await {
+            Ok(stream) => {
+                drop(stream);
+                break;
+            }
+            Err(_) if attempts < 50 => {
+                attempts += 1;
+                sleep(Duration::from_millis(50)).await;
+            }
+            Err(err) => {
+                panic!("agentd did not start listening on port {}: {}", port, err);
+            }
+        }
+    }
 }
