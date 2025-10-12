@@ -4,6 +4,4 @@ pub mod service;
 
 pub use clipboard_service::ClipboardBridgeService;
 pub use discovery::{spawn_discovery_task, TermBridgeDiscoveryHandle};
-pub use service::{
-    TermBridgeDiscoveryDiff, TermBridgeService, TermBridgeServiceConfig, TermBridgeServiceError,
-};
+pub use service::{TermBridgeService, TermBridgeServiceError};

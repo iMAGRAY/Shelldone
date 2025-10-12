@@ -1,20 +1,13 @@
 use crate::app::ack::model::{ExecArgs, ExecRequest, ExecResult};
 use crate::app::ack::service::{AckError, AckPort};
-use crate::app::termbridge::service::{
-    TermBridgeDiscoveryOutcome, TermBridgeServiceError, TermBridgeSyncPort,
-};
 use crate::app::termbridge::TermBridgeDiscoveryHandle;
 use crate::domain::mcp::{
     CapabilityName, McpEventEnvelope, McpSession, PersonaProfile, SessionId, ToolName,
 };
-use crate::domain::termbridge::{CapabilityRecord, CapabilitySource};
 use crate::ports::mcp::repo_port::McpSessionRepository;
-use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use std::time::Instant;
 use thiserror::Error;
-use uuid::Uuid;
 
 pub struct McpBridgeService<A, R>
 where
@@ -23,7 +16,6 @@ where
 {
     sessions: Arc<R>,
     ack: Arc<A>,
-    termbridge: Option<Arc<dyn TermBridgeSyncPort + Send + Sync>>,
     discovery: Option<TermBridgeDiscoveryHandle>,
 }
 
@@ -37,17 +29,6 @@ pub enum McpBridgeError {
     ToolFailure(String),
     #[error("internal error: {0}")]
     Internal(String),
-    #[error("forbidden: {0}")]
-    Forbidden(String),
-}
-
-const TERM_BRIDGE_SYNC_TOOL: &str = "termbridge.sync";
-
-#[derive(Debug, Deserialize)]
-struct TermBridgeSyncPayload {
-    terminals: Vec<CapabilityRecord>,
-    #[serde(default)]
-    source: Option<String>,
 }
 
 impl<A, R> McpBridgeService<A, R>
@@ -58,13 +39,11 @@ where
     pub fn new(
         sessions: Arc<R>,
         ack: Arc<A>,
-        termbridge: Option<Arc<dyn TermBridgeSyncPort + Send + Sync>>,
         discovery: Option<TermBridgeDiscoveryHandle>,
     ) -> Self {
         Self {
             sessions,
             ack,
-            termbridge,
             discovery,
         }
     }
@@ -142,114 +121,25 @@ where
         tool_name: &str,
         arguments: Value,
     ) -> Result<ExecResult, McpBridgeError> {
-        match tool_name {
-            "agent.exec" => {
-                let exec_args = parse_exec_args(arguments)?;
-                let persona = Some(session.persona().name().to_string());
-                let spectral_tag = Some(format!("mcp::{}", tool_name));
-                let request = ExecRequest {
-                    command_id: None,
-                    persona,
-                    args: exec_args,
-                    spectral_tag,
-                };
-                let exec_result = self.ack.exec(request).await.map_err(McpBridgeError::from)?;
-                let envelope = session
-                    .record_tool_invocation(ToolName::new(tool_name)?)
-                    .map_err(McpBridgeError::Protocol)?;
-                self.sessions.update(session.clone()).await;
-                self.log_event(session, envelope).await?;
-                Ok(exec_result)
-            }
-            TERM_BRIDGE_SYNC_TOOL => self.handle_termbridge_sync(session, arguments).await,
-            _ => Err(McpBridgeError::UnsupportedTool(tool_name.to_string())),
+        if tool_name != "agent.exec" {
+            return Err(McpBridgeError::UnsupportedTool(tool_name.to_string()));
         }
-    }
-
-    async fn handle_termbridge_sync(
-        &self,
-        session: &mut McpSession,
-        arguments: Value,
-    ) -> Result<ExecResult, McpBridgeError> {
-        if !session.has_capability(TERM_BRIDGE_SYNC_TOOL) {
-            return Err(McpBridgeError::Forbidden(format!(
-                "capability {} required",
-                TERM_BRIDGE_SYNC_TOOL
-            )));
-        }
-
-        let payload: TermBridgeSyncPayload = serde_json::from_value(arguments)
-            .map_err(|err| McpBridgeError::Protocol(err.to_string()))?;
-        let TermBridgeSyncPayload { terminals, source } = payload;
-        if terminals.is_empty() {
-            return Err(McpBridgeError::Protocol(
-                "terminals must be a non-empty array".into(),
-            ));
-        }
-
-        let sync_port = self
-            .termbridge
-            .as_ref()
-            .ok_or_else(|| McpBridgeError::Internal("termbridge sync not configured".into()))?;
-
-        let records: Vec<CapabilityRecord> = terminals
-            .into_iter()
-            .map(|mut record| {
-                if matches!(record.source, CapabilitySource::Local) {
-                    record.source = CapabilitySource::Mcp;
-                }
-                record
-            })
-            .collect();
-
-        let source = source.unwrap_or_else(|| format!("mcp:{}", session.id()));
-
-        let started = Instant::now();
-        let outcome = sync_port
-            .apply_external_snapshot(&source, records)
-            .await
-            .map_err(McpBridgeError::from)?;
-
+        let exec_args = parse_exec_args(arguments)?;
+        let persona = Some(session.persona().name().to_string());
+        let spectral_tag = Some(format!("mcp::{}", tool_name));
+        let request = ExecRequest {
+            command_id: None,
+            persona,
+            args: exec_args,
+            spectral_tag,
+        };
+        let exec_result = self.ack.exec(request).await.map_err(McpBridgeError::from)?;
         let envelope = session
-            .record_tool_invocation(ToolName::new(TERM_BRIDGE_SYNC_TOOL)?)
+            .record_tool_invocation(ToolName::new(tool_name)?)
             .map_err(McpBridgeError::Protocol)?;
         self.sessions.update(session.clone()).await;
         self.log_event(session, envelope).await?;
-        self.notify_discovery("mcp.termbridge.sync");
-
-        let TermBridgeDiscoveryOutcome {
-            state,
-            diff,
-            changed,
-        } = outcome;
-        let summary = json!({
-            "changed": changed,
-            "terminals": state.capabilities().len(),
-            "added": diff
-                .added
-                .iter()
-                .map(|record| record.terminal.as_str())
-                .collect::<Vec<_>>(),
-            "updated": diff
-                .updated
-                .iter()
-                .map(|record| record.terminal.as_str())
-                .collect::<Vec<_>>(),
-            "removed": diff
-                .removed
-                .iter()
-                .map(|record| record.terminal.as_str())
-                .collect::<Vec<_>>(),
-        });
-
-        Ok(ExecResult {
-            event_id: format!("termbridge-sync-{}", Uuid::new_v4()),
-            exit_code: 0,
-            stdout: summary.to_string(),
-            stderr: String::new(),
-            spectral_tag: "mcp.termbridge.sync".into(),
-            duration_ms: started.elapsed().as_secs_f64() * 1000.0,
-        })
+        Ok(exec_result)
     }
 
     #[allow(dead_code)]
@@ -364,47 +254,20 @@ impl From<String> for McpBridgeError {
     }
 }
 
-impl From<TermBridgeServiceError> for McpBridgeError {
-    fn from(value: TermBridgeServiceError) -> Self {
-        match value {
-            TermBridgeServiceError::Internal(msg) => McpBridgeError::Internal(msg),
-            TermBridgeServiceError::NotFound(msg) => McpBridgeError::ToolFailure(msg),
-            TermBridgeServiceError::NotSupported { reason, .. } => {
-                McpBridgeError::ToolFailure(reason)
-            }
-            TermBridgeServiceError::Overloaded { action, terminal } => {
-                McpBridgeError::ToolFailure(format!(
-                    "termbridge overloaded for action={} terminal={}",
-                    action, terminal
-                ))
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapters::ack::command_runner::ShellCommandRunner;
     use crate::adapters::mcp::repo_mem::InMemoryMcpSessionRepository;
-    use crate::adapters::termbridge::repo_mem::{
-        InMemoryTermBridgeBindingRepository, InMemoryTermBridgeStateRepository,
-    };
     use crate::app::ack::approvals::ApprovalRegistry;
     use crate::app::ack::service::AckService;
-    use crate::app::termbridge::service::{
-        TermBridgeService, TermBridgeServiceConfig, TermBridgeSyncPort,
-    };
     use crate::continuum::ContinuumStore;
     use crate::policy_engine::PolicyEngine;
-    use crate::ports::termbridge::capability_repo::TermBridgeStateRepository;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::tempdir;
 
-    fn build_bridge_with_termbridge(
-        termbridge: Option<Arc<dyn TermBridgeSyncPort + Send + Sync>>,
-    ) -> (
+    fn build_bridge() -> (
         Arc<McpBridgeService<AckService<ShellCommandRunner>, InMemoryMcpSessionRepository>>,
         tempfile::TempDir,
     ) {
@@ -426,15 +289,8 @@ mod tests {
             approvals,
         ));
         let repo = Arc::new(InMemoryMcpSessionRepository::new());
-        let bridge = Arc::new(McpBridgeService::new(repo, ack, termbridge, None));
+        let bridge = Arc::new(McpBridgeService::new(repo, ack, None));
         (bridge, tmp)
-    }
-
-    fn build_bridge() -> (
-        Arc<McpBridgeService<AckService<ShellCommandRunner>, InMemoryMcpSessionRepository>>,
-        tempfile::TempDir,
-    ) {
-        build_bridge_with_termbridge(None)
     }
 
     #[tokio::test]
@@ -512,112 +368,5 @@ mod tests {
         assert_eq!(parsed.cmd, "ls");
         assert_eq!(parsed.shell.as_deref(), Some("/bin/bash"));
         assert!(parse_exec_args(json!({})).is_err());
-    }
-
-    #[tokio::test]
-    async fn termbridge_sync_requires_capability() {
-        let state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
-        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
-        let termbridge_service = Arc::new(TermBridgeService::new(
-            state_repo.clone(),
-            binding_repo,
-            Vec::new(),
-            None,
-            TermBridgeServiceConfig::default(),
-        ));
-        let termbridge_sync: Arc<dyn TermBridgeSyncPort + Send + Sync> = termbridge_service.clone();
-        let (bridge, _) = build_bridge_with_termbridge(Some(termbridge_sync));
-
-        let mut session = bridge
-            .initialize_session(None, "1.0".into(), vec![])
-            .await
-            .unwrap();
-        let arguments = json!({
-            "terminals": [
-                {
-                    "terminal": "wezterm",
-                    "display_name": "WezTerm",
-                    "requires_opt_in": false,
-                    "capabilities": {
-                        "spawn": true,
-                        "split": true,
-                        "focus": true,
-                        "duplicate": false,
-                        "close": true,
-                        "send_text": true,
-                        "clipboard_write": true,
-                        "clipboard_read": false,
-                        "cwd_sync": true,
-                        "bracketed_paste": true,
-                        "max_clipboard_kb": 64
-                    },
-                    "notes": []
-                }
-            ]
-        });
-        let err = bridge
-            .call_tool(&mut session, TERM_BRIDGE_SYNC_TOOL, arguments)
-            .await
-            .expect_err("missing capability should fail");
-        assert!(matches!(err, McpBridgeError::Forbidden(_)));
-        assert!(state_repo.load().await.unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn termbridge_sync_updates_capability_map() {
-        let state_repo = Arc::new(InMemoryTermBridgeStateRepository::default());
-        let binding_repo = Arc::new(InMemoryTermBridgeBindingRepository::default());
-        let termbridge_service = Arc::new(TermBridgeService::new(
-            state_repo.clone(),
-            binding_repo,
-            Vec::new(),
-            None,
-            TermBridgeServiceConfig::default(),
-        ));
-        let termbridge_sync: Arc<dyn TermBridgeSyncPort + Send + Sync> = termbridge_service.clone();
-        let (bridge, _) = build_bridge_with_termbridge(Some(termbridge_sync));
-
-        let mut session = bridge
-            .initialize_session(None, "1.0".into(), vec![TERM_BRIDGE_SYNC_TOOL.into()])
-            .await
-            .unwrap();
-
-        let arguments = json!({
-            "source": "mcp.test",
-            "terminals": [
-                {
-                    "terminal": "wezterm",
-                    "display_name": "WezTerm",
-                    "requires_opt_in": false,
-                    "capabilities": {
-                        "spawn": true,
-                        "split": true,
-                        "focus": true,
-                        "duplicate": false,
-                        "close": true,
-                        "send_text": true,
-                        "clipboard_write": true,
-                        "clipboard_read": false,
-                        "cwd_sync": true,
-                        "bracketed_paste": true,
-                        "max_clipboard_kb": 64
-                    },
-                    "notes": ["mcp" ]
-                }
-            ]
-        });
-
-        let result = bridge
-            .call_tool(&mut session, TERM_BRIDGE_SYNC_TOOL, arguments)
-            .await
-            .expect("sync tool succeeds");
-        assert_eq!(result.exit_code, 0);
-        assert!(result.stdout.contains("\"changed\":true"));
-
-        let snapshot = state_repo.load().await.unwrap().expect("state saved");
-        assert_eq!(snapshot.capabilities().len(), 1);
-        let record = &snapshot.capabilities()[0];
-        assert_eq!(record.terminal.as_str(), "wezterm");
-        assert!(record.capabilities.spawn);
     }
 }

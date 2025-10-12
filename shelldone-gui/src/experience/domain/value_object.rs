@@ -43,7 +43,6 @@ pub enum ExperienceSurfaceRole {
     AgentFeed,
     Metrics,
     CommandPalette,
-    StateSync,
 }
 
 /// Intent that drives persona framing.
@@ -153,7 +152,6 @@ pub struct ExperienceSurface {
     persona: Option<ExperiencePersona>,
     agents: Vec<ExperienceAgentStatus>,
     approvals: Vec<ExperienceApproval>,
-    snapshots: Vec<ExperienceSnapshot>,
     active: bool,
 }
 
@@ -168,7 +166,6 @@ impl ExperienceSurface {
         persona: Option<ExperiencePersona>,
         agents: Vec<ExperienceAgentStatus>,
         approvals: Vec<ExperienceApproval>,
-        snapshots: Vec<ExperienceSnapshot>,
         active: bool,
     ) -> anyhow::Result<Self> {
         if !(0.0..=1.0).contains(&highlight_ratio) {
@@ -187,7 +184,6 @@ impl ExperienceSurface {
             persona,
             agents,
             approvals,
-            snapshots,
             active,
         })
     }
@@ -222,10 +218,6 @@ impl ExperienceSurface {
 
     pub fn approvals(&self) -> &[ExperienceApproval] {
         &self.approvals
-    }
-
-    pub fn snapshots(&self) -> &[ExperienceSnapshot] {
-        &self.snapshots
     }
 
     pub fn is_active(&self) -> bool {
@@ -299,74 +291,6 @@ impl ExperienceApproval {
     }
 }
 
-/// Snapshot entry describing stored session state information.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ExperienceSnapshot {
-    id: String,
-    label: String,
-    created_at: DateTime<Utc>,
-    size_bytes: u64,
-    path: String,
-    tags: Vec<String>,
-}
-
-impl ExperienceSnapshot {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: impl Into<String>,
-        label: impl Into<String>,
-        created_at: DateTime<Utc>,
-        size_bytes: u64,
-        path: impl Into<String>,
-        tags: Vec<String>,
-    ) -> anyhow::Result<Self> {
-        let id = id.into();
-        if id.trim().is_empty() {
-            anyhow::bail!("snapshot id must not be empty");
-        }
-        let label = label.into();
-        if label.trim().is_empty() {
-            anyhow::bail!("snapshot label must not be empty");
-        }
-        let path = path.into();
-        if path.trim().is_empty() {
-            anyhow::bail!("snapshot path must not be empty");
-        }
-        Ok(Self {
-            id,
-            label,
-            created_at,
-            size_bytes,
-            path,
-            tags,
-        })
-    }
-
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-
-    pub fn size_bytes(&self) -> u64 {
-        self.size_bytes
-    }
-
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
-    pub fn tags(&self) -> &[String] {
-        &self.tags
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,7 +339,6 @@ mod tests {
             Some(persona),
             vec![agent],
             vec![],
-            vec![],
             true,
         )
         .unwrap();
@@ -445,7 +368,6 @@ mod tests {
             Some(persona.clone()),
             vec![error_agent.clone()],
             vec![],
-            vec![],
             false,
         )
         .unwrap();
@@ -458,7 +380,6 @@ mod tests {
             ExperienceSurfaceRole::CommandPalette,
             0.3,
             None,
-            vec![],
             vec![],
             vec![],
             false,

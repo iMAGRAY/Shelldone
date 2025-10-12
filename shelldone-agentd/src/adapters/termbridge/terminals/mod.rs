@@ -3,7 +3,6 @@ mod iterm2;
 mod kitty;
 mod konsole;
 mod tilix;
-mod util;
 mod wezterm;
 mod windows_terminal;
 

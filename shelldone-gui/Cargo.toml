@@ -76,7 +76,6 @@ rangeset.workspace = true
 ratelim.workspace = true
 rayon.workspace = true
 regex.workspace = true
-reqwest.workspace = true
 serde = {workspace=true, features = ["rc", "derive"]}
 serde_json.workspace = true
 shlex.workspace = true
@@ -109,7 +108,6 @@ shelldone-toast-notification.workspace = true
 wgpu.workspace = true
 window-funcs.workspace = true
 window.workspace = true
-which = "4.4"
 
 [target.'cfg(windows)'.dependencies]
 shared_library.workspace = true

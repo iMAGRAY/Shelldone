@@ -5,28 +5,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CapabilitySource {
-    #[default]
-    Local,
-    Mcp,
-    Bootstrap,
-    #[serde(other)]
-    External,
-}
-
-impl CapabilitySource {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CapabilitySource::Local => "local",
-            CapabilitySource::Mcp => "mcp",
-            CapabilitySource::Bootstrap => "bootstrap",
-            CapabilitySource::External => "external",
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityRecord {
     pub terminal: TerminalId,
@@ -34,8 +12,6 @@ pub struct CapabilityRecord {
     pub requires_opt_in: bool,
     pub capabilities: TerminalCapabilities,
     pub notes: Vec<String>,
-    #[serde(default)]
-    pub source: CapabilitySource,
 }
 
 impl CapabilityRecord {
@@ -52,13 +28,7 @@ impl CapabilityRecord {
             requires_opt_in,
             capabilities,
             notes,
-            source: CapabilitySource::Local,
         }
-    }
-
-    pub fn with_source(mut self, source: CapabilitySource) -> Self {
-        self.source = source;
-        self
     }
 }
 

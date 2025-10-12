@@ -1,8 +1,5 @@
-use hex::encode;
 use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType, IsCa};
-use reqwest::Client;
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
+use serde_json::json;
 use shelldone_agentd::{run, Settings};
 use tempfile::TempDir;
 use tokio::net::TcpListener;
@@ -12,9 +9,6 @@ use tonic::transport::{
     Identity as ClientIdentity,
 };
 use tonic::Code;
-
-static E2E_MCP_MUTEX: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
-    once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
 
 async fn atomic_replace(path: &std::path::Path, contents: &[u8]) {
     let tmp_path = path.with_extension("tmp");
@@ -31,7 +25,6 @@ use mcp_proto::{CallToolRequest, InitializeRequest, ListToolsRequest};
 
 #[tokio::test]
 async fn grpc_mutual_tls_allows_authorized_client() {
-    let _guard = E2E_MCP_MUTEX.lock().await;
     let http_port = find_free_port().await;
     let grpc_port = find_free_port().await;
     let temp = TempDir::new().unwrap();
@@ -77,7 +70,6 @@ async fn grpc_mutual_tls_allows_authorized_client() {
 
 #[tokio::test]
 async fn grpc_mutual_tls_blocks_client_without_certificate() {
-    let _guard = E2E_MCP_MUTEX.lock().await;
     let http_port = find_free_port().await;
     let grpc_port = find_free_port().await;
     let temp = TempDir::new().unwrap();
@@ -140,7 +132,6 @@ async fn grpc_mutual_tls_blocks_client_without_certificate() {
 
 #[tokio::test]
 async fn tls_hot_reload_accepts_rotated_certificate() {
-    let _guard = E2E_MCP_MUTEX.lock().await;
     let http_port = find_free_port().await;
     let grpc_port = find_free_port().await;
     let temp = TempDir::new().unwrap();
@@ -199,9 +190,7 @@ async fn tls_hot_reload_accepts_rotated_certificate() {
     atomic_replace(&server_key_path, server2_key_pem.as_bytes()).await;
 
     // Wait for hot reload (notify debounce + filesystem latency under heavy IO)
-    wait_for_tls_fingerprint(http_port, &fingerprint_from_pem(&server2_cert_pem))
-        .await
-        .expect("status fingerprint available");
+    sleep(Duration::from_secs(8)).await;
 
     // Old CA should now fail
     let result_old =
@@ -214,7 +203,7 @@ async fn tls_hot_reload_accepts_rotated_certificate() {
     // Retry new CA until success (allowing watcher latency)
     let mut attempts = 0;
     let mut connected = None;
-    while attempts < 60 {
+    while attempts < 40 {
         match try_build_client(grpc_port, &ca2_pem, &client2_cert_pem, &client2_key_pem).await {
             Ok(mut client) => {
                 client
@@ -230,7 +219,7 @@ async fn tls_hot_reload_accepts_rotated_certificate() {
             }
             Err(_) => {
                 attempts += 1;
-                sleep(Duration::from_millis(250)).await;
+                sleep(Duration::from_millis(200)).await;
             }
         }
     }
@@ -238,122 +227,6 @@ async fn tls_hot_reload_accepts_rotated_certificate() {
     assert!(
         connected.is_some(),
         "expected TLS reload to accept rotated certificate"
-    );
-
-    server_handle.abort();
-}
-
-#[tokio::test]
-async fn termbridge_sync_applies_remote_snapshot() {
-    let _guard = E2E_MCP_MUTEX.lock().await;
-    let http_port = find_free_port().await;
-    let grpc_port = find_free_port().await;
-    let temp = TempDir::new().unwrap();
-
-    let (ca_pem, server_cert_pem, server_key_pem, client_cert_pem, client_key_pem) =
-        generate_certificates();
-    let ca_path = temp.path().join("ca.pem");
-    tokio::fs::write(&ca_path, &ca_pem).await.unwrap();
-    let server_cert_path = temp.path().join("server-cert.pem");
-    let server_key_path = temp.path().join("server-key.pem");
-    tokio::fs::write(&server_cert_path, &server_cert_pem)
-        .await
-        .unwrap();
-    tokio::fs::write(&server_key_path, &server_key_pem)
-        .await
-        .unwrap();
-
-    let state_dir = temp.path().join("state");
-
-    let settings = Settings {
-        listen: ([127, 0, 0, 1], http_port).into(),
-        grpc_listen: ([127, 0, 0, 1], grpc_port).into(),
-        grpc_tls_cert: Some(server_cert_path.clone()),
-        grpc_tls_key: Some(server_key_path.clone()),
-        grpc_tls_ca: Some(ca_path.clone()),
-        grpc_tls_policy: shelldone_agentd::CipherPolicy::Balanced,
-        state_dir: state_dir.clone(),
-        policy_path: None,
-        otlp_endpoint: None,
-    };
-
-    let server_handle = tokio::spawn(async move {
-        run(settings).await.unwrap();
-    });
-
-    sleep(Duration::from_millis(500)).await;
-
-    let mut client = build_client(grpc_port, &ca_pem, &client_cert_pem, &client_key_pem).await;
-
-    let init = client
-        .initialize(tonic::Request::new(InitializeRequest {
-            persona: "core".into(),
-            protocol_version: "1.0".into(),
-            capabilities: vec!["agent.exec".into(), "termbridge.sync".into()],
-        }))
-        .await
-        .unwrap()
-        .into_inner();
-    let session_id = init.session_id.clone();
-    assert!(!session_id.is_empty());
-
-    let snapshot_payload = json!({
-        "source": "e2e:mcp",
-        "terminals": [{
-            "terminal": "mcp-sync-e2e",
-            "display_name": "MCP Sync E2E",
-            "requires_opt_in": false,
-            "capabilities": {
-                "spawn": true,
-                "split": false,
-                "focus": true,
-                "duplicate": false,
-                "close": true,
-                "send_text": true,
-                "clipboard_write": true,
-                "clipboard_read": true,
-                "cwd_sync": true,
-                "bracketed_paste": true,
-                "max_clipboard_kb": 256
-            },
-            "notes": ["e2e-sync"]
-        }]
-    });
-
-    let exec = client
-        .call_tool(tonic::Request::new(CallToolRequest {
-            session_id: session_id.clone(),
-            tool_name: "termbridge.sync".into(),
-            arguments_json: snapshot_payload.to_string(),
-        }))
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert_eq!(
-        exec.exit_code, 0,
-        "termbridge.sync tool call should succeed"
-    );
-    let summary: Value = serde_json::from_str(&exec.stdout).unwrap();
-    assert_eq!(summary.get("changed").and_then(Value::as_bool), Some(true));
-    let added = summary
-        .get("added")
-        .and_then(Value::as_array)
-        .expect("termbridge sync summary contains added terminals");
-    assert!(
-        added
-            .iter()
-            .any(|value| value.as_str() == Some("mcp-sync-e2e")),
-        "termbridge sync summary should report new terminal"
-    );
-
-    let capabilities_path = state_dir.join("termbridge").join("capabilities.json");
-    let metadata = tokio::fs::metadata(&capabilities_path)
-        .await
-        .expect("termbridge capabilities snapshot should exist");
-    assert!(
-        metadata.is_file(),
-        "termbridge capabilities snapshot must be a file"
     );
 
     server_handle.abort();
@@ -457,43 +330,12 @@ async fn try_build_client(
     let endpoint = Endpoint::from_shared(format!("https://localhost:{port}"))?;
     let tls = ClientTlsConfig::new()
         .domain_name("localhost")
-        .ca_certificate(ClientCertificate::from_pem(ca_pem))
-        .identity(ClientIdentity::from_pem(client_cert_pem, client_key_pem));
+        .ca_certificate(ClientCertificate::from_pem(ca_pem.as_bytes().to_vec()))
+        .identity(ClientIdentity::from_pem(
+            client_cert_pem.as_bytes().to_vec(),
+            client_key_pem.as_bytes().to_vec(),
+        ));
 
     let channel = endpoint.tls_config(tls)?.connect().await?;
     Ok(McpBridgeClient::new(channel))
-}
-
-async fn wait_for_tls_fingerprint(
-    http_port: u16,
-    expected_fingerprint: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
-    let url = format!("http://127.0.0.1:{http_port}/status");
-    for _ in 0..60 {
-        if let Ok(resp) = client.get(&url).send().await {
-            if let Ok(body) = resp.json::<Value>().await {
-                if body
-                    .get("tls")
-                    .and_then(|tls| tls.get("fingerprint"))
-                    .and_then(|value| value.as_str())
-                    .map(|fingerprint| fingerprint == expected_fingerprint)
-                    .unwrap_or(false)
-                {
-                    return Ok(());
-                }
-            }
-        }
-        sleep(Duration::from_millis(250)).await;
-    }
-    Err("timed out waiting for TLS fingerprint".into())
-}
-
-fn fingerprint_from_pem(pem: &str) -> String {
-    let mut reader = std::io::Cursor::new(pem.as_bytes());
-    let certs = rustls_pemfile::certs(&mut reader)
-        .collect::<Result<Vec<_>, _>>()
-        .expect("parse cert chain");
-    let first = certs.first().expect("certificate present");
-    encode(Sha256::digest(first.as_ref()))
 }

@@ -44,10 +44,6 @@ pub struct PrismMetrics {
     pub termbridge_latency: Histogram<f64>,
     #[allow(dead_code)]
     pub termbridge_clipboard_bytes: Counter<u64>,
-    #[allow(dead_code)]
-    pub termbridge_capability_updates: Counter<u64>,
-    #[allow(dead_code)]
-    pub termbridge_consent_denied: Counter<u64>,
 }
 
 impl PrismMetrics {
@@ -128,16 +124,6 @@ impl PrismMetrics {
             .with_description("Bytes transferred through clipboard bridge")
             .build();
 
-        let termbridge_capability_updates = meter
-            .u64_counter("termbridge.capability.update")
-            .with_description("TermBridge capability map delta events")
-            .build();
-
-        let termbridge_consent_denied = meter
-            .u64_counter("termbridge.consent.denied")
-            .with_description("Denied TermBridge actions due to missing consent")
-            .build();
-
         Self {
             exec_latency,
             undo_latency,
@@ -154,8 +140,6 @@ impl PrismMetrics {
             termbridge_errors,
             termbridge_latency,
             termbridge_clipboard_bytes,
-            termbridge_capability_updates,
-            termbridge_consent_denied,
         }
     }
 
@@ -272,6 +256,7 @@ impl PrismMetrics {
         self.termbridge_latency.record(latency_ms, &attrs);
     }
 
+    #[allow(dead_code)]
     pub fn record_termbridge_error(&self, action: &str, terminal: &str, reason: &str) {
         self.termbridge_errors.add(
             1,
@@ -283,27 +268,7 @@ impl PrismMetrics {
         );
     }
 
-    pub fn record_termbridge_capability_update(&self, terminal: &str, source: &str, change: &str) {
-        self.termbridge_capability_updates.add(
-            1,
-            &[
-                KeyValue::new("terminal", terminal.to_string()),
-                KeyValue::new("source", source.to_string()),
-                KeyValue::new("change", change.to_string()),
-            ],
-        );
-    }
-
-    pub fn record_termbridge_consent_denied(&self, action: &str, terminal: &str) {
-        self.termbridge_consent_denied.add(
-            1,
-            &[
-                KeyValue::new("action", action.to_string()),
-                KeyValue::new("terminal", terminal.to_string()),
-            ],
-        );
-    }
-
+    #[allow(dead_code)]
     pub fn record_termbridge_clipboard(
         &self,
         action: &str,
@@ -397,6 +362,5 @@ mod tests {
         metrics.record_policy_evaluation(true);
         metrics.record_snapshot_created(100);
         metrics.record_events_restored(50);
-        metrics.record_termbridge_consent_denied("spawn", "wezterm");
     }
 }

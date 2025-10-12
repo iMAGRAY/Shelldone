@@ -32,7 +32,7 @@ deny_reasons contains "dangerous_command" if {{
 
 fn policy_eval_cold_cache(c: &mut Criterion) {
     let policy_file = create_test_policy();
-    let _engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
+    let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
 
     c.bench_function("policy_eval_cold_cache", |b| {
         b.iter(|| {
@@ -72,8 +72,8 @@ fn policy_eval_mixed_keys(c: &mut Criterion) {
     let policy_file = create_test_policy();
     let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
 
-    let personas = ["core", "nova", "flux"];
-    let commands = ["agent.exec", "agent.plan", "agent.undo"];
+    let personas = vec!["core", "nova", "flux"];
+    let commands = vec!["agent.exec", "agent.plan", "agent.undo"];
 
     c.bench_function("policy_eval_mixed_keys", |b| {
         let mut i = 0;

@@ -8,7 +8,8 @@
 
 ```bash
 cd agents/openai
-python3 -m venv ../../.venv && source ../../.venv/bin/activate
+python -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.lock
 export OPENAI_API_KEY=sk-...
 python bridge.py --instructions "Ты аккуратный помощник в терминале"
@@ -27,10 +28,10 @@ echo '{"type": "run", "input": "Сколько сейчас времени?"}' |
 - `__init__.py` — помечает каталог как Python-package.
 
 ## Обновление зависимостей
-1. Используйте локальный env (`../../.venv/bin/pip`).
-2. Обновите зависимости: `../../.venv/bin/pip install --upgrade openai-agents openai`.
-3. Зафиксируйте версии: `../../.venv/bin/pip freeze | sort > requirements.lock`.
-4. После обновления запустите `make verify` перед коммитом.
+1. Активируйте виртуальное окружение.
+2. Выполните `pip install --upgrade openai-agents openai`.
+3. Зафиксируйте версии: `pip freeze | sort > requirements.lock`.
+4. Запустите `make verify` перед коммитом.
 
 ## Протокол
 - `{"type": "run", "input": "...", "session": "optional"}` — запустить запрос.

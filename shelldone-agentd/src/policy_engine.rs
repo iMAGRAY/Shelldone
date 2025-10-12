@@ -515,10 +515,6 @@ pub struct TermBridgePolicyInput {
     pub bytes: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub requires_opt_in: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consent_granted: Option<bool>,
 }
 
 #[cfg(test)]
@@ -570,24 +566,16 @@ termbridge_allowed_actions := {{
     "spawn",
     "send_text",
     "focus",
-    "duplicate",
-    "close",
     "clipboard.write",
     "clipboard.read",
     "cwd.update",
 }}
 
- default termbridge_allow := false
+default termbridge_allow := false
 
- termbridge_require_consent if {{
-     input.requires_opt_in == true
-     not input.consent_granted == true
- }}
-
- termbridge_allow if {{
-     input.action in {{"spawn", "send_text", "focus", "duplicate", "close"}}
-     not termbridge_require_consent
- }}
+termbridge_allow if {{
+    input.action in {{"spawn", "send_text", "focus"}}
+}}
 
 termbridge_allow if {{
     input.action == "clipboard.write"
@@ -598,12 +586,11 @@ termbridge_allow if {{
     input.action == "clipboard.read"
 }}
 
- termbridge_allow if {{
-     input.action == "cwd.update"
-     input.cwd
-     count(input.cwd) <= 4096
-     not termbridge_require_consent
- }}
+termbridge_allow if {{
+    input.action == "cwd.update"
+    input.cwd
+    count(input.cwd) <= 4096
+}}
 
 termbridge_deny_reason contains msg if {{
     not termbridge_allow
@@ -703,8 +690,6 @@ tls_deny_reason contains msg if {{
             channel: Some("clipboard".to_string()),
             bytes: Some(1024),
             cwd: None,
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
@@ -725,8 +710,6 @@ tls_deny_reason contains msg if {{
             channel: Some("clipboard".to_string()),
             bytes: Some(10_000),
             cwd: None,
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
@@ -754,8 +737,6 @@ tls_deny_reason contains msg if {{
             channel: None,
             bytes: Some(128),
             cwd: None,
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
@@ -776,56 +757,10 @@ tls_deny_reason contains msg if {{
             channel: None,
             bytes: None,
             cwd: None,
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
         assert!(decision.is_allowed(), "focus should be allowed");
-    }
-
-    #[test]
-    fn policy_termbridge_allows_duplicate() {
-        let policy_file = create_test_policy();
-        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
-
-        let input = TermBridgePolicyInput {
-            action: "duplicate".to_string(),
-            persona: Some("core".to_string()),
-            terminal: Some("wezterm".to_string()),
-            command: Some("htop".to_string()),
-            backend: None,
-            channel: None,
-            bytes: None,
-            cwd: Some("/workspace".to_string()),
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
-        };
-
-        let decision = engine.evaluate_termbridge(&input).unwrap();
-        assert!(decision.is_allowed(), "duplicate should be allowed");
-    }
-
-    #[test]
-    fn policy_termbridge_allows_close() {
-        let policy_file = create_test_policy();
-        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
-
-        let input = TermBridgePolicyInput {
-            action: "close".to_string(),
-            persona: Some("core".to_string()),
-            terminal: Some("wezterm".to_string()),
-            command: None,
-            backend: None,
-            channel: None,
-            bytes: None,
-            cwd: None,
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
-        };
-
-        let decision = engine.evaluate_termbridge(&input).unwrap();
-        assert!(decision.is_allowed(), "close should be allowed");
     }
 
     #[test]
@@ -842,8 +777,6 @@ tls_deny_reason contains msg if {{
             channel: None,
             bytes: None,
             cwd: Some("/workspace".to_string()),
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
@@ -865,8 +798,6 @@ tls_deny_reason contains msg if {{
             channel: None,
             bytes: None,
             cwd: Some(oversized),
-            requires_opt_in: Some(false),
-            consent_granted: Some(false),
         };
 
         let decision = engine.evaluate_termbridge(&input).unwrap();
@@ -881,56 +812,6 @@ tls_deny_reason contains msg if {{
                 .any(|reason| reason.contains("cwd")),
             "expected deny reason to mention cwd, got {:?}",
             decision.deny_reasons
-        );
-    }
-
-    #[test]
-    fn policy_termbridge_denies_without_consent_when_required() {
-        let policy_file = create_test_policy();
-        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
-
-        let input = TermBridgePolicyInput {
-            action: "spawn".to_string(),
-            persona: Some("core".to_string()),
-            terminal: Some("iterm2".to_string()),
-            command: Some("bash".to_string()),
-            backend: None,
-            channel: None,
-            bytes: None,
-            cwd: None,
-            requires_opt_in: Some(true),
-            consent_granted: Some(false),
-        };
-
-        let decision = engine.evaluate_termbridge(&input).unwrap();
-        assert!(
-            !decision.is_allowed(),
-            "spawn must be denied when consent is required and not granted"
-        );
-    }
-
-    #[test]
-    fn policy_termbridge_allows_with_consent_when_required() {
-        let policy_file = create_test_policy();
-        let engine = PolicyEngine::new(Some(policy_file.path())).unwrap();
-
-        let input = TermBridgePolicyInput {
-            action: "send_text".to_string(),
-            persona: Some("core".to_string()),
-            terminal: Some("iterm2".to_string()),
-            command: None,
-            backend: None,
-            channel: None,
-            bytes: Some(5),
-            cwd: None,
-            requires_opt_in: Some(true),
-            consent_granted: Some(true),
-        };
-
-        let decision = engine.evaluate_termbridge(&input).unwrap();
-        assert!(
-            decision.is_allowed(),
-            "send_text should be allowed with consent"
         );
     }
 

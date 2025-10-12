@@ -380,11 +380,9 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::Mutex;
 
-    type CommandCall = (String, Vec<String>, Vec<u8>);
-
     #[derive(Default)]
     struct MockExecutor {
-        calls: Mutex<Vec<CommandCall>>,
+        calls: Mutex<Vec<(String, Vec<String>, Vec<u8>)>>,
         success: bool,
         stdout: Vec<u8>,
     }

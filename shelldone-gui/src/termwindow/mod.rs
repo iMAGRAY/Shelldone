@@ -32,9 +32,8 @@ use ::shelldone_term::input::{ClickPosition, MouseButton as TMB};
 use ::window::*;
 use anyhow::{anyhow, ensure, Context};
 use config::keyassignment::{
-    ClipboardCopyDestination, Confirmation, KeyAssignment, LauncherActionArgs, PaneDirection,
-    Pattern, PromptInputLine, QuickSelectArguments, RotationDirection, SpawnCommand, SplitSize,
-    StateSnapshotAction, StateSnapshotActionKind,
+    Confirmation, KeyAssignment, LauncherActionArgs, PaneDirection, Pattern, PromptInputLine,
+    QuickSelectArguments, RotationDirection, SpawnCommand, SplitSize,
 };
 use config::window::WindowLevel;
 use config::{
@@ -65,19 +64,14 @@ use smol::channel::Sender;
 use smol::Timer;
 use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, LinkedList};
-use std::ffi::OsString;
+use std::env;
 use std::ops::Add;
-use std::path::{Path, PathBuf};
-use std::process::Command as SystemCommand;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::{env, thread};
 use termwiz::hyperlink::Hyperlink;
 use termwiz::surface::SequenceNo;
-use url::Url;
-use which::which;
 
 pub mod background;
 pub mod box_model;
@@ -98,7 +92,6 @@ use crate::spawn::SpawnWhere;
 use prevcursor::PrevCursorPos;
 
 const ATLAS_SIZE: usize = 128;
-type StateRestoreInvocation = (OsString, Vec<OsString>, Vec<(OsString, OsString)>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PersonaMode {
@@ -2550,274 +2543,6 @@ impl TermWindow {
         promise::spawn::spawn(future).detach();
     }
 
-    fn perform_state_snapshot_action(
-        &mut self,
-        kind: StateSnapshotActionKind,
-    ) -> anyhow::Result<()> {
-        let mux = Mux::get();
-        let window_guard = mux
-            .get_window(self.mux_window_id)
-            .ok_or_else(|| anyhow!("window missing for state snapshot action"))?;
-        let workspace_name = window_guard.get_workspace().to_string();
-        let tab_count = window_guard.len();
-        drop(window_guard);
-
-        let activity_count = mux::activity::Activity::count();
-        let service = experience_hub_service();
-        let hub_state = service
-            .sync_hub_state(&workspace_name, tab_count, activity_count)
-            .context("refreshing state snapshot telemetry")?;
-
-        if let Some(generated_at) = hub_state.snapshot.generated_at {
-            log::debug!(
-                "state_sync: telemetry snapshot generated at {generated_at:?} ({}) entries",
-                hub_state.signal.snapshots.len()
-            );
-        }
-
-        if hub_state.signal.snapshots.is_empty() {
-            persistent_toast_notification(
-                "State Sync",
-                "No snapshots available yet. Run `shelldone state save` to create one.",
-            );
-            return Ok(());
-        }
-
-        let latest_snapshot = hub_state
-            .signal
-            .snapshots
-            .first()
-            .cloned()
-            .expect("snapshot list is not empty");
-
-        let snapshot_id = latest_snapshot.id.clone();
-        let snapshot_label = latest_snapshot.label.clone();
-        let snapshot_path = latest_snapshot.path.clone();
-
-        log::info!(
-            "state_sync: executing {:?} for snapshot {snapshot_id}",
-            kind
-        );
-
-        match kind {
-            StateSnapshotActionKind::RestoreLatest => {
-                self.restore_state_snapshot(snapshot_id, snapshot_label, snapshot_path)?;
-            }
-            StateSnapshotActionKind::RevealLatest => {
-                self.reveal_state_snapshot(snapshot_label, snapshot_path)?;
-            }
-            StateSnapshotActionKind::CopyLatestPath => {
-                self.copy_state_snapshot_path(snapshot_label, snapshot_path);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn restore_state_snapshot(
-        &self,
-        snapshot_id: String,
-        snapshot_label: String,
-        snapshot_path: String,
-    ) -> anyhow::Result<()> {
-        persistent_toast_notification(
-            "State Sync",
-            &format!("Restoring snapshot \"{}\"…", snapshot_label),
-        );
-
-        let (program, args, env_vars) = match Self::state_restore_invocation(
-            &snapshot_id,
-            &snapshot_path,
-        ) {
-            Ok(invocation) => invocation,
-            Err(err) => {
-                log::error!(
-                    "state_sync: restore command unavailable for snapshot {}: {err:#}",
-                    snapshot_id
-                );
-                persistent_toast_notification(
-                    "State Sync",
-                    &format!(
-                        "Restore skipped: `{}` недоступна ({}). Установите Shelldone CLI или задайте SHELLDONE_STATE_CLI (см. docs/recipes/state-backup.md).",
-                        Self::resolve_state_cli_program().to_string_lossy(),
-                        err
-                    ),
-                );
-                return Ok(());
-            }
-        };
-        let thread_label = snapshot_label.clone();
-
-        thread::Builder::new()
-            .name("state_restore".into())
-            .spawn(move || {
-                let mut command = SystemCommand::new(&program);
-                for arg in &args {
-                    command.arg(arg);
-                }
-                for (key, value) in &env_vars {
-                    command.env(key, value);
-                }
-                log::info!(
-                    "state_sync: invoking {:?} {:?} for snapshot {}",
-                    program,
-                    args,
-                    thread_label
-                );
-
-                match command.status() {
-                    Ok(status) if status.success() => {
-                        log::info!(
-                            "state_sync: restore completed successfully for snapshot {}",
-                            thread_label
-                        );
-                        persistent_toast_notification(
-                            "State Sync",
-                            &format!("Snapshot \"{}\" restored", thread_label),
-                        );
-                    }
-                    Ok(status) => {
-                        let code = status
-                            .code()
-                            .map(|value| value.to_string())
-                            .unwrap_or_else(|| "signal".to_string());
-                        log::error!(
-                            "state_sync: restore command failed for snapshot {} with exit {}",
-                            thread_label,
-                            code
-                        );
-                        persistent_toast_notification(
-                            "State Sync",
-                            &format!("Restore for \"{}\" failed (exit {})", thread_label, code),
-                        );
-                    }
-                    Err(err) => {
-                        log::error!(
-                            "state_sync: failed to launch restore command for snapshot {}: {err:#}",
-                            thread_label
-                        );
-                        persistent_toast_notification(
-                            "State Sync",
-                            &format!("Restore for \"{}\" failed: {}", thread_label, err),
-                        );
-                    }
-                }
-            })
-            .context("spawning state restore worker thread")?;
-        Ok(())
-    }
-
-    fn reveal_state_snapshot(
-        &self,
-        snapshot_label: String,
-        snapshot_path: String,
-    ) -> anyhow::Result<()> {
-        let file_path = PathBuf::from(&snapshot_path);
-        let target = if file_path.is_dir() {
-            file_path.clone()
-        } else {
-            file_path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or(file_path.clone())
-        };
-
-        if !target.exists() {
-            log::warn!(
-                "state_sync: snapshots folder missing for {} at {}",
-                snapshot_label,
-                target.display()
-            );
-            persistent_toast_notification(
-                "State Sync",
-                &format!(
-                    "Snapshots folder for \"{}\" is unavailable ({}).",
-                    snapshot_label,
-                    target.display()
-                ),
-            );
-            return Ok(());
-        }
-
-        let url = Url::from_file_path(&target).map_err(|_| {
-            let message = format!(
-                "Failed to build file URL for snapshots folder ({})",
-                target.display()
-            );
-            persistent_toast_notification("State Sync", &message);
-            anyhow!("failed to construct file URL for {}", target.display())
-        })?;
-        shelldone_open_url::open_url(url.as_str());
-        persistent_toast_notification(
-            "State Sync",
-            &format!("Opened snapshots folder for \"{}\"", snapshot_label),
-        );
-        Ok(())
-    }
-
-    fn copy_state_snapshot_path(&self, snapshot_label: String, snapshot_path: String) {
-        self.copy_to_clipboard(ClipboardCopyDestination::Clipboard, snapshot_path.clone());
-        persistent_toast_notification(
-            "State Sync",
-            &format!("Copied snapshot path for \"{}\"", snapshot_label),
-        );
-        log::info!(
-            "state_sync: copied snapshot path for {} ({})",
-            snapshot_label,
-            snapshot_path
-        );
-    }
-
-    fn state_restore_invocation(
-        snapshot_id: &str,
-        snapshot_path: &str,
-    ) -> anyhow::Result<StateRestoreInvocation> {
-        let program = Self::resolve_state_cli_program();
-        let resolved = Self::locate_state_cli(&program)?;
-
-        let args = vec![
-            OsString::from("state"),
-            OsString::from("restore"),
-            OsString::from("--snapshot"),
-            OsString::from(snapshot_id),
-        ];
-
-        let env_vars = vec![(
-            OsString::from("SHELLDONE_STATE_SNAPSHOT_PATH"),
-            OsString::from(snapshot_path),
-        )];
-
-        Ok((resolved.into_os_string(), args, env_vars))
-    }
-
-    fn resolve_state_cli_program() -> OsString {
-        if let Some(value) = env::var_os("SHELLDONE_STATE_CLI").filter(|v| !v.is_empty()) {
-            return value;
-        }
-        env::var_os("SHELLDONE_CLI")
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| OsString::from("shelldone"))
-    }
-
-    fn locate_state_cli(program: &OsString) -> anyhow::Result<PathBuf> {
-        let program_path = PathBuf::from(program);
-        let resolved = if program_path.components().count() > 1 || program_path.is_absolute() {
-            if program_path.exists() {
-                program_path
-            } else {
-                anyhow::bail!("{}", program_path.display());
-            }
-        } else {
-            which(program).context("command not found in PATH")?
-        };
-
-        if !resolved.is_file() {
-            anyhow::bail!("{} is not a file", resolved.display());
-        }
-
-        Ok(resolved)
-    }
-
     fn show_experience_hub(&mut self) {
         let mux = Mux::get();
         let tab = match mux.get_active_tab_for_window(self.mux_window_id) {
@@ -3271,9 +2996,6 @@ impl TermWindow {
             ShowTabNavigator => self.show_tab_navigator(),
             ShowDebugOverlay => self.show_debug_overlay(),
             ShowExperienceHub => self.show_experience_hub(),
-            StateSnapshot(StateSnapshotAction { kind }) => {
-                self.perform_state_snapshot_action(*kind)?;
-            }
             ShowLauncher => self.show_launcher(),
             ShowLauncherArgs(args) => {
                 let title = args.title.clone().unwrap_or("Launcher".to_string());
@@ -4113,166 +3835,5 @@ impl Drop for TermWindow {
                 fe.forget_known_window(&window);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod state_snapshot_action_tests {
-    use super::*;
-    use std::ffi::OsString;
-    use std::sync::{Mutex, OnceLock};
-
-    fn env_guard() -> &'static Mutex<()> {
-        static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
-        GUARD.get_or_init(|| Mutex::new(()))
-    }
-
-    #[test]
-    fn state_restore_invocation_builds_default_command() {
-        let _guard = env_guard().lock().unwrap();
-        let prev_state_cli = env::var_os("SHELLDONE_STATE_CLI");
-        let prev_cli = env::var_os("SHELLDONE_CLI");
-        let temp_cli = create_temp_cli("state-cli-default");
-        env::set_var("SHELLDONE_STATE_CLI", temp_cli.path());
-        env::remove_var("SHELLDONE_CLI");
-
-        let (program, args, envs) =
-            TermWindow::state_restore_invocation("snap-1", "/tmp/snap.json.zst").unwrap();
-
-        assert_eq!(program, temp_cli.path().as_os_str());
-        assert_eq!(
-            args,
-            vec![
-                OsString::from("state"),
-                OsString::from("restore"),
-                OsString::from("--snapshot"),
-                OsString::from("snap-1"),
-            ]
-        );
-        assert_eq!(
-            envs,
-            vec![(
-                OsString::from("SHELLDONE_STATE_SNAPSHOT_PATH"),
-                OsString::from("/tmp/snap.json.zst"),
-            ),]
-        );
-
-        match prev_state_cli {
-            Some(value) => env::set_var("SHELLDONE_STATE_CLI", value),
-            None => env::remove_var("SHELLDONE_STATE_CLI"),
-        }
-        match prev_cli {
-            Some(value) => env::set_var("SHELLDONE_CLI", value),
-            None => env::remove_var("SHELLDONE_CLI"),
-        }
-    }
-
-    #[test]
-    fn state_restore_invocation_respects_state_cli_env() {
-        let _guard = env_guard().lock().unwrap();
-        let prev_state_cli = env::var_os("SHELLDONE_STATE_CLI");
-        let prev_cli = env::var_os("SHELLDONE_CLI");
-        let env_cli = create_temp_cli("state-cli-env");
-        env::set_var("SHELLDONE_STATE_CLI", env_cli.path());
-        env::set_var("SHELLDONE_CLI", "/usr/bin/ignored-shelldone");
-
-        let (program, args, _) =
-            TermWindow::state_restore_invocation("snap-2", "/var/snapshots/snap.json.zst").unwrap();
-
-        assert_eq!(program, env_cli.path().as_os_str());
-        assert_eq!(
-            args,
-            vec![
-                OsString::from("state"),
-                OsString::from("restore"),
-                OsString::from("--snapshot"),
-                OsString::from("snap-2"),
-            ]
-        );
-
-        match prev_state_cli {
-            Some(value) => env::set_var("SHELLDONE_STATE_CLI", value),
-            None => env::remove_var("SHELLDONE_STATE_CLI"),
-        }
-        match prev_cli {
-            Some(value) => env::set_var("SHELLDONE_CLI", value),
-            None => env::remove_var("SHELLDONE_CLI"),
-        }
-    }
-
-    #[test]
-    fn state_restore_invocation_uses_path_lookup() {
-        let _guard = env_guard().lock().unwrap();
-        env::remove_var("SHELLDONE_STATE_CLI");
-        let prev_cli = env::var_os("SHELLDONE_CLI");
-        let prev_path = env::var_os("PATH");
-        env::remove_var("SHELLDONE_CLI");
-
-        let temp_cli = create_temp_cli("shelldone");
-        let mut paths = vec![temp_cli.path().parent().unwrap().to_path_buf()];
-        if let Some(original) = prev_path.clone() {
-            paths.extend(std::env::split_paths(&original));
-        }
-        let joined = std::env::join_paths(paths).expect("join paths");
-        env::set_var("PATH", &joined);
-
-        let (program, args, _) =
-            TermWindow::state_restore_invocation("snap-4", "/tmp/snap.json.zst").unwrap();
-
-        assert_eq!(program, temp_cli.path().as_os_str());
-        assert_eq!(args[0], OsString::from("state"));
-
-        match prev_cli {
-            Some(value) => env::set_var("SHELLDONE_CLI", value),
-            None => env::remove_var("SHELLDONE_CLI"),
-        }
-        match prev_path {
-            Some(value) => env::set_var("PATH", value),
-            None => env::remove_var("PATH"),
-        }
-    }
-
-    #[test]
-    fn state_restore_invocation_errors_when_cli_missing() {
-        let _guard = env_guard().lock().unwrap();
-        env::remove_var("SHELLDONE_STATE_CLI");
-        env::remove_var("SHELLDONE_CLI");
-
-        let result = TermWindow::state_restore_invocation("snap-3", "/tmp/snap.json.zst");
-        assert!(result.is_err());
-    }
-
-    struct TempCli {
-        _dir: tempfile::TempDir,
-        path: PathBuf,
-    }
-
-    impl TempCli {
-        fn path(&self) -> &PathBuf {
-            &self.path
-        }
-    }
-
-    fn create_temp_cli(name: &str) -> TempCli {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let file_name = if cfg!(windows) {
-            format!("{name}.cmd")
-        } else {
-            name.to_string()
-        };
-        let path = dir.path().join(file_name);
-        if cfg!(windows) {
-            std::fs::write(&path, b"@echo off\r\n").expect("write temp cli");
-        } else {
-            std::fs::write(&path, b"#!/bin/sh\nexit 0\n").expect("write temp cli");
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
-                perms.set_mode(0o755);
-                std::fs::set_permissions(&path, perms).expect("set perms");
-            }
-        }
-        TempCli { _dir: dir, path }
     }
 }
