@@ -68,6 +68,8 @@ pub struct TerminalCapabilities {
     pub spawn: bool,
     pub split: bool,
     pub focus: bool,
+    pub duplicate: bool,
+    pub close: bool,
     pub send_text: bool,
     pub clipboard_write: bool,
     pub clipboard_read: bool,
@@ -139,6 +141,8 @@ pub struct TerminalCapabilitiesBuilder {
     split: bool,
     focus: bool,
     send_text: bool,
+    duplicate: bool,
+    close: bool,
     clipboard_write: bool,
     clipboard_read: bool,
     cwd_sync: bool,
@@ -164,6 +168,16 @@ impl TerminalCapabilitiesBuilder {
 
     pub fn send_text(mut self, value: bool) -> Self {
         self.send_text = value;
+        self
+    }
+
+    pub fn duplicate(mut self, value: bool) -> Self {
+        self.duplicate = value;
+        self
+    }
+
+    pub fn close(mut self, value: bool) -> Self {
+        self.close = value;
         self
     }
 
@@ -198,6 +212,8 @@ impl TerminalCapabilitiesBuilder {
             split: self.split,
             focus: self.focus,
             send_text: self.send_text,
+            duplicate: self.duplicate,
+            close: self.close,
             clipboard_write: self.clipboard_write,
             clipboard_read: self.clipboard_read,
             cwd_sync: self.cwd_sync,
@@ -230,11 +246,15 @@ mod tests {
         let caps = TerminalCapabilities::builder()
             .spawn(true)
             .send_text(true)
+            .duplicate(true)
+            .close(true)
             .clipboard_write(true)
             .max_clipboard_kb(Some(128))
             .build();
         assert!(caps.spawn);
         assert!(caps.send_text);
+        assert!(caps.duplicate);
+        assert!(caps.close);
         assert!(caps.clipboard_write);
         assert_eq!(caps.max_clipboard_kb, Some(128));
         assert!(!caps.split);

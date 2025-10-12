@@ -38,7 +38,7 @@ impl ExperienceLayoutAggregate {
         self.sequence += 1;
         Ok(ExperienceEvent::new(
             self.sequence,
-            ExperienceEventPayload::SurfaceRegistered {
+            ExperienceEventPayload::Registered {
                 surface_id: surface.id().clone(),
             },
         ))
@@ -74,7 +74,7 @@ impl ExperienceLayoutAggregate {
         self.sequence += 1;
         Ok(ExperienceEvent::new(
             self.sequence,
-            ExperienceEventPayload::SurfaceActivated {
+            ExperienceEventPayload::Activated {
                 surface_id: surface_id.clone(),
             },
         ))
@@ -93,7 +93,7 @@ impl ExperienceLayoutAggregate {
             self.sequence += 1;
             Ok(Some(ExperienceEvent::new(
                 self.sequence,
-                ExperienceEventPayload::SurfaceRemoved {
+                ExperienceEventPayload::Removed {
                     surface_id: surface_id.clone(),
                 },
             )))
@@ -172,6 +172,7 @@ mod tests {
             Some(persona),
             vec![agent],
             vec![],
+            vec![],
             active,
         )
         .unwrap()
@@ -197,6 +198,7 @@ mod tests {
             None,
             vec![],
             vec![],
+            vec![],
             true,
         )
         .unwrap();
@@ -207,6 +209,7 @@ mod tests {
             ExperienceSurfaceRole::Workspace,
             0.8,
             None,
+            vec![],
             vec![],
             vec![],
             false,
@@ -262,6 +265,7 @@ mod tests {
             None,
             vec![],
             vec![],
+            vec![],
             true,
         )
         .unwrap();
@@ -272,6 +276,7 @@ mod tests {
             ExperienceSurfaceRole::Workspace,
             0.8,
             None,
+            vec![],
             vec![],
             vec![],
             false,
@@ -286,7 +291,7 @@ mod tests {
             .expect("activation succeeds");
         assert!(matches!(
             activate_event.payload,
-            ExperienceEventPayload::SurfaceActivated { .. }
+            ExperienceEventPayload::Activated { .. }
         ));
 
         let removed = aggregate
@@ -295,7 +300,7 @@ mod tests {
             .expect("event present");
         assert!(matches!(
             removed.payload,
-            ExperienceEventPayload::SurfaceRemoved { .. }
+            ExperienceEventPayload::Removed { .. }
         ));
     }
 }

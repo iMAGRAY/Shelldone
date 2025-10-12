@@ -194,6 +194,7 @@ fn map_bridge_error(err: McpBridgeError) -> Status {
         }
         McpBridgeError::ToolFailure(reason) => Status::failed_precondition(reason),
         McpBridgeError::Internal(reason) => Status::internal(reason),
+        McpBridgeError::Forbidden(reason) => Status::permission_denied(reason),
     }
 }
 
@@ -233,6 +234,7 @@ mod tests {
         Arc::new(McpBridgeService::new(
             Arc::new(InMemoryMcpSessionRepository::new()),
             ack,
+            None,
             None,
         ))
     }

@@ -2,9 +2,9 @@ use super::value_object::ExperienceSurfaceId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExperienceEventPayload {
-    SurfaceRegistered { surface_id: ExperienceSurfaceId },
-    SurfaceActivated { surface_id: ExperienceSurfaceId },
-    SurfaceRemoved { surface_id: ExperienceSurfaceId },
+    Registered { surface_id: ExperienceSurfaceId },
+    Activated { surface_id: ExperienceSurfaceId },
+    Removed { surface_id: ExperienceSurfaceId },
 }
 
 #[derive(Debug, Clone, PartialEq)]

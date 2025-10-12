@@ -1,6 +1,7 @@
 use crate::domain::termbridge::{TerminalBinding, TerminalCapabilities, TerminalId};
 use crate::ports::termbridge::{
-    CapabilityObservation, SpawnRequest, TermBridgeError, TerminalControlPort,
+    CapabilityObservation, DuplicateOptions, DuplicateStrategy, SpawnRequest, TermBridgeError,
+    TerminalControlPort,
 };
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -228,6 +229,8 @@ impl TerminalControlPort for WezTermAdapter {
             .spawn(binary_available)
             .split(binary_available)
             .focus(binary_available)
+            .duplicate(binary_available)
+            .close(binary_available)
             .send_text(binary_available)
             .clipboard_write(true)
             .clipboard_read(true)
@@ -345,6 +348,117 @@ impl TerminalControlPort for WezTermAdapter {
             ))
         }
     }
+
+    async fn duplicate(
+        &self,
+        binding: &TerminalBinding,
+        options: &DuplicateOptions,
+    ) -> Result<TerminalBinding, TermBridgeError> {
+        let pane_id = Self::extract_pane_id(binding).ok_or_else(|| {
+            TermBridgeError::internal(self.terminal_id(), "binding missing pane_id for duplicate")
+        })?;
+        let mut args = vec![
+            "cli".to_string(),
+            "split-pane".to_string(),
+            "--pane-id".to_string(),
+            pane_id.clone(),
+        ];
+        match options.strategy {
+            DuplicateStrategy::HorizontalSplit => args.push("--right".to_string()),
+            DuplicateStrategy::VerticalSplit => args.push("--bottom".to_string()),
+            DuplicateStrategy::NewTab | DuplicateStrategy::NewWindow => {
+                return Err(TermBridgeError::not_supported(
+                    self.terminal_id(),
+                    "duplicate",
+                    format!(
+                        "{:?} strategy not supported by wezterm adapter",
+                        options.strategy
+                    ),
+                ))
+            }
+        }
+        if let Some(cwd) = &options.cwd {
+            args.push("--cwd".to_string());
+            args.push(cwd.clone());
+        }
+        if let Some(command) = &options.command {
+            args.push("--".to_string());
+            args.push(command.clone());
+        }
+
+        let output = self.execute_cli(args, "duplicate").await?;
+        if !output.success {
+            return Err(TermBridgeError::internal(
+                self.terminal_id(),
+                Self::stderr_message("split-pane", &output),
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let parsed: Option<WezTermSpawnOutput> = serde_json::from_str(&stdout).ok();
+
+        let mut labels = HashMap::new();
+        if let Some(parsed) = parsed {
+            if let Some(pane) = parsed.pane_id {
+                labels.insert("pane_id".to_string(), pane.to_string());
+            }
+            if let Some(window) = parsed.window_id {
+                labels.insert("window_id".to_string(), window.to_string());
+            }
+            if let Some(tab) = parsed.tab_id {
+                labels.insert("tab_id".to_string(), tab.to_string());
+            }
+        } else if !stdout.is_empty() {
+            labels.insert("pane_id".to_string(), stdout.clone());
+        }
+
+        if let Some(command) = &options.command {
+            labels.insert("command".to_string(), command.clone());
+        }
+
+        let pane_token = labels
+            .get("pane_id")
+            .cloned()
+            .or_else(|| {
+                if !stdout.is_empty() {
+                    Some(stdout.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| format!("duplicate-of-{}", binding.token));
+
+        let ipc_endpoint = if labels.contains_key("pane_id") || !stdout.is_empty() {
+            Some(format!("wezterm://pane/{pane_token}"))
+        } else {
+            None
+        };
+
+        let terminal = binding.terminal.clone();
+        let new_binding = TerminalBinding::new(terminal, pane_token, labels, ipc_endpoint);
+        Ok(new_binding)
+    }
+
+    async fn close(&self, binding: &TerminalBinding) -> Result<(), TermBridgeError> {
+        let pane_id = Self::extract_pane_id(binding).ok_or_else(|| {
+            TermBridgeError::internal(self.terminal_id(), "binding missing pane_id for close")
+        })?;
+        let args = vec![
+            "cli".to_string(),
+            "kill-pane".to_string(),
+            "--pane-id".to_string(),
+            pane_id,
+        ];
+        let output = self.execute_cli(args, "close").await?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(TermBridgeError::internal(
+                self.terminal_id(),
+                Self::stderr_message("kill-pane", &output),
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -354,6 +468,13 @@ mod tests {
     use std::fs;
     use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
+
+    type CommandArgsLog = Arc<Mutex<Vec<Vec<String>>>>;
+
+    fn env_override_guard() -> std::sync::MutexGuard<'static, ()> {
+        static ENV_MUTEX: Mutex<()> = Mutex::new(());
+        ENV_MUTEX.lock().expect("env mutex poisoned")
+    }
 
     struct RecordingRunner {
         calls: Arc<Mutex<Vec<Vec<String>>>>,
@@ -370,7 +491,7 @@ mod tests {
 
         fn with_calls(
             responses: Vec<Result<WezTermCliOutput, WezTermCliError>>,
-        ) -> (Arc<Self>, Arc<Mutex<Vec<Vec<String>>>>) {
+        ) -> (Arc<Self>, CommandArgsLog) {
             let runner = Arc::new(Self::new(responses));
             (runner.clone(), runner.calls.clone())
         }
@@ -390,6 +511,7 @@ mod tests {
 
     #[test]
     fn resolve_cli_prefers_override_when_exists() {
+        let _guard = env_override_guard();
         let tempdir = tempdir().unwrap();
         let cli_path = tempdir.path().join("fake-wezterm"); // qa:allow-realness
         fs::write(&cli_path, "#!/bin/sh\nexit 0\n").unwrap();
@@ -411,6 +533,7 @@ mod tests {
 
     #[test]
     fn resolve_cli_falls_back_to_none_when_override_missing() {
+        let _guard = env_override_guard();
         let original = env::var(WEZTERM_CLI_OVERRIDE_ENV).ok();
         env::set_var(WEZTERM_CLI_OVERRIDE_ENV, "/no/such/wezterm");
 
@@ -510,5 +633,111 @@ mod tests {
             .await
             .expect_err("expected missing CLI error");
         assert!(matches!(err, TermBridgeError::NotSupported { .. }));
+    }
+
+    #[tokio::test]
+    async fn duplicate_horizontal_split_invokes_cli() {
+        let payload = br#"{"pane_id":42,"window_id":3,"tab_id":2}"#.to_vec();
+        let (runner, calls) = RecordingRunner::with_calls(vec![Ok(WezTermCliOutput {
+            success: true,
+            exit_code: Some(0),
+            stdout: payload,
+            stderr: Vec::new(),
+        })]);
+        let adapter = WezTermAdapter::with_runner(runner);
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "7".to_string());
+        let binding = TerminalBinding::new(
+            TerminalId::new("wezterm"),
+            "7",
+            labels,
+            Some("wezterm://pane/7".into()),
+        );
+
+        let options = DuplicateOptions {
+            strategy: DuplicateStrategy::HorizontalSplit,
+            command: Some("htop".into()),
+            cwd: Some("/tmp".into()),
+            ..Default::default()
+        };
+
+        let result = adapter
+            .duplicate(&binding, &options)
+            .await
+            .expect("duplicate");
+        assert_eq!(result.labels.get("pane_id"), Some(&"42".to_string()));
+        assert_eq!(result.ipc_endpoint, Some("wezterm://pane/42".to_string()));
+        assert_eq!(result.labels.get("command"), Some(&"htop".to_string()));
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(
+            recorded[0],
+            vec![
+                "cli".to_string(),
+                "split-pane".to_string(),
+                "--pane-id".to_string(),
+                "7".to_string(),
+                "--right".to_string(),
+                "--cwd".to_string(),
+                "/tmp".to_string(),
+                "--".to_string(),
+                "htop".to_string(),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_returns_not_supported_for_new_tab() {
+        let (runner, calls) = RecordingRunner::with_calls(Vec::new());
+        let adapter = WezTermAdapter::with_runner(runner);
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "11".to_string());
+        let binding = TerminalBinding::new(
+            TerminalId::new("wezterm"),
+            "11",
+            labels,
+            Some("wezterm://pane/11".into()),
+        );
+
+        let options = DuplicateOptions {
+            strategy: DuplicateStrategy::NewTab,
+            ..Default::default()
+        };
+
+        let err = adapter
+            .duplicate(&binding, &options)
+            .await
+            .expect_err("expected not supported");
+        assert!(matches!(err, TermBridgeError::NotSupported { .. }));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn close_invokes_kill_pane() {
+        let (runner, calls) = RecordingRunner::with_calls(vec![Ok(WezTermCliOutput::success())]);
+        let adapter = WezTermAdapter::with_runner(runner);
+
+        let mut labels = HashMap::new();
+        labels.insert("pane_id".to_string(), "15".to_string());
+        let binding = TerminalBinding::new(
+            TerminalId::new("wezterm"),
+            "15",
+            labels,
+            Some("wezterm://pane/15".into()),
+        );
+
+        adapter.close(&binding).await.expect("close succeeds");
+        let recorded = calls.lock().unwrap();
+        assert_eq!(
+            recorded[0],
+            vec![
+                "cli".to_string(),
+                "kill-pane".to_string(),
+                "--pane-id".to_string(),
+                "15".to_string()
+            ]
+        );
     }
 }

@@ -798,6 +798,36 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["View"],
             icon: Some("cod_dashboard"),
         },
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::RestoreLatest,
+        }) => CommandDef {
+            brief: "Restore latest snapshot".into(),
+            doc: "Runs `shelldone state restore --snapshot <latest>`".into(),
+            keys: vec![(Modifiers::CTRL.union(Modifiers::SHIFT), "R".into())],
+            args: &[],
+            menubar: &["Shell", "State Sync"],
+            icon: Some("md_restore"),
+        },
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::RevealLatest,
+        }) => CommandDef {
+            brief: "Reveal snapshots folder".into(),
+            doc: "Opens the snapshots directory in the system file manager.".into(),
+            keys: vec![(Modifiers::CTRL.union(Modifiers::SHIFT), "O".into())],
+            args: &[],
+            menubar: &["Shell", "State Sync"],
+            icon: Some("md_folder_open"),
+        },
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::CopyLatestPath,
+        }) => CommandDef {
+            brief: "Copy snapshot path".into(),
+            doc: "Copies the latest snapshot path to the clipboard.".into(),
+            keys: vec![(Modifiers::CTRL.union(Modifiers::SHIFT), "C".into())],
+            args: &[],
+            menubar: &["Shell", "State Sync"],
+            icon: Some("md_content_copy"),
+        },
         InputSelector(_) => CommandDef {
             brief: "Prompt the user to choose from a list".into(),
             doc: "Activates the selector overlay and wait for input".into(),
@@ -2129,6 +2159,15 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
         ShowLauncher,
         ShowTabNavigator,
         ShowExperienceHub,
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::RestoreLatest,
+        }),
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::RevealLatest,
+        }),
+        StateSnapshot(StateSnapshotAction {
+            kind: StateSnapshotActionKind::CopyLatestPath,
+        }),
         // ----------------- Help
         OpenUri("https://shelldone.org/".to_string()),
         OpenUri("https://github.com/shelldone/shelldone/discussions/".to_string()),

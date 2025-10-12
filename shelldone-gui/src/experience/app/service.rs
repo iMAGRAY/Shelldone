@@ -1,9 +1,10 @@
 use super::super::domain::aggregate::{ExperienceLayoutAggregate, ExperienceLayoutSnapshot};
 use super::super::domain::value_object::{
     ExperienceAgentState, ExperienceAgentStatus, ExperienceApproval, ExperienceIntent,
-    ExperienceLayer, ExperiencePersona, ExperienceSurface, ExperienceSurfaceId,
+    ExperienceLayer, ExperiencePersona, ExperienceSnapshot, ExperienceSurface, ExperienceSurfaceId,
     ExperienceSurfaceRole,
 };
+use crate::experience::ports::ApprovalSource;
 use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug)]
@@ -12,9 +13,12 @@ pub struct ExperienceSignal {
     pub persona: Option<PersonaSignal>,
     pub agents: Vec<AgentSignal>,
     pub approvals: Vec<ApprovalSignal>,
+    pub snapshots: Vec<StateSnapshotSignal>,
     pub tab_count: usize,
     pub pending_approvals: usize,
     pub active_automations: usize,
+    pub approvals_source: ApprovalSource,
+    pub termbridge_terminals: Vec<TermBridgeTerminalSummary>,
 }
 
 #[derive(Clone, Debug)]
@@ -42,10 +46,32 @@ pub struct ApprovalSignal {
 }
 
 #[derive(Clone, Debug)]
+pub struct StateSnapshotSignal {
+    pub id: String,
+    pub label: String,
+    pub created_at: DateTime<Utc>,
+    pub size_bytes: u64,
+    pub path: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TermBridgeTerminalSummary {
+    pub terminal: String,
+    pub requires_opt_in: bool,
+    pub source: Option<String>,
+    pub duplicate: bool,
+    pub close: bool,
+    pub send_text: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct ExperienceMetrics {
     pub tab_count: usize,
     pub pending_approvals: usize,
     pub active_automations: usize,
+    pub approvals_source: ApprovalSource,
+    pub termbridge_terminals: Vec<TermBridgeTerminalSummary>,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +85,7 @@ pub struct ExperienceSurfaceCard {
     pub agents: Vec<ExperienceAgentStatus>,
     pub active: bool,
     pub approvals: Vec<ExperienceApproval>,
+    pub snapshots: Vec<ExperienceSnapshot>,
 }
 
 #[derive(Clone, Debug)]
@@ -91,6 +118,7 @@ impl ExperienceOrchestrator {
             None,
             vec![],
             vec![],
+            vec![],
             true,
         )?;
         self.aggregate.register_surface(workspace_surface.clone())?;
@@ -108,6 +136,7 @@ impl ExperienceOrchestrator {
                     persona_signal.intent,
                     &persona_signal.tone,
                 )),
+                vec![],
                 vec![],
                 vec![],
                 true,
@@ -154,9 +183,43 @@ impl ExperienceOrchestrator {
                 None,
                 agent_statuses,
                 approvals.clone(),
+                vec![],
                 true,
             )?;
             self.aggregate.register_surface(agent_surface)?;
+        }
+
+        if !signal.snapshots.is_empty() {
+            let snapshot_items = signal
+                .snapshots
+                .iter()
+                .map(|snapshot| {
+                    ExperienceSnapshot::new(
+                        &snapshot.id,
+                        &snapshot.label,
+                        snapshot.created_at,
+                        snapshot.size_bytes,
+                        &snapshot.path,
+                        snapshot.tags.clone(),
+                    )
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+
+            let newest = signal.snapshots.first().expect("snapshots available");
+            let highlight = state_sync_highlight(newest.created_at, signal.snapshots.len());
+            let state_surface = ExperienceSurface::new(
+                ExperienceSurfaceId::new("surface::state-sync")?,
+                "State Sync".to_string(),
+                ExperienceLayer::Overlay,
+                ExperienceSurfaceRole::StateSync,
+                highlight,
+                None,
+                vec![],
+                vec![],
+                snapshot_items,
+                highlight >= 0.45,
+            )?;
+            self.aggregate.register_surface(state_surface)?;
         }
 
         let metrics_ratio = ((signal.active_automations as f32) + 1.0)
@@ -164,10 +227,11 @@ impl ExperienceOrchestrator {
         let metrics_surface = ExperienceSurface::new(
             ExperienceSurfaceId::new("surface::metrics")?,
             "Ops Metrics".to_string(),
-            ExperienceLayer::Overlay,
+            ExperienceLayer::Foundation,
             ExperienceSurfaceRole::Metrics,
             metrics_ratio.clamp(0.2, 1.0),
             None,
+            vec![],
             vec![],
             vec![],
             false,
@@ -182,6 +246,7 @@ impl ExperienceOrchestrator {
             ExperienceSurfaceRole::CommandPalette,
             0.25,
             None,
+            vec![],
             vec![],
             vec![],
             false,
@@ -206,6 +271,8 @@ impl ExperienceOrchestrator {
                 tab_count: signal.tab_count,
                 pending_approvals: signal.pending_approvals,
                 active_automations: signal.active_automations,
+                approvals_source: signal.approvals_source.clone(),
+                termbridge_terminals: signal.termbridge_terminals.clone(),
             },
             cards,
         })
@@ -229,15 +296,33 @@ impl ExperienceOrchestrator {
                 agents: surface.agents().to_vec(),
                 active: surface.is_active(),
                 approvals: surface.approvals().to_vec(),
+                snapshots: surface.snapshots().to_vec(),
             });
         }
         cards
     }
 }
 
+fn state_sync_highlight(latest_created_at: DateTime<Utc>, total_snapshots: usize) -> f32 {
+    let age = Utc::now() - latest_created_at;
+    let age_minutes = age.num_minutes().max(0);
+    let recency_score = if age_minutes <= 15 {
+        1.0
+    } else if age_minutes <= 60 {
+        0.8
+    } else if age_minutes <= 180 {
+        0.55
+    } else {
+        0.3
+    };
+    let density_score = (total_snapshots.min(6) as f32 / 6.0).clamp(0.2, 1.0);
+    (recency_score * 0.7 + density_score * 0.3).clamp(0.2, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration as ChronoDuration;
 
     #[test]
     fn builds_layout_with_persona_and_agents() {
@@ -263,14 +348,17 @@ mod tests {
                 pending_approvals: 1,
                 active_automations: 2,
                 approvals: vec![],
+                snapshots: vec![],
+                approvals_source: ApprovalSource::Local,
+                termbridge_terminals: vec![],
             })
             .unwrap();
 
         assert_eq!(view_model.metrics.tab_count, 3);
         assert_eq!(view_model.layout.primary.len(), 1);
-        assert_eq!(view_model.layout.overlays.len(), 2);
+        assert_eq!(view_model.layout.overlays.len(), 1);
         assert_eq!(view_model.layout.heads_up.len(), 2);
-        assert_eq!(view_model.cards.len(), 5);
+        assert_eq!(view_model.cards.len(), 4);
     }
 
     #[test]
@@ -293,6 +381,9 @@ mod tests {
                 pending_approvals: 1,
                 active_automations: 0,
                 approvals: vec![approval.clone()],
+                snapshots: vec![],
+                approvals_source: ApprovalSource::Local,
+                termbridge_terminals: vec![],
             })
             .unwrap();
 
@@ -304,5 +395,17 @@ mod tests {
         assert_eq!(agent_card.approvals.len(), 1);
         assert_eq!(agent_card.approvals[0].id(), approval.id);
         assert_eq!(agent_card.approvals[0].command(), approval.command);
+    }
+
+    #[test]
+    fn state_sync_highlight_rewards_recent_snapshots() {
+        let highlight = state_sync_highlight(Utc::now(), 3);
+        assert!((highlight - 0.85).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn state_sync_highlight_degrades_for_stale_single_snapshot() {
+        let highlight = state_sync_highlight(Utc::now() - ChronoDuration::minutes(240), 1);
+        assert!((highlight - 0.27).abs() < f32::EPSILON);
     }
 }

@@ -46,6 +46,33 @@ pub struct TermBridgeCommandRequest {
     pub bracketed_paste: Option<bool>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DuplicateStrategy {
+    HorizontalSplit,
+    VerticalSplit,
+    NewTab,
+    NewWindow,
+}
+
+impl Default for DuplicateStrategy {
+    fn default() -> Self {
+        Self::HorizontalSplit
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DuplicateOptions {
+    #[serde(default)]
+    pub strategy: DuplicateStrategy,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+}
+
 #[async_trait]
 pub trait TerminalControlPort: Send + Sync {
     fn terminal_id(&self) -> TerminalId;
@@ -77,6 +104,26 @@ pub trait TerminalControlPort: Send + Sync {
         Err(TermBridgeError::not_supported(
             self.terminal_id(),
             "send_text",
+            "not implemented",
+        ))
+    }
+
+    async fn duplicate(
+        &self,
+        _binding: &TerminalBinding,
+        _options: &DuplicateOptions,
+    ) -> Result<TerminalBinding, TermBridgeError> {
+        Err(TermBridgeError::not_supported(
+            self.terminal_id(),
+            "duplicate",
+            "not implemented",
+        ))
+    }
+
+    async fn close(&self, _binding: &TerminalBinding) -> Result<(), TermBridgeError> {
+        Err(TermBridgeError::not_supported(
+            self.terminal_id(),
+            "close",
             "not implemented",
         ))
     }

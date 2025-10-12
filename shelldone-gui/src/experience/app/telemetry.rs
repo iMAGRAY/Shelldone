@@ -2,7 +2,9 @@ use super::service::{
     AgentSignal, ApprovalSignal, ExperienceOrchestrator, ExperienceSignal, ExperienceViewModel,
     PersonaSignal,
 };
+use crate::experience::app::service::{StateSnapshotSignal, TermBridgeTerminalSummary};
 use crate::experience::domain::value_object::{ExperienceAgentState, ExperienceIntent};
+use crate::experience::ports::telemetry_port::{StateSnapshotFrame, TermBridgeDeltaSnapshot};
 use crate::experience::ports::{
     AgentFrame, AgentFrameStatus, ApprovalFrame, ExperienceTelemetryPort, PersonaFrame,
     TelemetrySnapshot,
@@ -50,7 +52,16 @@ pub fn build_hub_state_from_snapshot(
     activity_count_hint: usize,
 ) -> Result<ExperienceHubState> {
     let approvals = map_approvals(&snapshot.approvals);
+    let snapshots = map_state_snapshots(&snapshot.state_snapshots);
     let pending_approvals = approvals.len();
+    metrics::gauge!("experience.approvals.pending").set(pending_approvals as f64);
+    metrics::gauge!("experience.tabs.count").set(tab_count as f64);
+    metrics::gauge!("experience.snapshots.count").set(snapshots.len() as f64);
+    if snapshot.telemetry_ready {
+        metrics::counter!("experience.telemetry.ready", "state" => "true").increment(1);
+    } else {
+        metrics::counter!("experience.telemetry.ready", "state" => "false").increment(1);
+    }
 
     let telemetry_active = snapshot
         .agents
@@ -64,6 +75,7 @@ pub fn build_hub_state_from_snapshot(
         tab_count,
         active_automations,
         snapshot.persona.as_ref(),
+        snapshot.termbridge_delta.as_ref(),
     );
 
     let agents = if snapshot.agents.is_empty() {
@@ -72,14 +84,19 @@ pub fn build_hub_state_from_snapshot(
         build_agent_signals_from_snapshot(&snapshot, pending_approvals)
     };
 
+    let termbridge_terminals = map_termbridge_terminals(snapshot.termbridge_delta.as_ref());
+
     let signal = ExperienceSignal {
         workspace_name: workspace_name.to_string(),
         persona: Some(persona.clone()),
         agents,
         approvals,
+        snapshots: snapshots.clone(),
         tab_count,
         pending_approvals,
         active_automations,
+        approvals_source: snapshot.approvals_source.clone(),
+        termbridge_terminals,
     };
 
     let mut orchestrator = ExperienceOrchestrator::new();
@@ -107,15 +124,73 @@ fn map_approvals(frames: &[ApprovalFrame]) -> Vec<ApprovalSignal> {
     approvals
 }
 
+fn map_state_snapshots(frames: &[StateSnapshotFrame]) -> Vec<StateSnapshotSignal> {
+    let mut entries: Vec<_> = frames.iter().collect();
+    entries.sort_by_key(|frame| frame.created_at);
+    entries.reverse();
+    entries
+        .into_iter()
+        .take(12)
+        .map(|frame| {
+            let label = if frame.tags.is_empty() {
+                frame.id.clone()
+            } else {
+                format!("{} ({})", frame.id, frame.tags.join(", "))
+            };
+            StateSnapshotSignal {
+                id: frame.id.clone(),
+                label,
+                created_at: frame.created_at,
+                size_bytes: frame.size_bytes,
+                path: frame.path.clone(),
+                tags: frame.tags.clone(),
+            }
+        })
+        .collect()
+}
+
+fn map_termbridge_terminals(
+    delta: Option<&TermBridgeDeltaSnapshot>,
+) -> Vec<TermBridgeTerminalSummary> {
+    delta
+        .map(|snapshot| {
+            snapshot
+                .terminals
+                .iter()
+                .map(|terminal| TermBridgeTerminalSummary {
+                    terminal: terminal.terminal.clone(),
+                    requires_opt_in: terminal.requires_opt_in,
+                    source: terminal.source.clone(),
+                    duplicate: terminal.capabilities.duplicate,
+                    close: terminal.capabilities.close,
+                    send_text: terminal.capabilities.send_text,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn persona_signal(
     workspace_name: &str,
     tab_count: usize,
     active_automations: usize,
     frame: Option<&PersonaFrame>,
+    termbridge_delta: Option<&TermBridgeDeltaSnapshot>,
 ) -> PersonaSignal {
     match frame {
-        Some(frame) => persona_from_frame(frame, workspace_name, tab_count, active_automations),
-        None => fallback_persona(workspace_name, tab_count, active_automations),
+        Some(frame) => persona_from_frame(
+            frame,
+            workspace_name,
+            tab_count,
+            active_automations,
+            termbridge_delta,
+        ),
+        None => fallback_persona(
+            workspace_name,
+            tab_count,
+            active_automations,
+            termbridge_delta,
+        ),
     }
 }
 
@@ -124,8 +199,14 @@ fn persona_from_frame(
     workspace_name: &str,
     tab_count: usize,
     active_automations: usize,
+    termbridge_delta: Option<&TermBridgeDeltaSnapshot>,
 ) -> PersonaSignal {
-    let fallback = fallback_persona(workspace_name, tab_count, active_automations);
+    let fallback = fallback_persona(
+        workspace_name,
+        tab_count,
+        active_automations,
+        termbridge_delta,
+    );
 
     let name = if frame.name.trim().is_empty() {
         fallback.name
@@ -151,9 +232,10 @@ fn fallback_persona(
     workspace_name: &str,
     tab_count: usize,
     active_automations: usize,
+    termbridge_delta: Option<&TermBridgeDeltaSnapshot>,
 ) -> PersonaSignal {
     let workspace_lc = workspace_name.to_ascii_lowercase();
-    let intent = if active_automations > 0 {
+    let mut intent = if active_automations > 0 {
         ExperienceIntent::Automate
     } else if workspace_lc.contains("recover") || workspace_lc.contains("restore") {
         ExperienceIntent::Recover
@@ -162,6 +244,21 @@ fn fallback_persona(
     } else {
         ExperienceIntent::Focus
     };
+
+    if let Some(delta) = termbridge_delta {
+        if delta.changed {
+            if !delta.removed.is_empty() {
+                intent = ExperienceIntent::Recover;
+            } else if delta
+                .added
+                .iter()
+                .chain(delta.updated.iter())
+                .any(|entry| entry.requires_opt_in)
+            {
+                intent = ExperienceIntent::Focus;
+            }
+        }
+    }
 
     let tone = tone_for_intent(intent).to_string();
     let name = match workspace_lc.as_str() {
@@ -314,7 +411,10 @@ fn fallback_agent_signals(active_automations: usize, pending_approvals: usize) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::experience::ports::ExperienceTelemetryPort;
+    use crate::experience::ports::telemetry_port::{
+        TermBridgeTerminalCapabilities, TermBridgeTerminalChange,
+    };
+    use crate::experience::ports::{ApprovalSource, ExperienceTelemetryPort};
 
     struct StubPort {
         snapshot: TelemetrySnapshot,
@@ -349,6 +449,66 @@ mod tests {
     }
 
     #[test]
+    fn fallback_persona_prefers_recover_when_terminals_removed() {
+        let mut delta = TermBridgeDeltaSnapshot {
+            changed: true,
+            ..Default::default()
+        };
+        delta.removed.push(TermBridgeTerminalChange {
+            terminal: "wezterm".to_string(),
+            requires_opt_in: false,
+            source: None,
+            capabilities: TermBridgeTerminalCapabilities::default(),
+        });
+        let persona = fallback_persona("dev", 2, 0, Some(&delta));
+        assert_eq!(persona.intent, ExperienceIntent::Recover);
+    }
+
+    #[test]
+    fn fallback_persona_prefers_focus_when_opt_in_needed() {
+        let mut delta = TermBridgeDeltaSnapshot {
+            changed: true,
+            ..Default::default()
+        };
+        delta.added.push(TermBridgeTerminalChange {
+            terminal: "kitty".to_string(),
+            requires_opt_in: true,
+            source: None,
+            capabilities: TermBridgeTerminalCapabilities::default(),
+        });
+        let persona = fallback_persona("workspace", 1, 0, Some(&delta));
+        assert_eq!(persona.intent, ExperienceIntent::Focus);
+    }
+
+    #[test]
+    fn map_termbridge_terminals_preserves_source() {
+        let mut delta = TermBridgeDeltaSnapshot::default();
+        delta.terminals.push(TermBridgeTerminalChange {
+            terminal: "mcp-sync-e2e".to_string(),
+            requires_opt_in: false,
+            source: Some("mcp".to_string()),
+            capabilities: TermBridgeTerminalCapabilities {
+                spawn: true,
+                split: false,
+                focus: true,
+                duplicate: true,
+                close: false,
+                send_text: true,
+            },
+        });
+
+        let summaries = map_termbridge_terminals(Some(&delta));
+        assert_eq!(summaries.len(), 1);
+        let summary = &summaries[0];
+        assert_eq!(summary.terminal, "mcp-sync-e2e");
+        assert_eq!(summary.source.as_deref(), Some("mcp"));
+        assert!(!summary.requires_opt_in);
+        assert!(summary.duplicate);
+        assert!(!summary.close);
+        assert!(summary.send_text);
+    }
+
+    #[test]
     fn builds_view_model_from_snapshot() {
         let snapshot = TelemetrySnapshot {
             generated_at: Some(Utc::now()),
@@ -360,6 +520,9 @@ mod tests {
             agents: vec![agent("nova", AgentFrameStatus::Active, 30)],
             approvals: vec![approval("1", 120)],
             telemetry_ready: true,
+            approvals_source: ApprovalSource::Local,
+            termbridge_delta: None,
+            state_snapshots: vec![],
         };
         let service = ExperienceTelemetryService::new(StubPort { snapshot });
 
@@ -368,9 +531,14 @@ mod tests {
         assert_eq!(state.signal.tab_count, 3);
         assert_eq!(state.signal.approvals.len(), 1);
         assert_eq!(state.signal.agents.len(), 1);
-        assert_eq!(state.view_model.cards.len(), 5);
+        assert_eq!(state.view_model.cards.len(), 4);
         assert_eq!(state.view_model.metrics.active_automations, 2);
         assert!(state.view_model.metrics.pending_approvals > 0);
+        assert_eq!(
+            state.view_model.metrics.approvals_source,
+            ApprovalSource::Local
+        );
+        assert_eq!(state.signal.approvals_source, ApprovalSource::Local);
         assert!(state.snapshot.telemetry_ready);
         assert_eq!(state.snapshot.agents.len(), 1);
     }
@@ -388,6 +556,7 @@ mod tests {
         assert_eq!(persona.intent, ExperienceIntent::Recover);
         assert_eq!(state.signal.agents.len(), 2);
         assert!(!state.snapshot.telemetry_ready);
+        assert_eq!(state.signal.approvals_source, ApprovalSource::None);
     }
 
     #[test]
@@ -398,6 +567,9 @@ mod tests {
             agents: vec![],
             approvals: vec![approval("2", 30), approval("1", 120)],
             telemetry_ready: false,
+            approvals_source: ApprovalSource::Local,
+            termbridge_delta: None,
+            state_snapshots: vec![],
         };
         let service = ExperienceTelemetryService::new(StubPort { snapshot });
         let state = service.sync_hub_state("dev", 1, 0).expect("hub state");

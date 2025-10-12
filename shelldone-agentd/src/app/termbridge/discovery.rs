@@ -75,34 +75,46 @@ pub fn spawn_discovery_task(
 
 async fn run_discovery(
     service: Arc<TermBridgeServiceType>,
-    metrics: Option<&Arc<PrismMetrics>>,
+    _metrics: Option<&Arc<PrismMetrics>>,
     reason: Option<&'static str>,
 ) -> anyhow::Result<()> {
     let started = time::Instant::now();
-    match service.discover().await {
-        Ok(state) => {
+    let source = reason.unwrap_or("scheduled");
+    match service.discover(source).await {
+        Ok(outcome) => {
             let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-            if let Some(metrics) = metrics {
-                metrics.record_termbridge_action(
-                    "discover",
-                    reason.unwrap_or("scheduled"),
-                    elapsed,
-                    "success",
-                );
+            let diff = &outcome.diff;
+            if !diff.is_empty() {
+                for record in &diff.added {
+                    info!(
+                        terminal = record.terminal.as_str(),
+                        source, "termbridge terminal discovered"
+                    );
+                }
+                for record in &diff.updated {
+                    info!(
+                        terminal = record.terminal.as_str(),
+                        source, "termbridge terminal updated"
+                    );
+                }
+                for record in &diff.removed {
+                    info!(
+                        terminal = record.terminal.as_str(),
+                        source, "termbridge terminal removed"
+                    );
+                }
             }
             debug!(
-                count = state.capabilities().len(),
-                ?reason,
+                count = outcome.state.capabilities().len(),
+                source,
                 elapsed_ms = elapsed,
+                changed = outcome.changed,
                 "termbridge discovery completed"
             );
             Ok(())
         }
         Err(err) => {
-            if let Some(metrics) = metrics {
-                metrics.record_termbridge_error("discover", "all", &err.to_string());
-            }
-            error!(?reason, %err, "termbridge discovery failure");
+            error!(source, %err, "termbridge discovery failure");
             Err(anyhow::Error::new(err))
         }
     }
@@ -114,7 +126,7 @@ mod tests {
     use crate::adapters::termbridge::{
         FileTermBridgeStateRepository, InMemoryTermBridgeBindingRepository,
     };
-    use crate::app::termbridge::TermBridgeService;
+    use crate::app::termbridge::{TermBridgeService, TermBridgeServiceConfig};
     use crate::domain::termbridge::{TerminalCapabilities, TerminalId};
     use crate::ports::termbridge::{CapabilityObservation, TerminalControlPort};
     use async_trait::async_trait;
@@ -161,6 +173,7 @@ mod tests {
             binding_repo,
             vec![Arc::new(adapter)],
             None,
+            TermBridgeServiceConfig::default(),
         ));
         let handle = spawn_discovery_task(service.clone(), None, Some(Duration::from_secs(3600)));
         handle.notify_refresh("test");

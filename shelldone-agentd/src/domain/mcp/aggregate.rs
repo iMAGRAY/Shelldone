@@ -66,6 +66,12 @@ impl McpSession {
             .collect()
     }
 
+    pub fn has_capability(&self, capability: &str) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap.as_str() == capability)
+    }
+
     pub fn to_snapshot(&self) -> McpSessionSnapshot {
         McpSessionSnapshot {
             id: self.id.clone(),

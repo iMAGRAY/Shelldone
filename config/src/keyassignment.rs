@@ -121,6 +121,29 @@ pub enum Pattern {
     CurrentSelectionOrEmptyString,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
+pub struct StateSnapshotAction {
+    #[dynamic(default)]
+    pub kind: StateSnapshotActionKind,
+}
+
+impl Default for StateSnapshotAction {
+    fn default() -> Self {
+        Self {
+            kind: StateSnapshotActionKind::RestoreLatest,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromDynamic, ToDynamic, Default)]
+/// Variants mapped to state snapshot keyboard/menu commands.
+pub enum StateSnapshotActionKind {
+    #[default]
+    RestoreLatest,
+    RevealLatest,
+    CopyLatestPath,
+}
+
 impl Pattern {
     pub fn is_empty(&self) -> bool {
         match self {
@@ -612,6 +635,7 @@ pub enum KeyAssignment {
     PromptInputLine(PromptInputLine),
     InputSelector(InputSelector),
     Confirmation(Confirmation),
+    StateSnapshot(StateSnapshotAction),
 }
 impl_lua_conversion_dynamic!(KeyAssignment);
 
